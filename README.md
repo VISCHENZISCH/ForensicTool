@@ -1,4 +1,4 @@
-# Advanced Forensic Analysis Suite
+# Forensic Analysis
 
 Une suite d'outils performante pour l'analyse forensique de fichiers PDF et d'images, conçue pour l'extraction rapide de métadonnées et la visualisation  dans le terminal.
 
@@ -44,5 +44,4 @@ L'outil scannera automatiquement le répertoire courant et générera un rapport
 - `rich` : Pour l'interface utilisateur terminal améliorée.
 - `exif` : Pour l'extraction précise des métadonnées d'image.
 
----
-*Optimisé pour l'analyse forensique et la performance.*
+
