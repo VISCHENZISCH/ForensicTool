@@ -1,4 +1,4 @@
 pypdf>=5.0.0
 Pillow>=11.0.0
 rich>=13.9.0
-exif>=1.6.0
+exifread>=3.0.0

@@ -103,7 +103,7 @@ class ForensicAnalyzer:
 
         try:
             with Image.open(path) as img:
-                exif = img._getexif()
+                exif = img.getexif()
                 
                 if HAS_RICH:
                     c_width = min(self.console.width, 64)

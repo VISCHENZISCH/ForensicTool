@@ -20,8 +20,8 @@ Il est recommandé d'utiliser un environnement virtuel :
 
 ```bash
 # Création et activation de l'environnement virtuel
-python3 -m venv env
-source env/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 
 # Installation des dépendances
 pip install -r requirements.txt
