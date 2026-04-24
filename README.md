@@ -37,6 +37,12 @@ python main.py
 
 L'outil scannera automatiquement le répertoire courant et générera un rapport détaillé pour chaque fichier trouvé.
 
+## Tests
+
+```bash
+python test.py
+```
+
 ##  Dépendances
 
 - `pypdf` : Pour le traitement robuste des fichiers PDF.
