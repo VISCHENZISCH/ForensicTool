@@ -1,8 +1,55 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.github/
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+.eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+test.py
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
+
+# Logs and runtime
+*.log
+*.pid
+*.sqlite3
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Forensic evidence and generated reports
+ANONOPS.pdf
+INF1424_Programme_Complet_plus_cour_Modif.pdf
+RAPPORT.HTML
+rapport_*.html
+cookies_*.html
+*.json
+*.csv
+*.html
 *.pdf
-*.jpg
 *.png
-*.tiff
+*.jpg
 *.jpeg
+*.gif
 *.bmp
-*.pyc
-/env
+*.tiff
+*.webp
+test_debug.pcap
