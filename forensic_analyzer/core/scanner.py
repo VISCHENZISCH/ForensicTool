@@ -1,6 +1,8 @@
 """Logique de collecte des fichiers cibles et d'auto-scan."""
 from __future__ import annotations
+
 import os
+
 from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
@@ -21,11 +23,11 @@ def collect_targets(path: str) -> list[str]:
         return [os.path.abspath(path)]
 
     if os.path.isdir(path):
-        return sorted(
-            os.path.abspath(os.path.join(path, name))
-            for name in os.listdir(path)
-            if os.path.isfile(os.path.join(path, name))
-        )
+        targets = []
+        for root, _, files in os.walk(path):
+            for file in files:
+                targets.append(os.path.abspath(os.path.join(root, file)))
+        return sorted(targets)
 
     log.warning("Chemin introuvable : %s", path)
     return []

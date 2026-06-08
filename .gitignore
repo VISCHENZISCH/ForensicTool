@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.github/
+
 # Distribution / packaging
 build/
 dist/
@@ -15,7 +15,8 @@ pip-wheel-metadata/
 .venv
 env/
 venv/
-test.py
+
+# Ignored extensions and patterns
 .pcap
 .rules
 .binary
@@ -30,8 +31,14 @@ test.py
 .disque
 .timel
 .bin
+
+# Tests and debug
 /test_samples/*
 generate_test_samples.py
+test_debug.pcap
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Editor and OS files
 .vscode/
@@ -46,12 +53,9 @@ Thumbs.db
 *.pid
 *.sqlite3
 
-# Test artifacts
-.coverage
-htmlcov/
-.pytest_cache/
-
 # Forensic evidence and generated reports
+export/
+agent.md
 ANONOPS.pdf
 INF1424_Programme_Complet_plus_cour_Modif.pdf
 RAPPORT.HTML
@@ -68,4 +72,3 @@ cookies_*.html
 *.bmp
 *.tiff
 *.webp
-test_debug.pcap

@@ -1,6 +1,8 @@
 """Classe de base abstraite pour tous les renderers de sortie."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 
 

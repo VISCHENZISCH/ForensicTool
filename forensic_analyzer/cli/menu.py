@@ -3,40 +3,40 @@ Menu interactif principal pour Forensic Analyzer.
 Style : ASCII art, codes couleur ANSI, sans rich.
 """
 from __future__ import annotations
+
 import os
-import sys
 
-from forensic_analyzer.models.finding import FindingModel, ReportModel
-from forensic_analyzer.output import ui
-from forensic_analyzer.output.ui import C
-from forensic_analyzer.output.json_exporter import JSONExporter
-from forensic_analyzer.output.html_exporter import HTMLExporter
-from forensic_analyzer.output.csv_exporter import CSVExporter
-from forensic_analyzer.output.pdf_exporter import PDFExporter
-from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
-
-#Imports analyzers
-from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
-from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
-from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
-from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
-from forensic_analyzer.analyzers.firefox_analyzer import (
-    FirefoxHistoryAnalyzer, FirefoxCookiesAnalyzer,
-)
-from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
 from forensic_analyzer.analyzers.carving_analyzer import CarvingAnalyzer
-from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
-from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
+from forensic_analyzer.analyzers.chromium_analyzer import ChromiumAnalyzer
 from forensic_analyzer.analyzers.disk_analyzer import DiskAnalyzer
 from forensic_analyzer.analyzers.evtx_analyzer import EVTXAnalyzer
-from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
-from forensic_analyzer.analyzers.linux_artifacts_analyzer import LinuxArtifactsAnalyzer
-from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
+from forensic_analyzer.analyzers.firefox_analyzer import (
+    FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
+from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
+from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
 from forensic_analyzer.analyzers.ioc_analyzer import IOCAnalyzer
-
+from forensic_analyzer.analyzers.linux_artifacts_analyzer import \
+    LinuxArtifactsAnalyzer
+from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
+from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
+#Imports analyzers
+from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
+from forensic_analyzer.analyzers.pe_analyzer import PEAnalyzer
+from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
+from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
+from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
+from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
+from forensic_analyzer.analyzers.windows_execution_analyzer import \
+    WindowsExecutionAnalyzer
+from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry
 from forensic_analyzer.core.scanner import auto_scan
-
+from forensic_analyzer.models.finding import FindingModel, ReportModel
+from forensic_analyzer.output import ui
+from forensic_analyzer.output.csv_exporter import CSVExporter
+from forensic_analyzer.output.html_exporter import HTMLExporter
+from forensic_analyzer.output.json_exporter import JSONExporter
+from forensic_analyzer.output.pdf_exporter import PDFExporter
 
 # Dispatch mapping for menu options
 _MENU_DISPATCH = {
@@ -46,17 +46,20 @@ _MENU_DISPATCH = {
     "4":  ("Extraction Strings",    lambda: StringsAnalyzer(),        "Entrez le chemin du fichier binaire"),
     "5":  ("Historique Firefox",    lambda: FirefoxHistoryAnalyzer(), "Entrez le chemin de places.sqlite"),
     "6":  ("Cookies Firefox",       "cookies"),
-    "7":  ("Steganographie",        lambda: StegoAnalyzer(),          "Entrez le chemin de l'image"),
-    "8":  ("File Carving",          lambda: CarvingAnalyzer(),        "Entrez le chemin du fichier a analyser"),
-    "9":  ("Analyse PCAP",          lambda: PCAPAnalyzer(),           "Entrez le chemin du fichier .pcap"),
-    "10": ("Windows Event Logs",    lambda: EVTXAnalyzer(),           "Entrez le chemin du fichier .evtx"),
-    "11": ("Registre Windows",      lambda: RegistryAnalyzer(),       "Entrez le chemin de la ruche (SAM, SYSTEM, NTUSER.DAT)"),
-    "12": ("Artefacts Linux",       lambda: LinuxArtifactsAnalyzer(), "Entrez le chemin de la racine ou du fichier"),
-    "13": ("Analyse Memoire RAM",   "memory"),
-    "14": ("Forensique Disque",     lambda: DiskAnalyzer(),           "Entrez le chemin de l'image disque (.dd)"),
-    "15": ("Scan YARA",             "yara"),
-    "16": ("Extraction IOC",        lambda: IOCAnalyzer(),            "Entrez le chemin du fichier a scanner"),
-    "17": ("Timeline DFIR",         "timeline"),
+    "7":  ("Artefacts Chromium",    lambda: ChromiumAnalyzer(),       "Entrez le chemin de la db SQLite Chromium"),
+    "8":  ("Steganographie",        lambda: StegoAnalyzer(),          "Entrez le chemin de l'image"),
+    "9":  ("File Carving",          lambda: CarvingAnalyzer(),        "Entrez le chemin du fichier a analyser"),
+    "10": ("Analyse PCAP",          lambda: PCAPAnalyzer(),           "Entrez le chemin du fichier (.pcap, .pcapng, .cap)"),
+    "11": ("Triage Malware (PE)",   lambda: PEAnalyzer(),             "Entrez le chemin du fichier executable (.exe, .dll)"),
+    "12": ("Windows Event Logs",    lambda: EVTXAnalyzer(),           "Entrez le chemin du fichier .evtx"),
+    "13": ("Registre Windows",      lambda: RegistryAnalyzer(),       "Entrez le chemin de la ruche (SAM, SYSTEM, NTUSER.DAT)"),
+    "14": ("Artefacts Linux",       lambda: LinuxArtifactsAnalyzer(), "Entrez le chemin de la racine ou du fichier"),
+    "15": ("Analyse Memoire RAM",   "memory"),
+    "16": ("Forensique Disque",     lambda: DiskAnalyzer(),           "Entrez le chemin de l'image disque (.dd)"),
+    "17": ("Execution Windows",     lambda: WindowsExecutionAnalyzer(),"Entrez le chemin du fichier Prefetch (.pf) ou LNK (.lnk)"),
+    "18": ("Scan YARA",             "yara"),
+    "19": ("Extraction IOC",        lambda: IOCAnalyzer(),            "Entrez le chemin du fichier a scanner"),
+    "20": ("Timeline DFIR",         "timeline"),
 }
 
 
@@ -140,8 +143,66 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         ui.error("Option d'export invalide.")
 
 
+def _boot_sequence() -> None:
+    """Verifie reellement la presence des dependances avec une animation Matrix."""
+    import time
+    import sys
+    import importlib.util
+    from forensic_analyzer.output import ui
+    
+    ui.clear_screen()
+    
+    # Dictionnaire des modules a verifier: { "nom_affichage": "nom_import" }
+    modules = {
+        "Scapy (Network)": "scapy",
+        "YARA (Malware)": "yara",
+        "PEFile (Windows Exec)": "pefile",
+        "Evtx (Windows Logs)": "Evtx",
+        "WeasyPrint (PDF)": "weasyprint",
+        "Pydantic (Models)": "pydantic",
+        "Rich (UI)": "rich",
+        "Pillow (Images)": "PIL",
+        "ExifRead (Metadata)": "exifread",
+        "SQLite3 (Databases)": "sqlite3"
+    }
+    
+    print(f"\n{ui.C.MG5}INITIALISATION DU NOYAU FORENSIC ANALYZER...{ui.C.RS}\n")
+    time.sleep(0.3)
+    
+    items = list(modules.items())
+    total_steps = len(items)
+    
+    for i, (display_name, import_name) in enumerate(items, 1):
+        percent = int((i / total_steps) * 100)
+        
+        # Barre visuelle sur 40 caracteres
+        bar_len = 40
+        filled = int((i / total_steps) * bar_len)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        
+        sys.stdout.write(f"\r{ui.C.MG4}[{ui.C.MG5}{bar}{ui.C.MG4}]{ui.C.RS} {ui.C.MG6}{percent:3d}%{ui.C.RS} {ui.C.MG2}| Verification : {display_name}...{ui.C.RS}\033[K")
+        sys.stdout.flush()
+        
+        # Verification REELLE de la dependance
+        try:
+            spec = importlib.util.find_spec(import_name)
+            if spec is None:
+                raise ImportError(f"Module {import_name} not found")
+        except Exception:
+            sys.stdout.write(f"\n\n{ui.C.HR}[!] ERREUR CRITIQUE: Le module '{import_name}' n'est pas installe.{ui.C.RS}\n")
+            sys.stdout.write(f"{ui.C.HY}Veuillez relancer avec ./run.sh ou executer: pip install -r requirements.txt{ui.C.RS}\n")
+            sys.exit(1)
+            
+        time.sleep(0.15)  # Petit delai visuel
+        
+    print(f"\n\n{ui.C.MG5}[+] Toutes les dependances sont verifiees et operationnelles.{ui.C.RS}")
+    time.sleep(0.5)
+
+
 def interactive_loop() -> None:
     """Boucle interactive principale."""
+    _boot_sequence()
+    
     session_findings: list[FindingModel] = []
 
     while True:
@@ -179,7 +240,8 @@ def interactive_loop() -> None:
             registry.register_all(
                 PDFAnalyzer(), ImageAnalyzer(), StegoAnalyzer(),
                 PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
-                MemoryAnalyzer(), DiskAnalyzer(),
+                MemoryAnalyzer(), DiskAnalyzer(), PEAnalyzer(),
+                ChromiumAnalyzer(), WindowsExecutionAnalyzer(),
             )
             ui.status(f"Scan automatique en cours de : {path}")
             report = auto_scan(path, registry)
@@ -204,7 +266,7 @@ def interactive_loop() -> None:
             continue
 
         item = _MENU_DISPATCH[choice]
-        label = item[0]
+        item[0]
         action = item[1]
 
         # Cas Timeline

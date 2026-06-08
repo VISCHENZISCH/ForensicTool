@@ -1,8 +1,9 @@
 """Renderer terminal principal utilisant le systeme de design pur ANSI style TheFatRat."""
 from __future__ import annotations
-from forensic_analyzer.output.base_renderer import BaseRenderer
+
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output import ui
+from forensic_analyzer.output.base_renderer import BaseRenderer
 
 
 class RichRenderer(BaseRenderer):

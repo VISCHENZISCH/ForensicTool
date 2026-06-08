@@ -1,6 +1,8 @@
 """AnalyzerRegistry et run_pipeline - orchestration centrale du pipeline."""
 from __future__ import annotations
+
 import os
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger

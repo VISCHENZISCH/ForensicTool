@@ -21,7 +21,6 @@ if (-not (Test-Path $VenvDir)) {
 . .\$VenvDir\Scripts\Activate.ps1
 
 # 3. Installation/mise à jour des dépendances
-Write-Host "[*] Vérification et installation des dépendances..." -ForegroundColor Cyan
 python -m pip install --upgrade pip -q
 pip install -r requirements.txt -q
 

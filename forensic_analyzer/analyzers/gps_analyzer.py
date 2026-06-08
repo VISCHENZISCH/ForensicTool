@@ -1,9 +1,11 @@
 """Analyzer GPS — extraction et conversion de coordonnées EXIF via exifread."""
 from __future__ import annotations
+
 import os
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
-from forensic_analyzer.utils.deps import exifread, HAS_EXIFREAD
+from forensic_analyzer.utils.deps import HAS_EXIFREAD, exifread
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("gps")

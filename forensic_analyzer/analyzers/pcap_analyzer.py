@@ -1,11 +1,11 @@
 """Analyzer PCAP - reconstruction de flux, extraction credentials, detection C2, DNS exfiltration."""
 from __future__ import annotations
+
+import base64
 import os
 import re
-import base64
-import struct
-import socket
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -13,14 +13,11 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("pcap")
 
 try:
-    from scapy.all import (
-        rdpcap, IP, TCP, UDP, DNS, DNSQR, DNSRR, Raw,
-        HTTPRequest, HTTPResponse,
-    )
+    from scapy.all import DNS, DNSQR, IP, TCP, UDP, Raw, rdpcap
     HAS_SCAPY = True
 except ImportError:
     try:
-        from scapy.all import rdpcap, IP, TCP, UDP, DNS, DNSQR, DNSRR, Raw
+        from scapy.all import DNS, DNSQR, IP, TCP, UDP, Raw, rdpcap
         HAS_SCAPY = True
     except ImportError:
         HAS_SCAPY = False

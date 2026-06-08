@@ -7,7 +7,7 @@
 
 **Forensic Analyzer** est une suite d'outils forensiques (DFIR) unifiée, modulaire et hautement performante écrite en Python. Conçue pour les analystes SOC, les chasseurs de menaces (Threat Hunters) et les experts en réponse aux incidents, elle permet d'extraire, analyser et corréler des preuves numériques à travers 5 niveaux de profondeur technique.
 
-Le projet propose une interface terminal interactive et colorée pur ANSI (style *TheFatRat*) sans dépendance lourde, ainsi qu'un mode ligne de commande scriptable pour l'automatisation en pipeline.
+Le projet propose une interface terminal interactive et colorée pur ANSI  sans dépendance lourde, ainsi qu'un mode ligne de commande scriptable pour l'automatisation en pipeline.
 
 ---
 
@@ -16,38 +16,47 @@ Le projet propose une interface terminal interactive et colorée pur ANSI (style
 Lancé sans argument, **Forensic Analyzer** ouvre son menu interactif principal :
 
 ```text
-    ___ ___  ___  ___ _  _ ___ ___ ___
-   | __/ _ \| _ \| __| \| / __|_ _/ __|
-   | _| (_) |   / _|| .` \__ \| | (__
-   |_| \___/|_|_\___|_|\_/___\___/___|
-          A N A L Y Z E R  v1.0
-     Digital Forensics Investigation Suite
+0 1 ▓█████   ▒█████ 1 ██▀███  ▓█████ 0███▄    █   ██████  ██▓ ▄████▄ 1
+ 1  ▓█   ▀ 0▒██▒  ██▒▓██ ▒ ██▒▓█   ▀ 1██ ▀█   █ ▒██    ▒ ▓██▒▒██▀ ▀█ 0
+ 01 ▒███  1 ▒██░  ██▒▓██ ░▄█ ▒▒███  0▓██  ▀█ ██▒░ ▓██▄ 1 ▒██▒▒▓█    ▄ 
+ 1  ▒▓█     ▒██   ██░▒██▀▀█▄ 1▒▓█  ▄ ▓██▒ 0▐▌██▒ 1▒   ██▒░██░▒▓▓▄ ▄██0
+0 1 ░▒█ █▒ 1░ ████▓▒░░██▓ ▒██▒░▒████▒▒██░ 0 ▓██░▒██████▒▒░██░▒ ▓███▀ 1
+ 10 ░░ ▒░ ░ ░ ▒░▒░▒░ 0 ▒▓ ░▒▓░░░ ▒░ ░░ ▒░ 1 ▒ ▒ ▒ ▒▓▒ ▒ ░░▓ 0░ ░▒ ▒ 0 
+0    ░ ░  ░   ░ ▒ ▒░   ░▒ ░ ▒░ ░ ░  ░░ ░░ 0 ░ ▒░░ ░▒  ░ ░ ▒ ░  ░  ▒  1
+ 1 0   ░  1 ░ ░ ░ ▒ 0  ░░   ░ 1  ░  0   ░ 1 ░ ░ ░  ░  ░ 1 ▒ ░░  0 1 
+  0 1  ░  ░   0 ░ ░  1  ░   0    ░  ░    1    ░    1  ░   ░  ░ 0  1   
+  0x4A 0x7F FF AF EB C3 0x00 0F EAX RAX rbp rip rcx rsp EIP rdi rsi r8
+  jmp push pop ret xor test cmp mov lea call syscall nop hlt out in 00
 
- ─────────────────────────────────────────────────────────────
+                          © 2026 Félix TOVIGNAN
+             https://github.com/VISCHENZISCH/ForensicTool.git
 
-   ANALYSE FICHIERS                   ANALYSE SYSTEME
-   ────────────────                   ───────────────
-    [01] PDF - Metadonnees             [10] Windows Event Logs
-    [02] Image / EXIF                  [11] Registre Windows
-    [03] Coordonnees GPS               [12] Artefacts Linux
-    [04] Extraction Strings            [13] Analyse Memoire
-    [05] Historique Firefox            [14] Forensique Disque
-    [06] Cookies Firefox
-                                      THREAT HUNTING
-   ANALYSE AVANCEE                    ──────────────
-   ───────────────                     [15] Scan YARA
-    [07] Steganographie                [16] Extraction IOC
-    [08] File Carving                  [17] Timeline DFIR
-    [09] Analyse PCAP
- ─────────────────────────────────────────────────────────────
+      usage Linux : ./run.sh --help
+      usage Win   : .\run.ps1 --help
+      exemple     : $ ./run.sh --scan ./evidence --export-html rapport.html
 
-   OUTILS
-   ──────
+   Analyse Fichiers                  Analyse Système
+    [01] PDF - Metadonnees            [12] Windows Event Logs
+    [02] Image / EXIF                 [13] Registre Windows
+    [03] Coordonnees GPS              [14] Artefacts Linux
+    [04] Extraction Strings           [15] Analyse Memoire
+    [05] Historique Firefox           [16] Forensique Disque
+    [06] Cookies Firefox              [17] Exécution Windows
+    [07] Artefacts Chromium          
+                                     Threat Hunting
+   Analyse Avancée                    [18] Scan YARA
+    [08] Steganographie               [19] Extraction IOC
+    [09] File Carving                 [20] Timeline DFIR
+    [10] Analyse PCAP                
+    [11] Triage Malware (PE)         
+
+   Outils
     [88] Scan Automatique
     [99] Exporter Rapport
     [00] Quitter
 
-forensic~# _
+┌─[forensic-analyzer]─[menu]
+└──╼ $
 ```
 
 ---
@@ -61,6 +70,7 @@ La suite est structurée en 5 niveaux d'investigation progressive :
 * **Image/EXIF & GPS Analyzer** : Extraction des métadonnées géographiques avec liens automatiques vers Google Maps et OpenStreetMap.
 * **Strings Analyzer** : Extraction optimisée des chaînes ASCII/Unicode depuis les exécutables et fichiers binaires.
 * **Firefox Artifacts** : Extraction de l'historique et des cookies depuis les bases SQLite de profil.
+* **Chromium Artifacts** : Extraction des historiques de navigation et détection des téléchargements dangereux.
 
 ### L2 : Analyse Secrète & Carving
 * **Stego Analyzer** : Détection de stéganographie LSB (Least Significant Bit), analyse de distribution DCT (JPEG) et détection des canaux Alpha masqués.
@@ -69,11 +79,14 @@ La suite est structurée en 5 niveaux d'investigation progressive :
 ### L3 : Réseau & Mémoire Vive (RAM)
 * **PCAP Analyzer** : Reconstruction de sessions, extraction de credentials (FTP, HTTP Basic, etc.), détection de patterns C2 (beacons) et de requêtes d'exfiltration DNS.
 * **Memory Analyzer** : Wrapper d'intégration avec **Volatility3** permettant d'exécuter des plugins d'analyse RAM (Windows/Linux) et d'extraire les chaînes de caractères sensibles.
+* **PE Analyzer (Triage Malware)** : Analyse statique de binaires (PE), calcul d'entropie critique et extraction des imports DLL suspects.
 
 ### L4 : Forensique Système & Disque
 * **Disk/MFT Analyzer** : Analyse de bas niveau de la Master File Table (MFT) NTFS, recherche de flux ADS (Alternate Data Streams) et d'inodes Ext4.
 * **EVTX Analyzer** : Parsing ultra-rapide des Windows Event Logs avec détection des tentatives de brute-force SSH/SMB et de suppression des journaux d'audit.
 * **Registry Analyzer** : Analyse des ruches Windows (SAM, SYSTEM, NTUSER.DAT) avec extraction des mécanismes de persistance (Autorun/Services) et informations d'utilisateurs.
+* **Windows Execution Artifacts** : Parsing des fichiers Prefetch et LNK pour retracer l'exécution des binaires sur le système.
+* **Linux Artifacts** : Analyse de `bash_history`, `auth.log`, et autres journaux pour détecter le brute-force ou l'exécution de commandes malveillantes.
 
 ### L5 : Threat Hunting & Corrélation
 * **YARA Scanner** : Scan multi-threadé basé sur des règles YARA pour détecter des empreintes de malwares et payloads.
@@ -118,16 +131,17 @@ Forensic Analyzer est entièrement scriptable pour s'intégrer dans vos outils o
 
 ```bash
 # Scan automatique de tout un dossier de preuves et génération de rapports HTML & JSON
-python main.py --scan ./preuves --export-html rapport.html --export-json rapport.json
+./run.sh --scan ./preuves --export-html rapport.html --export-json rapport.json
 
 # Analyse réseau PCAP à la recherche de credentials et d'anomalies
-python main.py --pcap capture.pcap --export-csv timeline.csv
+./run.sh --pcap capture.pcap --export-csv timeline.csv
 
 # Scan YARA d'un répertoire suspect avec des règles personnalisées
-python main.py --yara /path/to/rules.yar --scan ./fichiers_suspects
+./run.sh --yara /path/to/rules.yar --scan ./fichiers_suspects
 
 # Extraction des données GPS d'une photo de scène d'incident
-python main.py --gps image.jpg
+./run.sh --gps image.jpg
+# (Note: sous Windows, utilisez .\run.ps1 au lieu de ./run.sh)
 ```
 
 ---

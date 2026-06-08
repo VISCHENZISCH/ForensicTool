@@ -1,6 +1,8 @@
 """Exporteur JSON — rapport structuré et horodaté."""
 from __future__ import annotations
+
 import json
+
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
 

@@ -1,7 +1,9 @@
 """Analyzers Firefox — historique et cookies depuis les bases SQLite."""
 from __future__ import annotations
+
 import os
 import sqlite3
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger

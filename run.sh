@@ -23,9 +23,8 @@ source "$VENV_DIR/bin/activate"
 # 3. Installation des dépendances si nécessaire
 # On vérifie la date de modification pour éviter de relancer pip install inutilement si requirements.txt n'a pas changé,
 # ou on le lance en mode rapide.
-echo "[*] Vérification et installation des dépendances..."
-pip install --upgrade pip -q
-pip install -r requirements.txt -q
+pip install --upgrade pip -q || true
+pip install -r requirements.txt -q || true
 
 # 4. Lancement de l'application avec les arguments fournis
 python main.py "$@"

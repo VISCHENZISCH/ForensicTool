@@ -1,23 +1,27 @@
 """Logging structuré et coloré en ANSI pour Forensic Analyzer."""
 import logging
-import sys
 import re
+import sys
 
-# Constantes de couleurs ANSI 256 de WebMapper
-CRIMSON   = "\033[38;5;196m"
-EMERALD   = "\033[38;5;46m"
-GOLD      = "\033[38;5;220m"
-SKY_BLUE  = "\033[38;5;39m"
-PURPLE    = "\033[38;5;141m"
-DARK_GREY = "\033[38;5;243m"
+# Constantes de couleurs Matrix Theme
+MG1 = "\033[38;5;22m"  # Très sombre
+MG2 = "\033[38;5;28m"  # Sombre
+MG3 = "\033[38;5;34m"  # Hacker Green
+MG4 = "\033[38;5;40m"  # Vert clair
+MG5 = "\033[38;5;46m"  # Émeraude vif
+MG6 = "\033[38;5;118m" # Vert-Jaune intense
 COLOR_RESET = "\033[0m"
 
-COLOR_TIME = EMERALD
-COLOR_MUTED = DARK_GREY
-COLOR_CYAN = SKY_BLUE
-COLOR_BRIGHT_BLUE = SKY_BLUE
-COLOR_YELLOW = GOLD
-COLOR_RED = CRIMSON
+HR = "\033[38;5;196m"  # Hacker Red
+HY = "\033[38;5;226m"  # Hacker Yellow
+
+PURPLE = MG3  
+COLOR_TIME = MG5
+COLOR_MUTED = MG1
+COLOR_CYAN = MG4
+COLOR_BRIGHT_BLUE = MG4
+COLOR_YELLOW = HY
+COLOR_RED = HR
 
 LEVEL_COLORS = {
     "DEBUG": COLOR_MUTED,
@@ -51,13 +55,13 @@ class ColoredFormatter(logging.Formatter):
         tag_match = TAG_RE.match(msg)
         if tag_match:
             tag = tag_match.group(1)
-            msg = msg.replace(f"[{tag}]", f"{PURPLE}[{tag}]{COLOR_RESET}")
+            msg = msg.replace(f"[{tag}]", f"{PURPLE}[{tag}]{MG3}")
 
         # Coloration de la flèche
-        msg = msg.replace("→", f"{COLOR_RED}→{COLOR_RESET}")
+        msg = msg.replace("→", f"{COLOR_RED}→{MG3}")
 
-        # Pas de marge ici : elle est déléguée au wrapper de flux global
-        return f"{time_str} {level_str} {logger_name} - {msg}"
+        # Le séparateur '-' en jaune, le message en Hacker Green
+        return f"{time_str} {level_str} {logger_name} {HY}-{COLOR_RESET} {MG3}{msg}{COLOR_RESET}"
 
 
 class DynamicStreamHandler(logging.StreamHandler):

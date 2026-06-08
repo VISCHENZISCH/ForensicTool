@@ -31,11 +31,11 @@ except ImportError:
 
 #Rich UI
 try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.text import Text
     from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
     HAS_RICH = True
 except ImportError:
     Console = Table = Panel = Text = box = None  # type: ignore[assignment,misc]

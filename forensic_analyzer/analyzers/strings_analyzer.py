@@ -1,7 +1,9 @@
 """Analyzer pour l'extraction de chaînes imprimables depuis des fichiers binaires."""
 from __future__ import annotations
+
 import os
 import re
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger

@@ -1,9 +1,11 @@
 """Analyzer pour les images — extraction EXIF via Pillow."""
 from __future__ import annotations
+
 import os
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
-from forensic_analyzer.utils.deps import PILImage, PIL_TAGS, HAS_PIL
+from forensic_analyzer.utils.deps import HAS_PIL, PIL_TAGS, PILImage
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("image")

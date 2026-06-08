@@ -1,5 +1,6 @@
 import sys
 
+
 class MarginStdin:
     """
     Wrapper pour sys.stdin qui réinitialise le flag at_line_start du stdout

@@ -1,9 +1,11 @@
 """Analyzer artefacts Linux - bash_history, cron, auth.log, SSH, /proc."""
 from __future__ import annotations
+
+import datetime
+import glob
 import os
 import re
-import glob
-import datetime
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger

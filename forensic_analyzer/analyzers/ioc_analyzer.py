@@ -1,9 +1,10 @@
 """Analyzer IOC - extraction d'indicateurs de compromission (IPs, URLs, hashes, emails)."""
 from __future__ import annotations
+
+import hashlib
 import os
 import re
-import hashlib
-from collections import Counter
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger

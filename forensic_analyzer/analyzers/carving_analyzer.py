@@ -1,7 +1,9 @@
 """Analyzer file carving - magic bytes, fichiers embarques, polyglot detection."""
 from __future__ import annotations
+
 import os
 import struct
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -193,7 +195,7 @@ def detect_embedded_files(data: bytes) -> list[dict]:
 
 def detect_polyglot(data: bytes, path: str) -> list[str]:
     """Detecte si un fichier est un polyglot (valide dans plusieurs formats)."""
-    ext = os.path.splitext(path)[1].lower()
+    os.path.splitext(path)[1].lower()
     polyglots = []
 
     # JPEG + ZIP

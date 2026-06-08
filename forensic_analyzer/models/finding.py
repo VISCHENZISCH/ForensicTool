@@ -1,8 +1,32 @@
 """Modèles de données Pydantic pour les résultats forensiques."""
 from __future__ import annotations
+
+import hashlib
+import os
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, model_validator
+
+
+def compute_hashes(filepath: str) -> dict[str, str]:
+    if not os.path.isfile(filepath):
+        return {}
+    
+    sha256 = hashlib.sha256()
+    md5 = hashlib.md5()
+    
+    try:
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256.update(chunk)
+                md5.update(chunk)
+        return {
+            "MD5": md5.hexdigest(),
+            "SHA-256": sha256.hexdigest()
+        }
+    except Exception:
+        return {}
 
 
 class FindingModel(BaseModel):
@@ -13,6 +37,18 @@ class FindingModel(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
+
+    @model_validator(mode='after')
+    def inject_hashes(self) -> "FindingModel":
+        if self.file and os.path.isfile(self.file):
+            if "SHA-256" not in self.metadata:
+                hashes = compute_hashes(self.file)
+                new_meta = {}
+                for k, v in hashes.items():
+                    new_meta[k] = v
+                new_meta.update(self.metadata)
+                self.metadata = new_meta
+        return self
 
 
 class ReportModel(BaseModel):

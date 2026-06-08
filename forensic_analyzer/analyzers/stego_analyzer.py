@@ -1,11 +1,12 @@
 """Analyzer steganographie - LSB, DCT, canal alpha, detection chi-square."""
 from __future__ import annotations
-import os
-import struct
+
 import math
+import os
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
-from forensic_analyzer.utils.deps import PILImage, HAS_PIL
+from forensic_analyzer.utils.deps import HAS_PIL, PILImage
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("stego")
@@ -82,7 +83,7 @@ def _analyze_alpha_channel(img) -> dict:
     pixels = list(img.getdata())
     alpha_values = [p[3] for p in pixels]
 
-    unique = set(alpha_values)
+    set(alpha_values)
     non_255 = sum(1 for a in alpha_values if a != 255)
     non_0_non_255 = sum(1 for a in alpha_values if a not in (0, 255))
 

@@ -1,5 +1,7 @@
 import struct
-from scapy.all import rdpcap, IP, TCP, Raw
+
+from scapy.all import TCP, Raw, rdpcap
+
 
 def debug():
     # Global Header

@@ -1,13 +1,15 @@
 """Analyzer pour les fichiers PDF — extraction de métadonnées via pypdf."""
 from __future__ import annotations
+
+import logging
 import os
+import warnings
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
-from forensic_analyzer.utils.deps import PdfReader, HAS_PYPDF
+from forensic_analyzer.utils.deps import HAS_PYPDF, PdfReader
 from forensic_analyzer.utils.logger import get_logger
 
-import warnings
-import logging
 warnings.filterwarnings("ignore", category=UserWarning, module="pypdf")
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 

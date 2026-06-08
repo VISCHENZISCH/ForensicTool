@@ -6,37 +6,40 @@ Couche CLI pour Forensic Analyzer.
 - Avec arguments : mode CLI (argparse)
 """
 
-import os
-import sys
 import argparse
-from forensic_analyzer.core.pipeline import AnalyzerRegistry
-from forensic_analyzer.core.scanner import auto_scan
-from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
-from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
-from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
-from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
-from forensic_analyzer.analyzers.firefox_analyzer import (
-    FirefoxHistoryAnalyzer, FirefoxCookiesAnalyzer,
-)
-from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
+
 from forensic_analyzer.analyzers.carving_analyzer import CarvingAnalyzer
-from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
-from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
+from forensic_analyzer.analyzers.chromium_analyzer import ChromiumAnalyzer
 from forensic_analyzer.analyzers.disk_analyzer import DiskAnalyzer
 from forensic_analyzer.analyzers.evtx_analyzer import EVTXAnalyzer
-from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
-from forensic_analyzer.analyzers.linux_artifacts_analyzer import LinuxArtifactsAnalyzer
-from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
+from forensic_analyzer.analyzers.firefox_analyzer import (
+    FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
+from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
+from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
 from forensic_analyzer.analyzers.ioc_analyzer import IOCAnalyzer
+from forensic_analyzer.analyzers.linux_artifacts_analyzer import \
+    LinuxArtifactsAnalyzer
+from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
+from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
+from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
+from forensic_analyzer.analyzers.pe_analyzer import PEAnalyzer
+from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
+from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
+from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
 from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
-from forensic_analyzer.output.rich_renderer import RichRenderer
-from forensic_analyzer.output.plain_renderer import PlainRenderer
-from forensic_analyzer.output.json_exporter import JSONExporter
-from forensic_analyzer.output.html_exporter import HTMLExporter
-from forensic_analyzer.output.csv_exporter import CSVExporter
-from forensic_analyzer.output.pdf_exporter import PDFExporter
-from forensic_analyzer.utils.deps import HAS_RICH
+from forensic_analyzer.analyzers.windows_execution_analyzer import \
+    WindowsExecutionAnalyzer
+from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
+from forensic_analyzer.core.pipeline import AnalyzerRegistry
+from forensic_analyzer.core.scanner import auto_scan
 from forensic_analyzer.models.finding import ReportModel
+from forensic_analyzer.output.csv_exporter import CSVExporter
+from forensic_analyzer.output.html_exporter import HTMLExporter
+from forensic_analyzer.output.json_exporter import JSONExporter
+from forensic_analyzer.output.pdf_exporter import PDFExporter
+from forensic_analyzer.output.plain_renderer import PlainRenderer
+from forensic_analyzer.output.rich_renderer import RichRenderer
+from forensic_analyzer.utils.deps import HAS_RICH
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,12 +67,14 @@ Exemples :
     g1.add_argument("--strings", metavar="FICHIER", help="Chaines imprimables d'un binaire")
     g1.add_argument("--fh",      metavar="SQLITE",  help="Historique Firefox (places.sqlite)")
     g1.add_argument("--fc",      metavar="SQLITE",  help="Cookies Firefox (cookies.sqlite)")
+    g1.add_argument("--chromium", metavar="SQLITE", help="Artefacts Chromium (Chrome/Edge)")
 
     # Analyse avancee
     g2 = p.add_argument_group("Analyse avancee")
     g2.add_argument("--stego",   metavar="IMAGE",   help="Steganographie (LSB, DCT, alpha)")
     g2.add_argument("--carve",   metavar="FICHIER", help="File carving et polyglot detection")
     g2.add_argument("--pcap",    metavar="PCAP",    help="Analyse reseau PCAP/PCAPNG")
+    g2.add_argument("--pe",      metavar="EXE",     help="Triage Malware (PE/Entropie)")
 
     # Analyse systeme
     g3 = p.add_argument_group("Analyse systeme")
@@ -79,6 +84,7 @@ Exemples :
     g3.add_argument("--disk",     metavar="IMAGE",  help="Image disque (MFT, ext4, ADS)")
     g3.add_argument("--evtx",     metavar="EVTX",   help="Windows Event Logs")
     g3.add_argument("--registry", metavar="HIVE",   help="Ruche registre Windows")
+    g3.add_argument("--winexec",  metavar="PF/LNK", help="Artefacts Execution (Prefetch, LNK)")
     g3.add_argument("--linux",    metavar="CHEMIN",  help="Artefacts Linux")
 
     # Threat Hunting
@@ -107,7 +113,8 @@ def cli_dispatch():
     registry.register_all(
         PDFAnalyzer(), ImageAnalyzer(), StegoAnalyzer(),
         PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
-        MemoryAnalyzer(), DiskAnalyzer(),
+        MemoryAnalyzer(), DiskAnalyzer(), PEAnalyzer(),
+        ChromiumAnalyzer(), WindowsExecutionAnalyzer(),
     )
 
     findings = []
@@ -131,6 +138,9 @@ def cli_dispatch():
         (args.linux,   LinuxArtifactsAnalyzer),
         (args.disk,    DiskAnalyzer),
         (args.ioc,     IOCAnalyzer),
+        (args.pe,      PEAnalyzer),
+        (args.chromium, ChromiumAnalyzer),
+        (args.winexec, WindowsExecutionAnalyzer),
     ]
 
     for arg_val, cls in simple_analyzers:
@@ -154,7 +164,8 @@ def cli_dispatch():
             if res:
                 findings.append(res)
         else:
-            print("[*] Specifiez une cible a scanner avec YARA via --scan ou autre.")
+            from forensic_analyzer.output import ui
+            ui.info("Specifiez une cible a scanner avec YARA via --scan ou autre.")
 
     report = ReportModel.from_findings(findings)
 
@@ -179,6 +190,7 @@ def cli_dispatch():
 def main():
     """Point d'entree : menu interactif par defaut, CLI si arguments."""
     import sys
+
     from forensic_analyzer.utils.margin import MarginStdout
     sys.stdout = MarginStdout(sys.stdout, margin=4)
     sys.stderr = MarginStdout(sys.stderr, margin=4)

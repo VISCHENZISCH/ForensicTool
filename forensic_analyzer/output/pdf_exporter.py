@@ -1,6 +1,8 @@
 """Exporteur PDF - export de rapports de qualite DFIR via weasyprint."""
 from __future__ import annotations
+
 import os
+
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
@@ -29,7 +31,8 @@ class PDFExporter:
             filename = os.path.basename(output_path)
             os.makedirs("export", exist_ok=True)
             target_path = os.path.join("export", filename)
-            from forensic_analyzer.output.html_exporter import build_interactive_html
+            from forensic_analyzer.output.html_exporter import \
+                build_interactive_html
             html_content = build_interactive_html(report)
             
             # Generer le PDF directement a partir du contenu HTML

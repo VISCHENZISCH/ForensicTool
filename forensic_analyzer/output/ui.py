@@ -3,9 +3,10 @@ ui.py - Systeme de design terminal pur ANSI pour Forensic Analyzer.
 Style hacker : double-lignes rouges, titres vert hacker et valeurs rouge hacker.
 """
 from __future__ import annotations
+
 import os
 import shutil
-
+import textwrap
 
 # Codes couleur ANSI
 
@@ -17,19 +18,32 @@ SKY_BLUE  = "\033[38;5;39m"
 PURPLE    = "\033[38;5;141m"
 MAGENTA   = "\033[38;5;201m"
 DARK_GREY = "\033[38;5;243m"
-WHITE     = "\033[97m"
+# Le blanc a été intégralement supprimé pour le thème Matrix
 
 class C:
-    """Palette premium de WebMapper."""
-    R   = CRIMSON
-    G   = EMERALD
-    Y   = GOLD
-    B   = SKY_BLUE
-    VB  = SKY_BLUE
-    M   = MAGENTA
-    P   = PURPLE
-    W   = WHITE
-    D   = DARK_GREY
+    """Palette premium de WebMapper. Theme Matrix."""
+    # Matrix Colors
+    MG1 = "\033[38;5;22m"  # Très sombre
+    MG2 = "\033[38;5;28m"  # Sombre
+    MG3 = "\033[38;5;34m"  # Hacker Green
+    MG4 = "\033[38;5;40m"  # Vert clair
+    MG5 = "\033[38;5;46m"  # Émeraude vif
+    MG6 = "\033[38;5;118m" # Vert-Jaune intense
+
+    HR = "\033[38;5;196m"  # Hacker Red
+    HY = "\033[38;5;226m"  # Hacker Yellow
+    
+    # Redéfinition des couleurs sémantiques pour le thème Matrix
+    R   = MG2  # Structure (lignes, boîtes) -> Vert Sombre
+    G   = MG5  # Succès, Composants actifs -> Émeraude vif
+    Y   = MG6  # Avertissements, Valeurs -> Vert-Jaune
+    B   = MG4  # Identité Projet, Info -> Vert clair
+    VB  = MG4  # Données, Variables -> Vert clair
+    M   = MG3  # Autres -> Hacker Green
+    P   = MG3  # Autres -> Hacker Green
+    W   = MG3  # Texte principal (anciennement Blanc) -> Hacker Green
+    D   = MG1  # Texte atténué (anciennement Gris foncé) -> Vert très sombre
+
     BD  = "\033[1m"
     RS  = "\033[0m"
 
@@ -59,11 +73,17 @@ def clear_screen() -> None:
 # Banniere ASCII Art
 
 BANNER = f"""
-{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(MAGENTA, "    ______ ____   ____   ______ _   __ _____  ____ ______  ", bold=True)}
-{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(MAGENTA, "   / ____// __ \\ / __ \\ / ____// | / // ___/ /  _// ____/ ", bold=True)}
-{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(PURPLE,  "  / /_   / / / // /_/ // /_   /  |/ / \\__ \\  / / / /      ", bold=True)}
-{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(PURPLE,  " / __/  / /_/ // _, _// /___ / /|  / ___/ /_/ / / /___    ", bold=True)}
-{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(SKY_BLUE,"/_/     \\____//_/ |_|/_____//_/ |_|/____//___/ \\____/    ", bold=True)}
+{c(C.MG1, "0 1 ▓█████   ▒█████ 1 ██▀███  ▓█████ 0███▄    █   ██████  ██▓ ▄████▄ 1", bold=True)}
+{c(C.MG2, " 1  ▓█   ▀ 0▒██▒  ██▒▓██ ▒ ██▒▓█   ▀ 1██ ▀█   █ ▒██    ▒ ▓██▒▒██▀ ▀█ 0", bold=True)}
+{c(C.MG3, " 01 ▒███  1 ▒██░  ██▒▓██ ░▄█ ▒▒███  0▓██  ▀█ ██▒░ ▓██▄ 1 ▒██▒▒▓█    ▄ ", bold=True)}
+{c(C.MG4, " 1  ▒▓█     ▒██   ██░▒██▀▀█▄ 1▒▓█  ▄ ▓██▒ 0▐▌██▒ 1▒   ██▒░██░▒▓▓▄ ▄██0", bold=True)}
+{c(C.MG5, "0 1 ░▒█ █▒ 1░ ████▓▒░░██▓ ▒██▒░▒████▒▒██░ 0 ▓██░▒██████▒▒░██░▒ ▓███▀ 1", bold=True)}
+{c(C.MG6, " 10 ░░ ▒░ ░ ░ ▒░▒░▒░ 0 ▒▓ ░▒▓░░░ ▒░ ░░ ▒░ 1 ▒ ▒ ▒ ▒▓▒ ▒ ░░▓ 0░ ░▒ ▒ 0 ", bold=True)}
+{c(C.MG5, "0    ░ ░  ░   ░ ▒ ▒░   ░▒ ░ ▒░ ░ ░  ░░ ░░ 0 ░ ▒░░ ░▒  ░ ░ ▒ ░  ░  ▒  1", bold=True)}
+{c(C.MG4, " 1 0   ░  1 ░ ░ ░ ▒ 0  ░░   ░ 1  ░  0   ░ 1 ░ ░ ░  ░  ░ 1 ▒ ░░  0 1 ", bold=True)}
+{c(C.MG3, "  0 1  ░  ░   0 ░ ░  1  ░   0    ░  ░    1    ░    1  ░   ░  ░ 0  1   ", bold=True)}
+{c(C.MG1, "  0x4A 0x7F FF AF EB C3 0x00 0F EAX RAX rbp rip rcx rsp EIP rdi rsi r8", bold=True)}
+{c(C.MG2, "  jmp push pop ret xor test cmp mov lea call syscall nop hlt out in 00", bold=True)}
 """
 
 def banner() -> None:
@@ -72,13 +92,13 @@ def banner() -> None:
     for line in BANNER.split("\n"):
         print(f"{MARGIN}{line}")
 
-    print(f"{MARGIN}                                © 2026 Félix TOVIGNAN")
-    print(f"{MARGIN}                      https://github.com/VISCHENZISCH/ForensicTool.git")
+    print(f"{MARGIN}                      {c(C.HY, '© 2026 Félix TOVIGNAN')}")
+    print(f"{MARGIN}         {c(C.G, 'https://github.com/VISCHENZISCH/ForensicTool.git')}")
     print()
 
-    # Usage & options
-    print(f"{MARGIN}  {c(C.W, 'usage:', bold=True)} {c(C.D, './run.sh --help')}")
-    print(f"{MARGIN}  {c(C.W, 'exemple :', bold=True)} {c(C.D, '$')} {c(C.G, 'python3 main.py')} {c(C.Y, '--scan ./evidence')} {c(C.VB, '--export-html rapport.html')}")
+    print(f"{MARGIN}  {c(C.W, 'usage Linux :', bold=True)} {c(C.D, './run.sh --help')}")
+    print(f"{MARGIN}  {c(C.W, 'usage Win   :', bold=True)} {c(C.D, '.\\\\run.ps1 --help')}")
+    print(f"{MARGIN}  {c(C.W, 'exemple     :', bold=True)} {c(C.D, '$')} {c(C.G, './run.sh')} {c(C.Y, '--scan ./evidence')} {c(C.VB, '--export-html rapport.html')}")
   
 
 
@@ -97,31 +117,36 @@ def menu() -> None:
     # Colonnes : gauche et droite
     left = [
         (f"{C.VB}{C.BD}Analyse Fichiers{C.RS}", None),
-        (f" {C.G}[01]{C.RS} PDF - Metadonnees", None),
-        (f" {C.G}[02]{C.RS} Image / EXIF", None),
-        (f" {C.G}[03]{C.RS} Coordonnees GPS", None),
-        (f" {C.G}[04]{C.RS} Extraction Strings", None),
-        (f" {C.G}[05]{C.RS} Historique Firefox", None),
-        (f" {C.G}[06]{C.RS} Cookies Firefox", None),
+        (f" {C.G}[01]{C.RS} {C.W}PDF - Metadonnees{C.RS}", None),
+        (f" {C.G}[02]{C.RS} {C.W}Image / EXIF{C.RS}", None),
+        (f" {C.G}[03]{C.RS} {C.W}Coordonnees GPS{C.RS}", None),
+        (f" {C.G}[04]{C.RS} {C.W}Extraction Strings{C.RS}", None),
+        (f" {C.G}[05]{C.RS} {C.W}Historique Firefox{C.RS}", None),
+        (f" {C.G}[06]{C.RS} {C.W}Cookies Firefox{C.RS}", None),
+        (f" {C.G}[07]{C.RS} {C.W}Artefacts Chromium{C.RS}", None),
         ("", None),
         (f"{C.VB}{C.BD}Analyse Avancée{C.RS}", None),
-        (f" {C.G}[07]{C.RS} Steganographie", None),
-        (f" {C.G}[08]{C.RS} File Carving", None),
-        (f" {C.G}[09]{C.RS} Analyse PCAP", None),
+        (f" {C.G}[08]{C.RS} {C.W}Steganographie{C.RS}", None),
+        (f" {C.G}[09]{C.RS} {C.W}File Carving{C.RS}", None),
+        (f" {C.G}[10]{C.RS} {C.W}Analyse PCAP{C.RS}", None),
+        (f" {C.G}[11]{C.RS} {C.W}Triage Malware (PE){C.RS}", None),
     ]
 
     right = [
         (f"{C.VB}{C.BD}Analyse Système{C.RS}", None),
-        (f" {C.G}[10]{C.RS} Windows Event Logs", None),
-        (f" {C.G}[11]{C.RS} Registre Windows", None),
-        (f" {C.G}[12]{C.RS} Artefacts Linux", None),
-        (f" {C.G}[13]{C.RS} Analyse Memoire", None),
-        (f" {C.G}[14]{C.RS} Forensique Disque", None),
+        (f" {C.G}[12]{C.RS} {C.W}Windows Event Logs{C.RS}", None),
+        (f" {C.G}[13]{C.RS} {C.W}Registre Windows{C.RS}", None),
+        (f" {C.G}[14]{C.RS} {C.W}Artefacts Linux{C.RS}", None),
+        (f" {C.G}[15]{C.RS} {C.W}Analyse Memoire{C.RS}", None),
+        (f" {C.G}[16]{C.RS} {C.W}Forensique Disque{C.RS}", None),
+        (f" {C.G}[17]{C.RS} {C.W}Exécution Windows{C.RS}", None),
         ("", None),
         (f"{C.VB}{C.BD}Threat Hunting{C.RS}", None),
-        (f" {C.G}[15]{C.RS} Scan YARA", None),
-        (f" {C.G}[16]{C.RS} Extraction IOC", None),
-        (f" {C.G}[17]{C.RS} Timeline DFIR", None),
+        (f" {C.G}[18]{C.RS} {C.W}Scan YARA{C.RS}", None),
+        (f" {C.G}[19]{C.RS} {C.W}Extraction IOC{C.RS}", None),
+        (f" {C.G}[20]{C.RS} {C.W}Timeline DFIR{C.RS}", None),
+        ("", None),
+        ("", None),
     ]
 
     col_w = (w - 12) // 2
@@ -136,9 +161,9 @@ def menu() -> None:
 
     print()
     print(f"{MARGIN}   {C.VB}{C.BD}Outils{C.RS}")
-    print(f"{MARGIN}    {C.Y}[88]{C.RS} Scan Automatique")
-    print(f"{MARGIN}    {C.Y}[99]{C.RS} Exporter Rapport")
-    print(f"{MARGIN}    {C.R}[00]{C.RS} Quitter")
+    print(f"{MARGIN}    {C.Y}[88]{C.RS} {C.W}Scan Automatique{C.RS}")
+    print(f"{MARGIN}    {C.Y}[99]{C.RS} {C.W}Exporter Rapport{C.RS}")
+    print(f"{MARGIN}    {C.R}[00]{C.RS} {C.W}Quitter{C.RS}")
     print()
 
 
@@ -146,11 +171,11 @@ def export_menu() -> None:
     """Affiche le sous-menu d'export avec double-lignes rouges."""
     print()
     print(f"{MARGIN}   {C.VB}{C.BD}Export{C.RS}")
-    print(f"{MARGIN}    {C.G}[J]{C.RS}  Export JSON")
-    print(f"{MARGIN}    {C.G}[H]{C.RS}  Export HTML (interactif)")
-    print(f"{MARGIN}    {C.G}[C]{C.RS}  Export CSV Timeline")
-    print(f"{MARGIN}    {C.G}[P]{C.RS}  Export PDF")
-    print(f"{MARGIN}    {C.D}[R]{C.RS}  Retour")
+    print(f"{MARGIN}    {C.G}[J]{C.RS}  {C.W}Export JSON{C.RS}")
+    print(f"{MARGIN}    {C.G}[H]{C.RS}  {C.W}Export HTML (interactif){C.RS}")
+    print(f"{MARGIN}    {C.G}[C]{C.RS}  {C.W}Export CSV Timeline{C.RS}")
+    print(f"{MARGIN}    {C.G}[P]{C.RS}  {C.W}Export PDF{C.RS}")
+    print(f"{MARGIN}    {C.D}[R]{C.RS}  {C.W}Retour{C.RS}")
     print()
 
 
@@ -162,14 +187,16 @@ def prompt(label: str = "forensic-analyzer") -> str:
         line1 = (
             f"{MARGIN}"
             f"{C.R}┌─[{C.RS}"
-            f"{C.VB}{C.BD}forensic-analyzer{C.RS}"
+            f"{C.HR}{C.BD}forensic-analyzer{C.RS}"
             f"{C.R}]─[{C.RS}"
-            f"{C.G}{label}{C.RS}"
+            f"{C.HR}{label}{C.RS}"
             f"{C.R}]{C.RS}"
         )
-        line2 = f"{MARGIN}{C.R}└──╼{C.RS} {C.W}${C.RS} "
+        line2 = f"{MARGIN}{C.R}└──╼{C.RS} {C.W}${C.RS} {C.MG4}"
         print(line1)
-        return input(line2).strip()
+        res = input(line2).strip()
+        print(C.RS, end="") # Reset couleur après la saisie
+        return res
     except (EOFError, KeyboardInterrupt):
         return ""
 
@@ -211,11 +238,11 @@ def success(msg: str) -> None:
 
 
 def warning(msg: str) -> None:
-    print(f"{MARGIN}{C.R}[!]{C.RS} {C.Y}{msg}{C.RS}")
+    print(f"{MARGIN}{C.HY}[!]{C.RS} {C.HY}{msg}{C.RS}")
 
 
 def error(msg: str) -> None:
-    print(f"{MARGIN}{C.R}[-]{C.RS} {C.R}{msg}{C.RS}")
+    print(f"{MARGIN}{C.HR}[-]{C.RS} {C.HR}{msg}{C.RS}")
 
 
 def status(msg: str) -> None:
@@ -230,6 +257,8 @@ MODULE_TAGS = {
     "stego": "SGO", "carving": "CRV", "pcap": "NET", "memory": "MEM",
     "disk": "DSK", "evtx": "EVT", "registry": "REG",
     "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
+    "pe_analysis": "MAL", "chromium_artifacts": "WEB", 
+    "prefetch": "PF", "lnk_shortcut": "LNK"
 }
 
 MODULE_NAMES = {
@@ -241,51 +270,54 @@ MODULE_NAMES = {
     "disk": "Forensique Disque", "evtx": "Windows Event Logs",
     "registry": "Registre Windows", "linux_artifacts": "Artefacts Linux",
     "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
+    "pe_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
+    "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)"
 }
 
 
-def separator(label: str = "") -> None:
-    """Separateur double-ligne rouge style hacker [ ✓✗!?→ ] avec label optionnel."""
-    w = _width() - 8
-    decor_l = f"{C.VB}[ {C.G}✓{C.R}✗{C.Y}!{C.B}?{C.R}→{C.VB} ]{C.RS}"
-    decor_r = f"{C.VB}[ {C.G}✓{C.R}✗{C.Y}!{C.B}?{C.R}→{C.VB} ]{C.RS}"
-    
+def separator(label: str = "", dynamic_width: int = 0) -> None:
+    """Separateur double-ligne style hacker avec taille fixe de 85."""
+    target_width = 85
     if label:
         text = f" {C.G}{label}{C.RS} "
-        label_visible_len = len(label) + 2
-        # Les décors font 13 caractères de longueur visible chacun
-        remaining = w - 26 - label_visible_len
-        if remaining < 4:
-            remaining = 4
-        half = remaining // 2
-        print(f"{MARGIN}{decor_l} {C.R}{'═' * half}{C.RS}{text}{C.R}{'═' * (remaining - half)}{C.RS} {decor_r}")
+        label_len = len(label) + 2
+        rem = target_width - label_len
+        left = rem // 2
+        right = rem - left
+        print(f"{MARGIN}{C.R}{'═' * left}{C.RS}{text}{C.R}{'═' * right}{C.RS}")
     else:
-        remaining = w - 26
-        if remaining < 4:
-            remaining = 4
-        print(f"{MARGIN}{decor_l} {C.R}{'═' * remaining}{C.RS} {decor_r}")
+        print(f"{MARGIN}{C.R}{'═' * target_width}{C.RS}")
 
 
-def finding_header(finding_type: str, filename: str) -> None:
+def finding_header(finding_type: str, filename: str, dynamic_width: int = 0) -> None:
     """Affiche l'entete d'un finding."""
     tag = MODULE_TAGS.get(finding_type, "???")
     name = MODULE_NAMES.get(finding_type, finding_type)
     print()
     separator(f"{tag} | {name}")
-    print(f"{MARGIN}   {C.G}Fichier                      :{C.RS} {C.W}{filename}{C.RS}")
+    print(f"{MARGIN}   {C.G}Fichier                      {C.HY}:{C.RS} {C.W}{filename}{C.RS}")
     print()
 
 
 def kv(key: str, value, indent: int = 3) -> None:
-    """Affiche une paire cle-valeur en vert hacker et rouge hacker."""
+    """Affiche une paire cle-valeur en appliquant un retour a la ligne si besoin."""
     pad = " " * indent
     val_str = str(value)
 
-    # Titre du parametre en vert hacker (G) et resultat en rouge (R)
-    key_display = f"{C.G}{key:<28}{C.RS}"
-    val_display = f"{C.W}{val_str}{C.RS}"
+    offset = indent + 1 + 28 + 3
+    wrap_width = 85 - offset
+    if wrap_width < 10:
+        wrap_width = 50
 
-    print(f"{MARGIN}{pad} {key_display} : {val_display}")
+    lines = textwrap.wrap(val_str, width=wrap_width)
+    if not lines:
+        lines = [""]
+
+    key_display = f"{C.G}{key:<28}{C.RS}"
+    print(f"{MARGIN}{pad} {key_display} {C.HY}:{C.RS} {C.W}{lines[0]}{C.RS}")
+    
+    for line in lines[1:]:
+        print(f"{MARGIN}{' ' * offset}{C.W}{line}{C.RS}")
 
 
 def render_finding(finding) -> None:
@@ -319,6 +351,47 @@ def render_finding(finding) -> None:
                 url = e.get("url", "")
                 print(f"{MARGIN}    {C.G}{date:<22}{C.RS} {C.W}{url}{C.RS}")
 
+    elif finding.type == "yara" and "matches" in extra:
+        matches = extra["matches"]
+        if matches:
+            print()
+            separator("Correspondances YARA")
+            for rule in matches:
+                print(f"{MARGIN}    {C.HR}[!]{C.RS} {C.W}{rule}{C.RS}")
+
+    elif finding.type == "pe_analysis":
+        if "sections_pe" in extra and extra["sections_pe"]:
+            print()
+            separator("Sections PE")
+            for sec in extra["sections_pe"]:
+                name = sec.get("Nom", "")
+                ent = sec.get("Entropie", "")
+                size = sec.get("Taille Virtuelle", 0)
+                color = C.HR if "CRITIQUE" in ent else C.G
+                print(f"{MARGIN}    {color}{name:<10}{C.RS} {C.HY}Entropie:{C.RS} {C.W}{ent:<15}{C.RS} {C.HY}Taille:{C.RS} {C.W}{size}{C.RS}")
+        if "dll_imports" in extra and extra["dll_imports"]:
+            print()
+            separator("Imports DLL")
+            for dll in extra["dll_imports"][:15]:
+                print(f"{MARGIN}    {C.G}DLL{C.HY}:{C.RS} {C.W}{dll}{C.RS}")
+            if len(extra["dll_imports"]) > 15:
+                print(f"{MARGIN}    {C.D}     ... +{len(extra['dll_imports']) - 15} de plus{C.RS}")
+
+    elif finding.type == "chromium_artifacts":
+        if "chromium_downloads" in extra and extra["chromium_downloads"]:
+            print()
+            separator("Téléchargements")
+            for d in extra["chromium_downloads"][:10]:
+                color = C.HR if d.get('danger_type') else C.G
+                fname = str(d.get('fichier', ''))[:50]
+                print(f"{MARGIN}    {color}{fname:<50}{C.RS} {C.HY}Taille:{C.RS} {C.W}{d.get('taille_octets', 0)}{C.RS}")
+        if "chromium_urls" in extra and extra["chromium_urls"]:
+            print()
+            separator("Historique URLs (Top 10)")
+            for u in extra["chromium_urls"][:10]:
+                url = str(u.get('url', ''))[:65]
+                print(f"{MARGIN}    {C.VB}{u.get('visites', 0):>4}x{C.RS} {C.W}{url}{C.RS}")
+
     elif finding.type == "firefox_cookies" and "entries" in extra:
         entries = extra["entries"]
         if entries:
@@ -328,7 +401,7 @@ def render_finding(finding) -> None:
                 name = e.get("name", "")
                 host = e.get("host", "")
                 val = e.get("value", "")[:40]
-                print(f"{MARGIN}    {C.G}{name}{C.RS} @ {C.VB}{host:<30}{C.RS} {C.W}{val}{C.RS}")
+                print(f"{MARGIN}    {C.G}{name}{C.RS} {C.W}@{C.RS} {C.VB}{host:<30}{C.RS} {C.W}{val}{C.RS}")
 
     elif finding.type == "pcap" and "credentials" in extra:
         creds = extra["credentials"]
@@ -388,13 +461,13 @@ def render_summary(report) -> None:
         type_counts[f.type] = type_counts.get(f.type, 0) + 1
 
     print()
-    separator("RESUME")
+    separator("STATISTIQUES")
     print()
 
     for ftype, count in sorted(type_counts.items()):
         tag = MODULE_TAGS.get(ftype, "???")
         name = MODULE_NAMES.get(ftype, ftype)
-        print(f"{MARGIN}    {C.VB}[{tag}]{C.RS} {C.G}{name:<30}{C.RS} {C.W}{C.BD}{count}{C.RS}")
+        print(f"{MARGIN}    {C.VB}[{tag}]{C.RS} {C.W}{C.BD}{count:<4}{C.RS} {C.G}{name}{C.RS}")
 
     print()
     print(f"{MARGIN}{C.G}[+]{C.RS} {C.W}{n} resultat{'s' if n > 1 else ''}{C.RS}  {C.D}|{C.RS}  {C.D}{report.timestamp}{C.RS}")
@@ -414,6 +487,8 @@ def wait_for_key() -> None:
     """Attend que l'utilisateur appuie sur Entree."""
     try:
         print()
-        input(f"{MARGIN}{C.D}[Appuyez sur Entree pour continuer]{C.RS}")
+        input(f"{MARGIN}{C.D}[Appuyez sur Entree pour continuer]{C.MG4}")
     except (EOFError, KeyboardInterrupt):
         pass
+    finally:
+        print(C.RS, end="")

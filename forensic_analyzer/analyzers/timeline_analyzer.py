@@ -1,8 +1,10 @@
 """Analyzer Timeline - correlation multi-sources et export DFIR."""
 from __future__ import annotations
-import os
+
 import csv
 import datetime
+import os
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
@@ -136,6 +138,44 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "description": f"Connexion SSH: {entry.get('user', '?')} depuis {entry.get('source_ip', '?')}",
                     "file": file,
                     "details": str(entry),
+                })
+
+        # Chromium history & downloads
+        elif source == "chromium_artifacts":
+            for url in finding.extra.get("chromium_urls", []):
+                ts = url.get("derniere_visite", "")
+                if ts:
+                    events.append({
+                        "timestamp": _normalize_timestamp(ts),
+                        "source": "chromium",
+                        "event_type": "navigation",
+                        "description": f"Visite: {url.get('url', '?')[:100]}",
+                        "file": file,
+                        "details": url.get("titre", ""),
+                    })
+            for dl in finding.extra.get("chromium_downloads", []):
+                ts = dl.get("debut", "")
+                if ts:
+                    events.append({
+                        "timestamp": _normalize_timestamp(ts),
+                        "source": "chromium",
+                        "event_type": "download",
+                        "description": f"Téléchargement: {dl.get('fichier', '?')}",
+                        "file": file,
+                        "details": f"URL: {dl.get('url', '?')}",
+                    })
+
+        # Windows Execution
+        elif source in ("prefetch", "lnk_shortcut"):
+            ts = finding.metadata.get("Dernière Exécution", "") or finding.metadata.get("Creation", "")
+            if ts:
+                events.append({
+                    "timestamp": _normalize_timestamp(ts),
+                    "source": source,
+                    "event_type": "execution",
+                    "description": f"Exécution: {finding.metadata.get('Nom supposé', file)}",
+                    "file": file,
+                    "details": str(finding.metadata),
                 })
 
         # PCAP

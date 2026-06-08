@@ -1,9 +1,11 @@
 """Analyzer memoire - wrapper Volatility3 pour dumps RAM."""
 from __future__ import annotations
-import os
-import subprocess
+
 import json
+import os
 import shutil
+import subprocess
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger

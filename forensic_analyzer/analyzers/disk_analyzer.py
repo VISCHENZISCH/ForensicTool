@@ -1,8 +1,10 @@
 """Analyzer disque - MFT NTFS, ADS, ext4 inodes, slack space."""
 from __future__ import annotations
+
+import datetime
 import os
 import struct
-import datetime
+
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -179,7 +181,7 @@ def parse_ext4_inode(data: bytes, offset: int = 0, inode_size: int = 256) -> dic
         gid = struct.unpack_from('<H', d, 24)[0]
         links = struct.unpack_from('<H', d, 26)[0]
         blocks = struct.unpack_from('<I', d, 28)[0]
-        flags = struct.unpack_from('<I', d, 32)[0]
+        struct.unpack_from('<I', d, 32)[0]
 
         # Determiner le type de fichier
         file_type = {

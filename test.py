@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 # Importations des modules a tester
 from forensic_analyzer.core.pipeline import AnalyzerRegistry
-from forensic_analyzer.core.scanner import auto_scan
+from forensic_analyzer.core.scanner import auto_scan, collect_targets
 from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
 from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
 from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer, _to_degrees
@@ -32,6 +32,9 @@ from forensic_analyzer.analyzers.linux_artifacts_analyzer import LinuxArtifactsA
 from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
 from forensic_analyzer.analyzers.ioc_analyzer import IOCAnalyzer
 from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
+from forensic_analyzer.analyzers.pe_analyzer import PEAnalyzer
+from forensic_analyzer.analyzers.chromium_analyzer import ChromiumAnalyzer
+from forensic_analyzer.analyzers.windows_execution_analyzer import WindowsExecutionAnalyzer
 from forensic_analyzer.output.json_exporter import JSONExporter
 from forensic_analyzer.output.html_exporter import HTMLExporter
 from forensic_analyzer.output.csv_exporter import CSVExporter
@@ -448,7 +451,148 @@ class TestFirefoxAnalyzersL1(unittest.TestCase):
             os.unlink(path)
 
 
-if __name__ == "__main__":
+class TestCoreAnalyzers(unittest.TestCase):
+    def test_pdf_analyzer_fallback(self):
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.write(b"%PDF-1.4\n%/Title (Document Test)\n%/Author (Auteur Test)\n")
+            path = f.name
+        try:
+            with patch("forensic_analyzer.analyzers.pdf_analyzer.HAS_PYPDF", False):
+                analyzer = PDFAnalyzer()
+                res = analyzer.analyze(path)
+                self.assertIsNotNone(res)
+                self.assertEqual(res.type, "pdf")
+                self.assertEqual(res.metadata["Title"], "Document Test")
+                self.assertEqual(res.metadata["Author"], "Auteur Test")
+        finally:
+            os.unlink(path)
+
+    def test_image_analyzer_no_pil(self):
+        with patch("forensic_analyzer.analyzers.image_analyzer.HAS_PIL", False):
+            analyzer = ImageAnalyzer()
+            res = analyzer.analyze("dummy.png")
+            self.assertIsNone(res)
+
+    @patch("forensic_analyzer.analyzers.gps_analyzer.exifread")
+    def test_gps_analyzer_mocked(self, mock_exifread):
+        class MockTag:
+            def __init__(self, values):
+                self.values = values
+            def __str__(self):
+                return "N"
+        
+        class Ratio:
+            def __init__(self, num, den):
+                self.num = num
+                self.den = den
+
+        mock_exifread.process_file.return_value = {
+            "GPS GPSLatitude": MockTag([Ratio(48, 1), Ratio(51, 1), Ratio(24, 1)]),
+            "GPS GPSLatitudeRef": "N",
+            "GPS GPSLongitude": MockTag([Ratio(2, 1), Ratio(20, 1), Ratio(14, 1)]),
+            "GPS GPSLongitudeRef": "E",
+        }
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            path = f.name
+        try:
+            with patch("forensic_analyzer.analyzers.gps_analyzer.HAS_EXIFREAD", True):
+                analyzer = GPSAnalyzer()
+                res = analyzer.analyze(path)
+                self.assertIsNotNone(res)
+                self.assertEqual(res.type, "gps")
+                self.assertAlmostEqual(res.metadata["Latitude"], 48.856667)
+                self.assertAlmostEqual(res.metadata["Longitude"], 2.337222)
+        finally:
+            os.unlink(path)
+
+
+class TestProAnalyzers(unittest.TestCase):
+    def test_pe_analyzer_mocked(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"MZ" + b"\x00" * 50)
+            path = f.name
+        
+        analyzer = PEAnalyzer()
+        self.assertTrue(analyzer.supports(path))
+        res = analyzer.analyze(path)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.type, "pe_analysis")
+        self.assertIn("Entropie globale", res.metadata)
+        os.unlink(path)
+
+    def test_chromium_analyzer_mocked(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "History")
+            conn = sqlite3.connect(path)
+            conn.execute("CREATE TABLE downloads (target_path TEXT, start_time INTEGER, total_bytes INTEGER, danger_type INTEGER)")
+            conn.execute("INSERT INTO downloads VALUES ('malware.exe', 123456, 1024, 1)")
+            conn.execute("CREATE TABLE urls (url TEXT, title TEXT, visit_count INTEGER)")
+            conn.execute("INSERT INTO urls VALUES ('http://evil.com', 'Evil', 5)")
+            conn.commit()
+            conn.close()
+            
+            analyzer = ChromiumAnalyzer()
+            self.assertTrue(analyzer.supports(path))
+            res = analyzer.analyze(path)
+            self.assertIsNotNone(res)
+            self.assertEqual(res.type, "chromium_artifacts")
+            self.assertEqual(res.metadata.get("Téléchargements trouvés"), 1)
+
+    def test_winexec_analyzer_prefetch(self):
+        with tempfile.NamedTemporaryFile(suffix=".pf", delete=False) as f:
+            f.write(b"SCCA" + b"\x00" * 20)
+            path = f.name
+            
+        analyzer = WindowsExecutionAnalyzer()
+        self.assertTrue(analyzer.supports(path))
+        res = analyzer.analyze(path)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.type, "prefetch")
+        os.unlink(path)
+
+    def test_winexec_analyzer_lnk(self):
+        with tempfile.NamedTemporaryFile(suffix=".lnk", delete=False) as f:
+            # Header size (0x4c) + dummy data up to 100 bytes
+            f.write(b"\x4c\x00\x00\x00" + b"\x00" * 16 + b"\x61\x00\x00\x00" + b"\x00" * 80)
+            path = f.name
+            
+        analyzer = WindowsExecutionAnalyzer()
+        self.assertTrue(analyzer.supports(path))
+        res = analyzer.analyze(path)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.type, "lnk_shortcut")
+        self.assertIn("A un Target IDList", res.metadata)
+        os.unlink(path)
+
+
+class TestScanner(unittest.TestCase):
+    def test_collect_targets_recursive(self):
+        with tempfile.TemporaryDirectory() as d:
+            subdir = os.path.join(d, "subdir")
+            os.mkdir(subdir)
+            
+            f1_path = os.path.join(d, "file1.txt")
+            f2_path = os.path.join(subdir, "file2.txt")
+            
+            with open(f1_path, "w") as f1, open(f2_path, "w") as f2:
+                f1.write("test1")
+                f2.write("test2")
+                
+            targets = collect_targets(d)
+            self.assertEqual(len(targets), 2)
+            self.assertIn(os.path.abspath(f1_path), targets)
+            self.assertIn(os.path.abspath(f2_path), targets)
+
+    def test_auto_scan_empty(self):
+        registry = AnalyzerRegistry()
+        with tempfile.TemporaryDirectory() as d:
+            report = auto_scan(d, registry)
+            self.assertEqual(report.total, 0)
+            self.assertEqual(len(report.findings), 0)
+
+
+if __name__ == '__main__':
     print(":-" * 60)
     print("  Forensic Analyzer - Suite de tests unitaires complete")
     print(":-" * 60)

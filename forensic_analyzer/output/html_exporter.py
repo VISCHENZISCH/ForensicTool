@@ -1,639 +1,366 @@
-"""Exporteur HTML interactif premium avec Chart.js et sections DFIR."""
+"""Exporteur HTML/PDF - Design System Figma (Monochrome + Color Blocks)."""
 from __future__ import annotations
+
 import html
 import json
 import os
-from forensic_analyzer.models.finding import FindingModel, ReportModel
+from collections import defaultdict
+
 from forensic_analyzer.analyzers.timeline_analyzer import build_timeline
+from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("html_exporter")
 
 _TYPE_LABELS = {
-    "pdf": "[PDF]", "image": "[IMG]", "gps": "[GPS]",
-    "strings": "[STR]", "firefox_history": "[NAV]", "firefox_cookies": "[CKY]",
-    "stego": "[STEG]", "carving": "[CARV]", "pcap": "[NET]",
-    "memory": "[MEM]", "disk": "[DISK]", "evtx": "[EVTX]",
-    "registry": "[REG]", "linux_artifacts": "[LNX]",
-    "yara": "[YARA]", "ioc": "[IOC]", "timeline": "[TIME]",
+    "pdf": "PDF Document", "image": "Image / EXIF", "gps": "GPS Data",
+    "strings": "Extracted Strings", "firefox_history": "Firefox History", "firefox_cookies": "Firefox Cookies",
+    "stego": "Steganography", "carving": "File Carving", "pcap": "Network Traffic (PCAP)",
+    "memory": "Memory Dump", "disk": "Disk Forensic", "evtx": "Windows EVTX",
+    "registry": "Windows Registry", "linux_artifacts": "Linux Artifacts",
+    "yara": "YARA Matches", "ioc": "IOCs", "timeline": "DFIR Timeline",
+    "pe_analysis": "PE Malware Triage", "chromium_artifacts": "Chromium Artifacts",
+    "prefetch": "WinExec Prefetch", "lnk_shortcut": "WinExec LNK",
 }
 
-_TYPE_COLORS = {
-    "pdf": "#f25f5c", "image": "#3ecf8e", "gps": "#f5c542",
-    "strings": "#a78bfa", "firefox_history": "#4f8ef7", "firefox_cookies": "#fb923c",
-    "stego": "#ec4899", "carving": "#06b6d4", "pcap": "#6366f1",
-    "memory": "#ef4444", "disk": "#84cc16", "evtx": "#f59e0b",
-    "registry": "#8b5cf6", "linux_artifacts": "#10b981",
-    "yara": "#e11d48", "ioc": "#d946ef", "timeline": "#0ea5e9",
+def get_category(f_type: str) -> str:
+    if f_type in ("disk", "evtx", "registry", "prefetch", "lnk_shortcut"):
+        return "system"
+    elif f_type in ("pcap", "firefox_history", "firefox_cookies", "chromium_artifacts"):
+        return "network"
+    elif f_type in ("pe_analysis", "yara", "ioc", "stego", "carving", "strings"):
+        return "malware"
+    elif f_type in ("pdf", "image", "gps"):
+        return "files"
+    elif f_type in ("memory", "linux_artifacts"):
+        return "memory_linux"
+    elif f_type == "timeline":
+        return "timeline"
+    return "other"
+
+_CATEGORIES = {
+    "system": {"title": "Système & Disque", "class": "block-lime"},
+    "network": {"title": "Réseau & Web", "class": "block-coral"},
+    "malware": {"title": "Malware & Avancé", "class": "block-navy"},
+    "files": {"title": "Métadonnées Fichiers", "class": "block-lilac"},
+    "memory_linux": {"title": "Mémoire & OS", "class": "block-mint"},
+    "timeline": {"title": "Chronologie", "class": "block-cream"},
+    "other": {"title": "Autres", "class": "block-pink"},
 }
 
 
-def _finding_card(f: FindingModel) -> str:
-    label = _TYPE_LABELS.get(f.type, "[?]")
+def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
+    label = _TYPE_LABELS.get(f.type, f.type.upper())
     fname = html.escape(os.path.basename(f.file))
-    color = _TYPE_COLORS.get(f.type, "#4f8ef7")
+    
+    card_cls = "card card-inverse" if is_inverse else "card"
+    row_cls = "table-row table-row-inverse" if is_inverse else "table-row"
+    text_cls = "text-inverse" if is_inverse else "text-ink"
+    muted_cls = "text-inverse-muted" if is_inverse else "text-muted"
 
     rows = "".join(
-        f"<tr><td>{html.escape(str(k))}</td><td>{html.escape(str(v)[:300])}</td></tr>"
+        f"<div class='{row_cls}'><div class='eyebrow {muted_cls} cell-key'>{html.escape(str(k))}</div><div class='body-sm {text_cls} cell-val'>{html.escape(str(v)[:300])}</div></div>"
         for k, v in f.metadata.items()
     )
+
     extra_rows = ""
-    if f.type == "strings" and "strings" in f.extra:
-        extra_rows = "".join(
-            f"<tr><td>{i}</td><td class='mono'>{html.escape(s)}</td></tr>"
-            for i, s in enumerate(f.extra["strings"][:100], 1)
-        )
-    elif f.type == "firefox_history" and "entries" in f.extra:
-        extra_rows = "".join(
-            f"<tr><td>{html.escape(e.get('date') or '-')}</td>"
-            f"<td><a href='{html.escape(e.get('url',''))}' target='_blank' class='link'>"
-            f"{html.escape(e.get('url','')[:80])}</a></td></tr>"
-            for e in f.extra["entries"][:50]
-        )
-    elif f.type == "ioc" and "iocs" in f.extra:
-        iocs = f.extra["iocs"]
-        for ioc_type, items in iocs.items():
+    ext = f.extra or {}
+    
+    def section_header(title):
+        return f"<div class='{row_cls} section-header'><div class='eyebrow {text_cls}'>{title}</div></div>"
+    
+    def render_row(k, v, is_danger=False):
+        danger_style = "color: var(--accent-magenta); font-weight: 540;" if is_danger else ""
+        return f"<div class='{row_cls}'><div class='eyebrow {muted_cls} cell-key'>{html.escape(str(k))}</div><div class='body-sm {text_cls} cell-val mono' style='{danger_style}'>{html.escape(str(v))}</div></div>"
+
+    if f.type == "strings" and "strings" in ext:
+        extra_rows += section_header("Chaines (Top 100)")
+        for i, s in enumerate(ext["strings"][:100], 1):
+            extra_rows += render_row(f"#{i}", s)
+    elif f.type == "firefox_history" and "entries" in ext:
+        extra_rows += section_header("Historique")
+        for e in ext["entries"][:50]:
+            extra_rows += render_row(e.get('date') or '-', e.get('url','')[:80])
+    elif f.type == "firefox_cookies" and "entries" in ext:
+        extra_rows += section_header("Cookies")
+        for e in ext["entries"][:50]:
+            extra_rows += render_row(e.get('host') or '-', f"{e.get('name','')} = {e.get('value','')[:60]}")
+    elif f.type == "chromium_artifacts":
+        if ext.get("chromium_urls"):
+            extra_rows += section_header("URLs (Top 10)")
+            for u in ext["chromium_urls"][:10]:
+                extra_rows += render_row(f"VISITES: {u.get('visites', 0)}", u.get('url','')[:80])
+        if ext.get("chromium_downloads"):
+            extra_rows += section_header("Téléchargements")
+            for d in ext["chromium_downloads"][:10]:
+                extra_rows += render_row(f"TAILLE: {d.get('taille_octets', 0)}", str(d.get('fichier', ''))[:80], is_danger=bool(d.get('danger_type')))
+    elif f.type == "pe_analysis":
+        if ext.get("sections_pe"):
+            extra_rows += section_header("Sections PE")
+            for sec in ext["sections_pe"]:
+                ent = sec.get("Entropie", "")
+                extra_rows += render_row(sec.get('Nom', ''), f"Entropie: {ent} | Taille: {sec.get('Taille Virtuelle', 0)}", is_danger="CRITIQUE" in ent)
+        if ext.get("dll_imports"):
+            extra_rows += section_header("Imports DLL")
+            for dll in ext["dll_imports"][:15]:
+                extra_rows += render_row("DLL", dll)
+    elif f.type == "pcap" and ext.get("credentials"):
+        extra_rows += section_header("Credentials Réseau")
+        for c in ext["credentials"][:20]:
+            extra_rows += render_row(c.get('protocol', '?'), c.get('data', c.get('user', str(c))), is_danger=True)
+    elif f.type == "ioc" and ext.get("iocs"):
+        for ioc_type, items in ext["iocs"].items():
             for item in items[:10]:
-                extra_rows += f"<tr><td><span class='ioc-type'>{ioc_type}</span></td><td class='mono'>{html.escape(str(item))}</td></tr>"
+                extra_rows += render_row(ioc_type, item)
+    elif f.type == "timeline" and ext.get("events"):
+        extra_rows += section_header("Chronologie")
+        for e in ext["events"][:50]:
+            extra_rows += render_row(e.get('timestamp', '?') or "N/A", f"[{e.get('source', '')}] {e.get('detail', '')[:80]}")
+    elif f.type in ("carving", "stego"):
+        for extra_key in ("embedded_files", "polyglots", "lsb_data", "matches"):
+            items = ext.get(extra_key)
+            if items and isinstance(items, list):
+                extra_rows += section_header(extra_key.replace('_', ' '))
+                for item in items[:20]:
+                    if isinstance(item, dict):
+                        for ik, iv in item.items():
+                            extra_rows += render_row(ik, str(iv)[:80])
+                    else:
+                        extra_rows += render_row("MATCH", str(item))
+    elif f.type == "yara" and ext.get("matches"):
+        extra_rows += section_header("Règles YARA")
+        for rule in ext["matches"]:
+            extra_rows += render_row("ALERT", rule, is_danger=True)
 
+    tag_cls = "pill-inverse" if is_inverse else "pill-secondary"
     return f"""
-    <section class="card">
-      <h3 class="card-title">
-        <span class="badge" style="background:{color}">{f.type.upper()}</span>
-        {label} {fname}
-      </h3>
-      <p class="filepath">{html.escape(f.file)}</p>
-      <table><tbody>{rows}{extra_rows}</tbody></table>
-    </section>"""
-
-
-def _build_charts_data(report: ReportModel) -> str:
-    """Genere les donnees JSON pour Chart.js."""
-    # Comptage par type
-    type_counts: dict[str, int] = {}
-    for f in report.findings:
-        type_counts[f.type] = type_counts.get(f.type, 0) + 1
-
-    # Timeline pour graphe temporel
-    events = build_timeline(report)
-    source_counts: dict[str, int] = {}
-    for e in events:
-        src = e.get("source", "other")
-        source_counts[src] = source_counts.get(src, 0) + 1
-
-    return json.dumps({
-        "type_labels": list(type_counts.keys()),
-        "type_values": list(type_counts.values()),
-        "type_colors": [_TYPE_COLORS.get(t, "#4f8ef7") for t in type_counts],
-        "source_labels": list(source_counts.keys()),
-        "source_values": list(source_counts.values()),
-        "timeline_count": len(events),
-    })
+    <div class="{card_cls}">
+      <div class="card-header">
+        <span class="caption {tag_cls}">{f.type.upper()}</span>
+        <h3 class="card-title {text_cls}" style="margin-top: 16px; margin-bottom: 4px;">{label}</h3>
+        <div class="caption {muted_cls} mono" style="word-break: break-all;">{html.escape(f.file)}</div>
+      </div>
+      <div class="table-wrapper" style="margin-top: 24px;">
+        {rows}{extra_rows}
+      </div>
+    </div>"""
 
 
 def _build_executive_summary(report: ReportModel) -> str:
-    """Genere le resume executif."""
     alerts = []
     for f in report.findings:
-        if f.type == "stego" and f.extra.get("verdict") in ("STEGO PROBABLE", "SUSPECT"):
-            alerts.append(f"Steganographie detectee dans {os.path.basename(f.file)}")
-        if f.type == "pcap":
-            creds = f.extra.get("credentials", [])
-            if creds:
-                alerts.append(f"{len(creds)} credential(s) trouvee(s) dans le trafic reseau")
-            if f.extra.get("dns_exfiltration", {}).get("detected"):
-                alerts.append("Exfiltration DNS detectee")
-            if f.extra.get("c2_beacons", {}).get("detected"):
-                alerts.append("Pattern C2/beacon detecte")
-        if f.type == "evtx":
-            evtx_alerts = f.extra.get("alerts", {})
-            if evtx_alerts.get("audit_cleared"):
-                alerts.append("Audit log Windows efface")
-            if evtx_alerts.get("failed_logons", 0) > 50:
-                alerts.append(f"{evtx_alerts['failed_logons']} tentatives de connexion echouees")
-        if f.type == "linux_artifacts":
-            auth = f.extra.get("auth_log", {})
-            bf = auth.get("brute_force_ips", {})
-            if bf:
-                alerts.append(f"Brute-force SSH detecte depuis {len(bf)} IP(s)")
-        if f.type == "yara":
-            matches = f.extra.get("matches", [])
-            if matches:
-                rules = set(m["rule"] for m in matches)
-                alerts.append(f"YARA : {len(rules)} regle(s) declenchee(s)")
-        if f.type == "carving":
-            polyglots = f.extra.get("polyglots", [])
-            if polyglots:
-                alerts.append(f"Polyglot detecte : {', '.join(polyglots)}")
+        ext = f.extra or {}
+        if f.type == "stego" and ext.get("verdict") in ("STEGO PROBABLE", "SUSPECT"):
+            alerts.append(f"Steganography detected in {os.path.basename(f.file)}")
+        if f.type == "pcap" and ext.get("credentials"):
+            alerts.append(f"{len(ext['credentials'])} credential(s) intercepted in network traffic")
+        if f.type == "pe_analysis":
+            for sec in ext.get("sections_pe", []):
+                if "CRITIQUE" in sec.get("Entropie", ""):
+                    alerts.append(f"Critical entropy in PE section {sec.get('Nom', '')} of {os.path.basename(f.file)}")
+        if f.type == "evtx" and ext.get("alerts", {}).get("audit_cleared"):
+            alerts.append("Windows Audit Log clearing detected")
+        if f.type == "linux_artifacts" and ext.get("auth_log", {}).get("brute_force_ips"):
+            alerts.append("SSH Brute-force activity detected")
+        if f.type == "yara" and ext.get("matches"):
+            alerts.append(f"YARA rules triggered on {os.path.basename(f.file)}")
+        if f.type == "chromium_artifacts":
+            for d in ext.get("chromium_downloads", []):
+                if d.get("danger_type"):
+                    alerts.append(f"Dangerous download detected via Chromium: {d.get('fichier')}")
 
-    alert_html = ""
-    if alerts:
-        items = "".join(f"<li>{html.escape(a)}</li>" for a in alerts)
-        alert_html = f'<div class="alert-box"><h4>Alertes</h4><ul>{items}</ul></div>'
-    else:
-        alert_html = '<div class="ok-box"><h4>Aucune alerte critique</h4></div>'
-
-    return alert_html
-
-
-def _build_ioc_table(report: ReportModel) -> str:
-    """Genere la table IOC consolidee."""
-    all_iocs: dict = {}
-    for f in report.findings:
-        if f.type == "ioc" and "iocs" in f.extra:
-            for ioc_type, items in f.extra["iocs"].items():
-                if items:
-                    if ioc_type not in all_iocs:
-                        all_iocs[ioc_type] = []
-                    all_iocs[ioc_type].extend(items)
-
-    if not all_iocs:
+    if not alerts:
         return ""
 
-    rows = ""
-    for ioc_type, items in all_iocs.items():
-        unique = list(set(items))[:50]
-        for item in unique:
-            rows += f"<tr><td><span class='ioc-type'>{ioc_type}</span></td><td class='mono'>{html.escape(str(item))}</td></tr>"
-
+    items = "".join(f"<li class='body-sm' style='margin-bottom: 12px; display: flex; gap: 12px;'><span class='eyebrow' style='color: var(--accent-magenta);'>ALERT</span> {html.escape(a)}</li>" for a in alerts)
     return f"""
-    <section class="card">
-      <h3 class="card-title"><span class="badge" style="background:#d946ef">IOC</span> Table des indicateurs de compromission</h3>
-      <table><thead><tr><th style="width: 30%">Type</th><th>Valeur</th></tr></thead><tbody>{rows}</tbody></table>
-    </section>"""
+    <div class="color-block block-pink">
+      <h2 class="display-lg" style="margin-bottom: 48px;">Critical Alerts</h2>
+      <ul style="list-style: none; padding: 0; margin: 0;">{items}</ul>
+    </div>
+    """
 
 
 def build_interactive_html(report: ReportModel) -> str:
-    """Construit le rapport HTML interactif complet."""
-    cards = "\n".join(_finding_card(f) for f in report.findings)
     ts = html.escape(report.timestamp)
-    charts_data = _build_charts_data(report)
     exec_summary = _build_executive_summary(report)
-    ioc_table = _build_ioc_table(report)
 
-    counts = {"pdf": 0, "image": 0, "network": 0, "disk": 0, "other": 0}
+    # Group findings by category
+    grouped: dict[str, list[FindingModel]] = defaultdict(list)
     for f in report.findings:
-        if f.type == "pdf":
-            counts["pdf"] += 1
-        elif f.type in ("image", "stego"):
-            counts["image"] += 1
-        elif f.type in ("pcap",):
-            counts["network"] += 1
-        elif f.type in ("disk", "evtx", "registry", "linux_artifacts"):
-            counts["disk"] += 1
-        else:
-            counts["other"] += 1
+        grouped[get_category(f.type)].append(f)
+
+    sections_html = ""
+    for cat_id, cat_info in _CATEGORIES.items():
+        if cat_id not in grouped:
+            continue
+        
+        is_inverse = cat_id in ("malware",)  # Navy block is inverse
+        title_cls = "display-lg text-inverse" if is_inverse else "display-lg"
+        
+        cards_html = "".join(_finding_card(f, is_inverse) for f in grouped[cat_id])
+        
+        sections_html += f"""
+        <div class="color-block {cat_info['class']}">
+          <h2 class="{title_cls}" style="margin-bottom: 48px;">{cat_info['title']}</h2>
+          <div class="grid-2up">
+            {cards_html}
+          </div>
+        </div>
+        """
 
     return f"""<!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forensic Analyzer - Rapport Interactif</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<title>Forensic Analyzer Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {{
-    --page: #f1f5f9;
-    --ink: #0f172a;
-    --muted: #475569;
-    --surface: #ffffff;
-    --line: #e2e8f0;
-    --navy: #0f172a;
-    --accent: #2563eb;
-    --link: #0284c7;
-    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --primary: #000000;
+  --on-primary: #ffffff;
+  --ink: #000000;
+  --canvas: #ffffff;
+  --inverse-canvas: #000000;
+  --inverse-ink: #ffffff;
+  --hairline: #e6e6e6;
+  --hairline-soft: #f1f1f1;
+  --surface-soft: #f7f7f5;
+  --block-lime: #dceeb1;
+  --block-lilac: #c5b0f4;
+  --block-cream: #f4ecd6;
+  --block-pink: #efd4d4;
+  --block-mint: #c8e6cd;
+  --block-coral: #f3c9b6;
+  --block-navy: #1f1d3d;
+  --accent-magenta: #ff3d8b;
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 }}
-* {{
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}}
+
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
 body {{
-    font-family: var(--font-sans);
-    background: var(--page);
-    color: var(--ink);
-    min-height: 100vh;
-    padding: 0;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
 }}
-.container {{
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 32px 24px;
-}}
-.header {{
-    background: var(--navy);
-    color: #ffffff;
-    border-radius: 8px;
-    padding: 24px 32px;
-    margin-bottom: 32px;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 16px;
-    align-items: center;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}}
-.header h1 {{
-    color: #ffffff;
-    font-size: 2.1em;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-}}
-.header .meta {{
-    color: #94a3b8;
-    font-size: 1.05em;
-    margin-top: 4px;
-}}
-.total-badge {{
-    background: #ffffff;
-    color: #0f172a;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-size: 1.05em;
-    font-weight: 800;
-    white-space: nowrap;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
-}}
-.stats {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 20px;
-    margin-bottom: 32px;
-}}
-.stat {{
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 24px 20px;
-    text-align: center;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-    transition: transform 0.2s;
-}}
-.stat:hover {{
-    transform: translateY(-2px);
-}}
-.stat strong {{
-    display: block;
-    font-size: 2.2em;
-    color: var(--navy);
-    font-weight: 800;
-}}
-.stat span {{
-    font-size: 0.85em;
-    color: var(--muted);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}}
-.section-title {{
-    font-size: 1.25em;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--navy);
-    margin: 40px 0 24px;
-    padding-bottom: 8px;
-    border-bottom: 3px solid var(--navy);
-}}
-.alert-box {{
-    background: #fef2f2;
-    border: 1px solid #fca5a5;
-    border-radius: 8px;
-    padding: 18px 20px;
-    margin-bottom: 32px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-}}
-.alert-box h4 {{
-    color: #991b1b;
-    font-weight: 800;
-    margin-bottom: 8px;
-    font-size: 1.1em;
-}}
-.alert-box ul {{
-    padding-left: 20px;
-}}
-.alert-box li {{
-    color: #7f1d1d;
-    font-size: 0.95em;
-    margin-bottom: 4px;
-}}
-.ok-box {{
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-radius: 8px;
-    padding: 18px 20px;
-    margin-bottom: 32px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-}}
-.ok-box h4 {{
-    color: #166534;
-    font-weight: 800;
-    font-size: 1.1em;
-}}
-.charts {{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-bottom: 32px;
-}}
-.chart-box {{
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 24px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-}}
-.chart-box h3 {{
-    font-size: 0.95em;
-    color: var(--muted);
-    margin-bottom: 16px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 800;
-}}
-.card {{
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 24px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-    transition: transform 0.15s, border-color 0.15s;
-}}
-.card:hover {{
-    transform: translateY(-1px);
-    border-color: var(--navy) !important;
-}}
-.card-title {{
-    background: #ffffff;
-    border-bottom: 1px solid var(--line);
-    color: var(--ink);
-    padding: 14px 18px;
-    font-size: 1.15em;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}}
-.filepath {{
-    font-size: 0.8em;
-    color: var(--muted);
-    padding: 8px 18px 12px;
-    font-family: var(--font-mono);
-    word-break: break-all;
-    border-bottom: 1px solid var(--line);
-    background: #fafafa;
-}}
-table {{
-    width: 100%;
-    border-collapse: collapse;
-    background: #ffffff;
-    table-layout: fixed;
-}}
-th {{
-    background: #f8fafc;
-    color: #475569;
-    border-bottom: 2px solid var(--line);
-    font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    text-align: left;
-    padding: 12px 18px;
-    font-weight: 800;
-}}
-td {{
-    color: var(--ink);
-    vertical-align: middle;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 12px 18px;
-    word-break: break-all;
-}}
-td:first-child {{
-    color: var(--muted);
-    width: 30%;
-    font-weight: 700;
-}}
-tr {{
-    transition: background 0.15s;
-}}
-tr:hover {{
-    background: #f8fafc !important;
-}}
-.badge {{
-    display: inline-block;
-    padding: 4px 10px;
-    font-size: 0.8em;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    text-align: center;
-    color: #ffffff;
-}}
-.nav {{
-    display: flex;
-    gap: 8px;
-    margin: 16px 0 24px;
-    flex-wrap: wrap;
-}}
-.nav button {{
-    background: var(--surface);
-    border: 1px solid var(--line);
-    color: var(--ink);
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.85em;
-    font-weight: 700;
-    transition: all 0.15s;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
-}}
-.nav button:hover, .nav button.active {{
-    background: var(--navy);
-    border-color: var(--navy);
-    color: #ffffff;
-}}
-.mono {{
-    font-family: var(--font-mono);
-    font-size: 0.85em;
-}}
-.ioc-type {{
-    font-size: 0.8em;
-    background: var(--page);
-    color: #d946ef;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: 700;
-}}
-.link {{
-    color: var(--link);
-    font-weight: 700;
-}}
-.link:hover {{
-    text-decoration: underline;
-}}
-.footer {{
-    text-align: left;
-    color: var(--muted);
-    font-size: 0.95em;
-    margin-top: 32px;
-    padding: 16px 0;
-    border-top: 1px solid var(--line);
-}}
-.hidden {{
-    display: none;
-}}
-@media (max-width: 768px) {{
-    .container {{
-        padding: 12px;
-    }}
-    .header {{
-        grid-template-columns: 1fr;
-        padding: 16px;
-    }}
-    .header h1 {{
-        font-size: 1.7em;
-    }}
-    .charts {{
-        grid-template-columns: 1fr;
-    }}
-    .stats {{
-        grid-template-columns: repeat(3, 1fr);
-    }}
-    table {{
-        min-width: auto;
-    }}
+
+/* Typography */
+.display-xl {{ font-family: var(--font-sans); font-size: 86px; font-weight: 300; line-height: 1.0; letter-spacing: -1.72px; }}
+.display-lg {{ font-family: var(--font-sans); font-size: 64px; font-weight: 300; line-height: 1.1; letter-spacing: -0.96px; }}
+.headline {{ font-family: var(--font-sans); font-size: 26px; font-weight: 500; line-height: 1.35; letter-spacing: -0.26px; }}
+.subhead {{ font-family: var(--font-sans); font-size: 26px; font-weight: 300; line-height: 1.35; letter-spacing: -0.26px; }}
+.card-title {{ font-family: var(--font-sans); font-size: 24px; font-weight: 700; line-height: 1.45; }}
+.body-lg {{ font-family: var(--font-sans); font-size: 20px; font-weight: 300; line-height: 1.4; letter-spacing: -0.14px; }}
+.body {{ font-family: var(--font-sans); font-size: 18px; font-weight: 300; line-height: 1.45; letter-spacing: -0.26px; }}
+.body-sm {{ font-family: var(--font-sans); font-size: 16px; font-weight: 300; line-height: 1.45; letter-spacing: -0.14px; }}
+.button {{ font-family: var(--font-sans); font-size: 20px; font-weight: 500; line-height: 1.4; letter-spacing: -0.1px; }}
+.eyebrow {{ font-family: var(--font-mono); font-size: 18px; font-weight: 400; line-height: 1.3; letter-spacing: 0.54px; text-transform: uppercase; }}
+.caption {{ font-family: var(--font-mono); font-size: 12px; font-weight: 400; line-height: 1.0; letter-spacing: 0.6px; text-transform: uppercase; }}
+.mono {{ font-family: var(--font-mono); }}
+
+.text-ink {{ color: var(--ink); }}
+.text-inverse {{ color: var(--inverse-ink); }}
+.text-muted {{ color: rgba(0,0,0,0.5); }}
+.text-inverse-muted {{ color: rgba(255,255,255,0.5); }}
+
+/* Layout */
+.nav-bar {{ padding: 24px 48px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--hairline); }}
+.page-container {{ max-width: 1400px; margin: 0 auto; padding: 48px; }}
+.hero-section {{ padding: 96px 0; max-width: 900px; }}
+.marquee-strip {{ background: var(--inverse-canvas); color: var(--inverse-ink); padding: 12px 48px; display: flex; gap: 48px; }}
+
+/* Color Blocks */
+.color-block {{ border-radius: 24px; padding: 48px; margin-bottom: 96px; }}
+.block-lime {{ background: var(--block-lime); color: var(--ink); }}
+.block-lilac {{ background: var(--block-lilac); color: var(--ink); }}
+.block-cream {{ background: var(--block-cream); color: var(--ink); }}
+.block-navy {{ background: var(--block-navy); color: var(--inverse-ink); }}
+.block-coral {{ background: var(--block-coral); color: var(--ink); }}
+.block-pink {{ background: var(--block-pink); color: var(--ink); }}
+.block-mint {{ background: var(--block-mint); color: var(--ink); }}
+
+/* Cards & Components */
+.grid-2up {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
+.card {{ background: var(--surface-soft); border-radius: 8px; padding: 24px; }}
+.card-inverse {{ background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }}
+
+.pill-primary {{ background: var(--primary); color: var(--on-primary); border-radius: 50px; padding: 10px 20px; display: inline-flex; align-items: center; }}
+.pill-secondary {{ background: var(--canvas); color: var(--ink); border-radius: 50px; padding: 8px 18px 10px; border: 1px solid var(--primary); display: inline-flex; align-items: center; }}
+.pill-inverse {{ background: rgba(255,255,255,0.1); color: var(--inverse-ink); border-radius: 50px; padding: 8px 18px 10px; border: 1px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; }}
+
+/* Tables */
+.table-row {{ display: flex; padding: 12px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; }}
+.table-row-inverse {{ border-bottom: 1px solid rgba(255,255,255,0.1); }}
+.table-row:last-child {{ border-bottom: none; }}
+.cell-key {{ width: 35%; flex-shrink: 0; padding-right: 16px; word-break: break-word; }}
+.cell-val {{ width: 65%; word-break: break-word; }}
+.section-header {{ padding-top: 24px; padding-bottom: 8px; border-bottom: 2px solid var(--primary); }}
+.table-row-inverse.section-header {{ border-bottom: 2px solid var(--inverse-ink); }}
+
+/* Responsive */
+@media (max-width: 960px) {{
+  .grid-2up {{ grid-template-columns: 1fr; }}
+  .display-xl {{ font-size: 56px; letter-spacing: -1px; }}
+  .display-lg {{ font-size: 44px; letter-spacing: -0.5px; }}
+  .color-block {{ padding: 32px; border-radius: 0; margin-left: -24px; margin-right: -24px; }}
+  .page-container {{ padding: 24px; }}
 }}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div>
-      <h1>Forensic Analyzer</h1>
-      <div class="meta">Rapport généré le {ts}</div>
-    </div>
-    <div class="total-badge">
-      {report.total} résultat(s)
+
+<div class="page-container">
+
+  <div class="color-block" style="background: var(--inverse-canvas); color: var(--inverse-ink); margin-bottom: 96px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 48px;">
+      <div>
+        <h1 class="display-xl" style="margin-bottom: 24px;">Investigation<br>Report</h1>
+        <p class="subhead" style="color: rgba(255,255,255,0.7); max-width: 500px;">A comprehensive digital forensics and incident response summary.</p>
+      </div>
+      
+      <div class="card card-inverse" style="min-width: 350px; flex-shrink: 0;">
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 24px;">
+          <a href="https://github.com/VISCHENZISCH/ForensicTool" target="_blank" style="text-decoration: none; display: flex; align-items: center; gap: 8px;">
+            <h3 class="button text-inverse" style="margin: 0; font-weight: 700; letter-spacing: -0.5px;">Forensic Analyzer</h3>
+            <span style="color: rgba(255,255,255,0.5); font-size: 16px;">↗</span>
+          </a>
+          <span class="caption pill-inverse" style="white-space: nowrap;">Report {ts[:10]}</span>
+        </div>
+        <div>
+          <div class="table-row table-row-inverse">
+            <div class="eyebrow text-inverse-muted cell-key" style="width: 40%;">Generated</div>
+            <div class="body-sm text-inverse cell-val mono" style="width: 60%;">{ts[:19].replace('T', ' ')}</div>
+          </div>
+          <div class="table-row table-row-inverse" style="border-bottom: none;">
+            <div class="eyebrow text-inverse-muted cell-key" style="width: 40%;">Artifacts</div>
+            <div class="body-lg text-inverse cell-val mono" style="width: 60%; font-weight: 700; color: var(--block-lime);">{report.total}</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="stats">
-    <div class="stat"><strong>{report.total}</strong><span>Analyses</span></div>
-    <div class="stat"><strong>{counts['pdf']}</strong><span>PDFs</span></div>
-    <div class="stat"><strong>{counts['image']}</strong><span>Images</span></div>
-    <div class="stat"><strong>{counts['network']}</strong><span>Réseau</span></div>
-    <div class="stat"><strong>{counts['disk']}</strong><span>Système</span></div>
-    <div class="stat"><strong>{counts['other']}</strong><span>Autres</span></div>
-  </div>
-
-  <h2 class="section-title">Résumé Exécutif</h2>
   {exec_summary}
 
-  <h2 class="section-title">Statistiques</h2>
-  <div class="charts">
-    <div class="chart-box">
-      <h3>Distribution par type</h3>
-      <canvas id="typeChart"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3>Sources timeline</h3>
-      <canvas id="sourceChart"></canvas>
-    </div>
-  </div>
+  {sections_html}
 
-  {ioc_table}
-
-  <h2 class="section-title">Résultats Détaillés</h2>
-  <div class="nav" id="filters">
-    <button class="active" onclick="filterCards('all')">Tous</button>
-  </div>
-  <div id="findings">
-    {cards}
-  </div>
-
-  <div class="footer">
-    © 2026 Félix TOVIGNAN &nbsp;|&nbsp; 
-    <a href="https://github.com/VISCHENZISCH/ForensicTool.git" target="_blank" class="link">
-      https://github.com/VISCHENZISCH/ForensicTool.git
-    </a>
+  <div style="margin-top: 96px; padding-top: 48px; border-top: 1px solid var(--hairline); text-align: center;">
+    <div class="caption text-muted">© 2026 Félix TOVIGNAN • VISCHENZISCH</div>
   </div>
 </div>
 
-<script>
-const chartData = {charts_data};
-
-// Type distribution chart
-if (chartData.type_labels.length > 0) {{
-  new Chart(document.getElementById('typeChart'), {{
-    type: 'doughnut',
-    data: {{
-      labels: chartData.type_labels,
-      datasets: [{{ data: chartData.type_values, backgroundColor: chartData.type_colors, borderWidth: 0 }}]
-    }},
-    options: {{
-      responsive: true,
-      plugins: {{ legend: {{ position: 'right', labels: {{ color: '#475569', font: {{ size: 11 }} }} }} }}
-    }}
-  }});
-}}
-
-// Source chart
-if (chartData.source_labels.length > 0) {{
-  new Chart(document.getElementById('sourceChart'), {{
-    type: 'bar',
-    data: {{
-      labels: chartData.source_labels,
-      datasets: [{{ label: 'Événements', data: chartData.source_values, backgroundColor: '#2563eb', borderRadius: 6 }}]
-    }},
-    options: {{
-      responsive: true,
-      scales: {{
-        x: {{ ticks: {{ color: '#475569' }}, grid: {{ display: false }} }},
-        y: {{ ticks: {{ color: '#475569' }}, grid: {{ color: '#e2e8f0' }} }}
-      }},
-      plugins: {{ legend: {{ display: false }} }}
-    }}
-  }});
-}}
-
-// Dynamic filter buttons
-const types = new Set();
-document.querySelectorAll('.card').forEach(c => {{
-  const label = c.querySelector('.badge');
-  if (label) types.add(label.textContent.toLowerCase());
-}});
-const nav = document.getElementById('filters');
-types.forEach(t => {{
-  const btn = document.createElement('button');
-  btn.textContent = t;
-  btn.onclick = (event) => filterCards(t, event);
-  nav.appendChild(btn);
-}});
-
-function filterCards(type, event) {{
-  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
-  if (event) {{
-    event.target.classList.add('active');
-  }} else {{
-    document.querySelector('.nav button').classList.add('active');
-  }}
-  document.querySelectorAll('#findings .card').forEach(c => {{
-    if (type === 'all') {{ c.classList.remove('hidden'); return; }}
-    const label = c.querySelector('.badge');
-    if (label && label.textContent.toLowerCase() === type) c.classList.remove('hidden');
-    else c.classList.add('hidden');
-  }});
-}}
-</script>
 </body>
 </html>"""
 
 
 class HTMLExporter:
-    """Genere un rapport HTML interactif premium avec Chart.js."""
+    """Genere un rapport HTML/PDF premium utilisant le design system Figma."""
 
     def export(self, report: ReportModel, output_path: str) -> None:
         filename = os.path.basename(output_path)
@@ -642,4 +369,4 @@ class HTMLExporter:
         content = build_interactive_html(report)
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(content)
-        log.info("Rapport HTML exporté -> %s", target_path)
+        log.info("Rapport HTML/PDF (Figma Design) exporté -> %s", target_path)
