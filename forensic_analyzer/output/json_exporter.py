@@ -18,7 +18,11 @@ class JSONExporter:
             report:      ReportModel à exporter.
             output_path: Chemin de destination du fichier .json.
         """
+        import os
+        filename = os.path.basename(output_path)
+        os.makedirs("export", exist_ok=True)
+        target_path = os.path.join("export", filename)
         data = report.model_dump()
-        with open(output_path, "w", encoding="utf-8") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-        log.info("Rapport JSON exporté → %s (%d résultat(s))", output_path, report.total)
+        log.info("Rapport JSON exporté → %s (%d résultat(s))", target_path, report.total)

@@ -14,9 +14,13 @@ class CSVExporter:
     """Exporte la timeline en CSV compatible Plaso/DFIR."""
 
     def export(self, report: ReportModel, output_path: str) -> None:
+        import os
+        filename = os.path.basename(output_path)
+        os.makedirs("export", exist_ok=True)
+        target_path = os.path.join("export", filename)
         events = build_timeline(report)
-        with open(output_path, "w", newline="", encoding="utf-8") as f:
+        with open(target_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=_FIELDNAMES)
             writer.writeheader()
             writer.writerows(events)
-        log.info("Timeline CSV exportee -> %s (%d evenements)", output_path, len(events))
+        log.info("Timeline CSV exportee -> %s (%d evenements)", target_path, len(events))

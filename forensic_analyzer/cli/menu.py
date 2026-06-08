@@ -101,12 +101,16 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     if choice == "J":
         path = ui.prompt_input("Entrez le chemin du fichier JSON de sortie (.json)")
         if path:
+            filename = os.path.basename(path)
+            target_path = os.path.join("export", filename)
             JSONExporter().export(report, path)
-            ui.success(f"Rapport JSON exporte avec succes dans : {path}")
+            ui.success(f"Rapport JSON exporte avec succes dans : {target_path}")
 
     elif choice == "H":
         path = ui.prompt_input("Entrez le chemin du fichier HTML de sortie (.html)")
         if path:
+            filename = os.path.basename(path)
+            target_path = os.path.join("export", filename)
             # Add timeline automatically to HTML if possible
             timeline = TimelineAnalyzer().build_from_report(report)
             if timeline:
@@ -114,19 +118,23 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
             else:
                 augmented = report
             HTMLExporter().export(augmented, path)
-            ui.success(f"Rapport HTML interactif exporte dans : {path}")
+            ui.success(f"Rapport HTML interactif exporte dans : {target_path}")
 
     elif choice == "C":
         path = ui.prompt_input("Entrez le chemin du fichier CSV de sortie (.csv)")
         if path:
+            filename = os.path.basename(path)
+            target_path = os.path.join("export", filename)
             CSVExporter().export(report, path)
-            ui.success(f"Timeline CSV exportee dans : {path}")
+            ui.success(f"Timeline CSV exportee dans : {target_path}")
 
     elif choice == "P":
         path = ui.prompt_input("Entrez le chemin du fichier PDF de sortie (.pdf)")
         if path:
+            filename = os.path.basename(path)
+            target_path = os.path.join("export", filename)
             PDFExporter().export(report, path)
-            ui.success(f"Rapport PDF exporte dans : {path}")
+            ui.success(f"Rapport PDF exporte dans : {target_path}")
 
     else:
         ui.error("Option d'export invalide.")
@@ -144,6 +152,10 @@ def interactive_loop() -> None:
 
         if not choice:
             continue
+
+        # Normaliser les choix à deux chiffres comme 01-09 en 1-9, tout en gardant 00
+        if choice.isdigit() and choice != "00":
+            choice = str(int(choice))
 
         # Quitter
         if choice == "00" or choice == "0":

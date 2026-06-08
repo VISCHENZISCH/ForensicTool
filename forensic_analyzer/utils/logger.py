@@ -39,7 +39,7 @@ class ColoredFormatter(logging.Formatter):
         # 2. Niveau (Couleur correspondante)
         level_raw = record.levelname
         lvl_color = LEVEL_COLORS.get(level_raw, COLOR_MUTED)
-        level_str = f"{lvl_color}[{level_raw:<8}]{COLOR_RESET}"
+        level_str = f"{lvl_color}[{level_raw}]{COLOR_RESET}"
 
         # 3. Logger name (Sky Blue / Muted)
         logger_name = f"{COLOR_CYAN}{record.name}{COLOR_RESET}"
@@ -60,11 +60,25 @@ class ColoredFormatter(logging.Formatter):
         return f"{time_str} {level_str} {logger_name} — {msg}"
 
 
+class DynamicStreamHandler(logging.StreamHandler):
+    """Handler qui résout sys.stdout de manière dynamique au moment du log."""
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def stream(self):
+        return sys.stdout
+
+    @stream.setter
+    def stream(self, value):
+        pass
+
+
 def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     """Retourne un logger configuré sous l'espace de noms `forensic.<name>`."""
     logger = logging.getLogger(f"forensic.{name}")
     if not logger.handlers:
-        h = logging.StreamHandler(sys.stdout) # Redirige vers stdout pour bénéficier du wrapper
+        h = DynamicStreamHandler() # Utilise le handler dynamique pour bénéficier du wrapper de marge
         h.setFormatter(ColoredFormatter())
         logger.addHandler(h)
     logger.setLevel(level)

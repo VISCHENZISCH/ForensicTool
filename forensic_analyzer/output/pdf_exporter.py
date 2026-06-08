@@ -26,11 +26,14 @@ class PDFExporter:
             return
 
         try:
+            filename = os.path.basename(output_path)
+            os.makedirs("export", exist_ok=True)
+            target_path = os.path.join("export", filename)
             from forensic_analyzer.output.html_exporter import build_interactive_html
             html_content = build_interactive_html(report)
             
             # Generer le PDF directement a partir du contenu HTML
-            weasyprint.HTML(string=html_content).write_pdf(output_path)
-            log.info("Rapport PDF exporte -> %s", output_path)
+            weasyprint.HTML(string=html_content).write_pdf(target_path)
+            log.info("Rapport PDF exporte -> %s", target_path)
         except Exception as exc:
             log.error("Erreur d'export PDF via WeasyPrint : %s", exc)

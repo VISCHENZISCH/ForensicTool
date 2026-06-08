@@ -390,26 +390,34 @@ class TestExportersL1(unittest.TestCase):
         # Test JSON
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             json_path = f.name
+        resolved_json = os.path.join("export", os.path.basename(json_path))
         try:
             JSONExporter().export(report, json_path)
-            self.assertTrue(os.path.exists(json_path))
-            with open(json_path, encoding="utf-8") as f:
+            self.assertTrue(os.path.exists(resolved_json))
+            with open(resolved_json, encoding="utf-8") as f:
                 data = json.load(f)
             self.assertEqual(data["total"], 2)
         finally:
-            os.unlink(json_path)
+            if os.path.exists(json_path):
+                os.unlink(json_path)
+            if os.path.exists(resolved_json):
+                os.unlink(resolved_json)
 
         # Test HTML
         with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
             html_path = f.name
+        resolved_html = os.path.join("export", os.path.basename(html_path))
         try:
             HTMLExporter().export(report, html_path)
-            self.assertTrue(os.path.exists(html_path))
-            with open(html_path, encoding="utf-8") as f:
+            self.assertTrue(os.path.exists(resolved_html))
+            with open(resolved_html, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Forensic Analyzer", content)
         finally:
-            os.unlink(html_path)
+            if os.path.exists(html_path):
+                os.unlink(html_path)
+            if os.path.exists(resolved_html):
+                os.unlink(resolved_html)
 
 
 class TestFirefoxAnalyzersL1(unittest.TestCase):

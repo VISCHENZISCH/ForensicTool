@@ -16,6 +16,22 @@ pip-wheel-metadata/
 env/
 venv/
 test.py
+.pcap
+.rules
+.binary
+.memory
+.sqlite
+.evtx
+.registry
+.linux
+.yar
+.image
+.pdf
+.disque
+.timel
+.bin
+/test_samples/*
+generate_test_samples.py
 
 # Editor and OS files
 .vscode/

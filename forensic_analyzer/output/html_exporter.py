@@ -54,12 +54,12 @@ def _finding_card(f: FindingModel) -> str:
         iocs = f.extra["iocs"]
         for ioc_type, items in iocs.items():
             for item in items[:10]:
-                extra_rows += f"<tr><td>{ioc_type}</td><td class='mono'>{html.escape(str(item))}</td></tr>"
+                extra_rows += f"<tr><td><span class='ioc-type'>{ioc_type}</span></td><td class='mono'>{html.escape(str(item))}</td></tr>"
 
     return f"""
-    <section class="card" style="border-left: 3px solid {color}">
+    <section class="card">
       <h3 class="card-title">
-        <span class="label" style="background:{color}">{f.type.upper()}</span>
+        <span class="badge" style="background:{color}">{f.type.upper()}</span>
         {label} {fname}
       </h3>
       <p class="filepath">{html.escape(f.file)}</p>
@@ -157,9 +157,9 @@ def _build_ioc_table(report: ReportModel) -> str:
             rows += f"<tr><td><span class='ioc-type'>{ioc_type}</span></td><td class='mono'>{html.escape(str(item))}</td></tr>"
 
     return f"""
-    <section class="card" style="border-left: 3px solid #d946ef">
-      <h3 class="card-title"><span class="label" style="background:#d946ef">IOC</span> Table des indicateurs de compromission</h3>
-      <table><thead><tr><th>Type</th><th>Valeur</th></tr></thead><tbody>{rows}</tbody></table>
+    <section class="card">
+      <h3 class="card-title"><span class="badge" style="background:#d946ef">IOC</span> Table des indicateurs de compromission</h3>
+      <table><thead><tr><th style="width: 30%">Type</th><th>Valeur</th></tr></thead><tbody>{rows}</tbody></table>
     </section>"""
 
 
@@ -193,90 +193,343 @@ def build_interactive_html(report: ReportModel) -> str:
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {{
-  --bg: #0a0e17; --surface: #111827; --surface2: #1f2937;
-  --border: #374151; --accent: #3b82f6; --text: #f1f5f9;
-  --muted: #94a3b8; --red: #ef4444; --green: #22c55e;
-  --yellow: #eab308; --radius: 12px;
+    --page: #f1f5f9;
+    --ink: #0f172a;
+    --muted: #475569;
+    --surface: #ffffff;
+    --line: #e2e8f0;
+    --navy: #0f172a;
+    --accent: #2563eb;
+    --link: #0284c7;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }}
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg);
-        color: var(--text); line-height: 1.6; }}
-.container {{ max-width: 1200px; margin: 0 auto; padding: 2rem; }}
-header {{ text-align: center; padding: 3rem 0 2rem; }}
-header h1 {{ font-size: 2.2rem; color: var(--accent); letter-spacing: .03em; margin-bottom: .5rem; }}
-header p {{ color: var(--muted); font-size: .9rem; }}
-.nav {{ display: flex; gap: .5rem; justify-content: center; margin: 2rem 0;
-        flex-wrap: wrap; }}
-.nav button {{ background: var(--surface); border: 1px solid var(--border); color: var(--text);
-               padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-size: .85rem;
-               transition: all .2s; }}
-.nav button:hover, .nav button.active {{ background: var(--accent); border-color: var(--accent); }}
-.stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-          gap: 1rem; margin: 2rem 0; }}
-.stat {{ background: var(--surface); border: 1px solid var(--border);
-         border-radius: var(--radius); padding: 1.2rem; text-align: center;
-         transition: transform .2s; }}
-.stat:hover {{ transform: translateY(-2px); }}
-.stat strong {{ display: block; font-size: 1.8rem; color: var(--accent); }}
-.stat span {{ font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }}
-.charts {{ display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 2rem 0; }}
-.chart-box {{ background: var(--surface); border: 1px solid var(--border);
-              border-radius: var(--radius); padding: 1.5rem; }}
-.chart-box h3 {{ font-size: .9rem; color: var(--muted); margin-bottom: 1rem; }}
-.alert-box {{ background: rgba(239,68,68,0.1); border: 1px solid var(--red);
-              border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; }}
-.alert-box h4 {{ color: var(--red); margin-bottom: .5rem; }}
-.alert-box ul {{ padding-left: 1.2rem; }}
-.alert-box li {{ color: var(--text); margin-bottom: .3rem; }}
-.ok-box {{ background: rgba(34,197,94,0.1); border: 1px solid var(--green);
-           border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; }}
-.ok-box h4 {{ color: var(--green); }}
-.card {{ background: var(--surface); border: 1px solid var(--border);
-         border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.2rem;
-         transition: border-color .2s; }}
-.card:hover {{ border-color: var(--accent); }}
-.card-title {{ font-size: 1rem; display: flex; align-items: center; gap: .5rem;
-               margin-bottom: .5rem; }}
-.label {{ font-size: .65rem; color: #fff; padding: .15rem .5rem;
-          border-radius: 999px; text-transform: uppercase; font-weight: 600; }}
-.filepath {{ font-size: .7rem; color: var(--muted); margin-bottom: .8rem; word-break: break-all; }}
-.ioc-type {{ font-size: .7rem; background: var(--surface2); color: var(--accent);
-             padding: .1rem .4rem; border-radius: 4px; }}
-table {{ width: 100%; border-collapse: collapse; font-size: .82rem; }}
-th {{ text-align: left; padding: .5rem .6rem; border-bottom: 2px solid var(--border);
-     color: var(--muted); font-weight: 500; }}
-td {{ padding: .4rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }}
-td:first-child {{ color: var(--muted); width: 30%; font-weight: 500; }}
-.mono {{ font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: .8rem; }}
-.link {{ color: var(--accent); word-break: break-all; }}
-a {{ color: var(--accent); text-decoration: none; }}
-a:hover {{ text-decoration: underline; }}
-.section-title {{ font-size: 1.3rem; color: var(--text); margin: 2.5rem 0 1rem;
-                  padding-bottom: .5rem; border-bottom: 2px solid var(--border); }}
-.hidden {{ display: none; }}
+* {{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}}
+body {{
+    font-family: var(--font-sans);
+    background: var(--page);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 0;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}}
+.container {{
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 32px 24px;
+}}
+.header {{
+    background: var(--navy);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 24px 32px;
+    margin-bottom: 32px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}}
+.header h1 {{
+    color: #ffffff;
+    font-size: 2.1em;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}}
+.header .meta {{
+    color: #94a3b8;
+    font-size: 1.05em;
+    margin-top: 4px;
+}}
+.total-badge {{
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 1.05em;
+    font-weight: 800;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}}
+.stats {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}}
+.stat {{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+    transition: transform 0.2s;
+}}
+.stat:hover {{
+    transform: translateY(-2px);
+}}
+.stat strong {{
+    display: block;
+    font-size: 2.2em;
+    color: var(--navy);
+    font-weight: 800;
+}}
+.stat span {{
+    font-size: 0.85em;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}}
+.section-title {{
+    font-size: 1.25em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--navy);
+    margin: 40px 0 24px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--navy);
+}}
+.alert-box {{
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+}}
+.alert-box h4 {{
+    color: #991b1b;
+    font-weight: 800;
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}}
+.alert-box ul {{
+    padding-left: 20px;
+}}
+.alert-box li {{
+    color: #7f1d1d;
+    font-size: 0.95em;
+    margin-bottom: 4px;
+}}
+.ok-box {{
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+}}
+.ok-box h4 {{
+    color: #166534;
+    font-weight: 800;
+    font-size: 1.1em;
+}}
+.charts {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+}}
+.chart-box {{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+}}
+.chart-box h3 {{
+    font-size: 0.95em;
+    color: var(--muted);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 800;
+}}
+.card {{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+    transition: transform 0.15s, border-color 0.15s;
+}}
+.card:hover {{
+    transform: translateY(-1px);
+    border-color: var(--navy) !important;
+}}
+.card-title {{
+    background: #ffffff;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    padding: 14px 18px;
+    font-size: 1.15em;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}}
+.filepath {{
+    font-size: 0.8em;
+    color: var(--muted);
+    padding: 8px 18px 12px;
+    font-family: var(--font-mono);
+    word-break: break-all;
+    border-bottom: 1px solid var(--line);
+    background: #fafafa;
+}}
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    table-layout: fixed;
+}}
+th {{
+    background: #f8fafc;
+    color: #475569;
+    border-bottom: 2px solid var(--line);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    text-align: left;
+    padding: 12px 18px;
+    font-weight: 800;
+}}
+td {{
+    color: var(--ink);
+    vertical-align: middle;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 12px 18px;
+    word-break: break-all;
+}}
+td:first-child {{
+    color: var(--muted);
+    width: 30%;
+    font-weight: 700;
+}}
+tr {{
+    transition: background 0.15s;
+}}
+tr:hover {{
+    background: #f8fafc !important;
+}}
+.badge {{
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 0.8em;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    text-align: center;
+    color: #ffffff;
+}}
+.nav {{
+    display: flex;
+    gap: 8px;
+    margin: 16px 0 24px;
+    flex-wrap: wrap;
+}}
+.nav button {{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 700;
+    transition: all 0.15s;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}}
+.nav button:hover, .nav button.active {{
+    background: var(--navy);
+    border-color: var(--navy);
+    color: #ffffff;
+}}
+.mono {{
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+}}
+.ioc-type {{
+    font-size: 0.8em;
+    background: var(--page);
+    color: #d946ef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+}}
+.link {{
+    color: var(--link);
+    font-weight: 700;
+}}
+.link:hover {{
+    text-decoration: underline;
+}}
+.footer {{
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.95em;
+    margin-top: 32px;
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+}}
+.hidden {{
+    display: none;
+}}
 @media (max-width: 768px) {{
-  .charts {{ grid-template-columns: 1fr; }}
-  .stats {{ grid-template-columns: repeat(3, 1fr); }}
+    .container {{
+        padding: 12px;
+    }}
+    .header {{
+        grid-template-columns: 1fr;
+        padding: 16px;
+    }}
+    .header h1 {{
+        font-size: 1.7em;
+    }}
+    .charts {{
+        grid-template-columns: 1fr;
+    }}
+    .stats {{
+        grid-template-columns: repeat(3, 1fr);
+    }}
+    table {{
+        min-width: auto;
+    }}
 }}
 </style>
 </head>
 <body>
 <div class="container">
-  <header>
-    <h1>Forensic Analyzer</h1>
-    <p>Rapport genere le {ts} -- {report.total} resultat(s)</p>
-  </header>
+  <div class="header">
+    <div>
+      <h1>Forensic Analyzer</h1>
+      <div class="meta">Rapport généré le {ts}</div>
+    </div>
+    <div class="total-badge">
+      {report.total} résultat(s)
+    </div>
+  </div>
 
   <div class="stats">
     <div class="stat"><strong>{report.total}</strong><span>Analyses</span></div>
     <div class="stat"><strong>{counts['pdf']}</strong><span>PDFs</span></div>
     <div class="stat"><strong>{counts['image']}</strong><span>Images</span></div>
-    <div class="stat"><strong>{counts['network']}</strong><span>Reseau</span></div>
-    <div class="stat"><strong>{counts['disk']}</strong><span>Systeme</span></div>
+    <div class="stat"><strong>{counts['network']}</strong><span>Réseau</span></div>
+    <div class="stat"><strong>{counts['disk']}</strong><span>Système</span></div>
     <div class="stat"><strong>{counts['other']}</strong><span>Autres</span></div>
   </div>
 
-  <h2 class="section-title">Resume Executif</h2>
+  <h2 class="section-title">Résumé Exécutif</h2>
   {exec_summary}
 
   <h2 class="section-title">Statistiques</h2>
@@ -293,12 +546,19 @@ a:hover {{ text-decoration: underline; }}
 
   {ioc_table}
 
-  <h2 class="section-title">Resultats Detailles</h2>
+  <h2 class="section-title">Résultats Détaillés</h2>
   <div class="nav" id="filters">
     <button class="active" onclick="filterCards('all')">Tous</button>
   </div>
   <div id="findings">
     {cards}
+  </div>
+
+  <div class="footer">
+    © 2026 Félix TOVIGNAN &nbsp;|&nbsp; 
+    <a href="https://github.com/VISCHENZISCH/ForensicTool.git" target="_blank" class="link">
+      https://github.com/VISCHENZISCH/ForensicTool.git
+    </a>
   </div>
 </div>
 
@@ -315,7 +575,7 @@ if (chartData.type_labels.length > 0) {{
     }},
     options: {{
       responsive: true,
-      plugins: {{ legend: {{ position: 'right', labels: {{ color: '#94a3b8', font: {{ size: 11 }} }} }} }}
+      plugins: {{ legend: {{ position: 'right', labels: {{ color: '#475569', font: {{ size: 11 }} }} }} }}
     }}
   }});
 }}
@@ -326,13 +586,13 @@ if (chartData.source_labels.length > 0) {{
     type: 'bar',
     data: {{
       labels: chartData.source_labels,
-      datasets: [{{ label: 'Evenements', data: chartData.source_values, backgroundColor: '#3b82f6', borderRadius: 6 }}]
+      datasets: [{{ label: 'Événements', data: chartData.source_values, backgroundColor: '#2563eb', borderRadius: 6 }}]
     }},
     options: {{
       responsive: true,
       scales: {{
-        x: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ display: false }} }},
-        y: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ color: '#1f2937' }} }}
+        x: {{ ticks: {{ color: '#475569' }}, grid: {{ display: false }} }},
+        y: {{ ticks: {{ color: '#475569' }}, grid: {{ color: '#e2e8f0' }} }}
       }},
       plugins: {{ legend: {{ display: false }} }}
     }}
@@ -342,23 +602,27 @@ if (chartData.source_labels.length > 0) {{
 // Dynamic filter buttons
 const types = new Set();
 document.querySelectorAll('.card').forEach(c => {{
-  const label = c.querySelector('.label');
+  const label = c.querySelector('.badge');
   if (label) types.add(label.textContent.toLowerCase());
 }});
 const nav = document.getElementById('filters');
 types.forEach(t => {{
   const btn = document.createElement('button');
   btn.textContent = t;
-  btn.onclick = () => filterCards(t);
+  btn.onclick = (event) => filterCards(t, event);
   nav.appendChild(btn);
 }});
 
-function filterCards(type) {{
+function filterCards(type, event) {{
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (event) {{
+    event.target.classList.add('active');
+  }} else {{
+    document.querySelector('.nav button').classList.add('active');
+  }}
   document.querySelectorAll('#findings .card').forEach(c => {{
     if (type === 'all') {{ c.classList.remove('hidden'); return; }}
-    const label = c.querySelector('.label');
+    const label = c.querySelector('.badge');
     if (label && label.textContent.toLowerCase() === type) c.classList.remove('hidden');
     else c.classList.add('hidden');
   }});
@@ -372,7 +636,10 @@ class HTMLExporter:
     """Genere un rapport HTML interactif premium avec Chart.js."""
 
     def export(self, report: ReportModel, output_path: str) -> None:
+        filename = os.path.basename(output_path)
+        os.makedirs("export", exist_ok=True)
+        target_path = os.path.join("export", filename)
         content = build_interactive_html(report)
-        with open(output_path, "w", encoding="utf-8") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write(content)
-        log.info("Rapport HTML exporté -> %s", output_path)
+        log.info("Rapport HTML exporté -> %s", target_path)
