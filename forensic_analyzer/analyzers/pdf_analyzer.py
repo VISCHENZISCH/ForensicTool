@@ -40,7 +40,7 @@ class PDFAnalyzer(BaseAnalyzer):
                 metadata["Chiffrement"] = "Inconnu (pypdf manquant)"
                 return FindingModel(type="pdf", file=os.path.abspath(path), metadata=metadata)
             except Exception as exc:
-                log.error("Erreur PDF fallback '%s' : %s", os.path.basename(path), exc)
+                log.error("[PDF] → %s : %s", os.path.basename(path), exc)
                 return None
         try:
             reader = PdfReader(path)
@@ -51,6 +51,6 @@ class PDFAnalyzer(BaseAnalyzer):
             data["Version PDF"]     = str(reader.pdf_header)
             return FindingModel(type="pdf", file=os.path.abspath(path), metadata=data)
         except Exception as exc:
-            log.error("Erreur PDF '%s' : %s", os.path.basename(path), exc)
+            log.error("[PDF] → %s : %s", os.path.basename(path), exc)
             return None
 

@@ -59,14 +59,12 @@ def clear_screen() -> None:
 # Banniere ASCII Art
 
 BANNER = f"""
-{c(C.B, bold=True)}••••••••••    ••••••    ••••••••    ••••••••••  ••      ••    ••••••••  ••••••    ••••••    {c(C.RS)}
-{c(C.B, bold=True)}••          ••      ••  ••      ••  ••          ••••    ••  ••            ••    ••          {c(C.RS)}
-{c(C.B, bold=True)}••••••••    ••      ••  ••••••••    ••••••••    ••  ••  ••    ••••••      ••    ••          {c(C.RS)}
-{c(C.B, bold=True)}••          ••      ••  ••    ••    ••          ••    ••••          ••    ••    ••          {c(C.RS)}
-{c(C.B, bold=True)}••            ••••••    ••      ••  ••••••••••  ••      ••  ••••••••    ••••••    ••••••    {c(C.RS)}
-{c(C.W, bold=True)}                                  A N A L Y Z E R  v1.0{c(C.RS)}
+{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(MAGENTA, "    ______ ____   ____   ______ _   __ _____  ____ ______  ", bold=True)}
+{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(MAGENTA, "   / ____// __ \\ / __ \\ / ____// | / // ___/ /  _// ____/ ", bold=True)}
+{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(PURPLE,  "  / /_   / / / // /_/ // /_   /  |/ / \\__ \\  / / / /      ", bold=True)}
+{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(PURPLE,  " / __/  / /_/ // _, _// /___ / /|  / ___/ /_/ / / /___    ", bold=True)}
+{c(SKY_BLUE, bold=True)}{c(C.RS)}{c(SKY_BLUE,"/_/     \\____//_/ |_|/_____//_/ |_|/____//___/ \\____/    ", bold=True)}
 """
-
 
 def banner() -> None:
     """Efface l'ecran et affiche le bandeau principal."""
@@ -79,22 +77,9 @@ def banner() -> None:
     print()
 
     # Usage & options
-    print(f"{MARGIN}  {c(C.W, 'usage:', bold=True)} {c(C.D, 'python3 main.py')} {c(C.VB, '[--scan CHEMIN] [--pdf FICHIER] [--image FICHIER] [--pcap PCAP]')} {c(C.Y, '[options]')}")
-    print()
-    print(f"{MARGIN}  {c(C.W, 'arguments :', bold=True)}")
-    print(f"{MARGIN}    {c(C.Y, '--scan CHEMIN')}         Scan automatique d'un fichier ou dossier")
-    print(f"{MARGIN}    {c(C.Y, '--pdf FICHIER')}         Analyse des métadonnées PDF")
-    print(f"{MARGIN}    {c(C.Y, '--image FICHIER')}       Analyse des métadonnées EXIF d'une image")
-    print(f"{MARGIN}    {c(C.Y, '--pcap PCAP')}           Analyse réseau PCAP/PCAPNG")
-    print()
-    print(f"{MARGIN}  {c(C.W, 'options :', bold=True)}")
-    print(f"{MARGIN}    {c(C.VB, '--yara REGLES')}         Règles YARA (.yar ou dossier)")
-    print(f"{MARGIN}    {c(C.VB, '--mem DUMP')}            Dump mémoire RAM (Volatility)")
-    print(f"{MARGIN}    {c(C.VB, '--export-html HTML')}     Générer un rapport interactif HTML")
-    print()
-    print(f"{MARGIN}  {c(C.W, 'exemple :', bold=True)}")
-    print(f"{MARGIN}    {c(C.D, '$')} {c(C.G, 'python3 main.py')} {c(C.Y, '--scan ./evidence')} {c(C.VB, '--export-html rapport.html')}")
-    print()
+    print(f"{MARGIN}  {c(C.W, 'usage:', bold=True)} {c(C.D, './run.sh --help')}")
+    print(f"{MARGIN}  {c(C.W, 'exemple :', bold=True)} {c(C.D, '$')} {c(C.G, 'python3 main.py')} {c(C.Y, '--scan ./evidence')} {c(C.VB, '--export-html rapport.html')}")
+  
 
 
 
@@ -112,7 +97,6 @@ def menu() -> None:
     # Colonnes : gauche et droite
     left = [
         (f"{C.VB}{C.BD}Analyse Fichiers{C.RS}", None),
-        (f"{C.R}    {C.RS}", None),
         (f" {C.G}[01]{C.RS} PDF - Metadonnees", None),
         (f" {C.G}[02]{C.RS} Image / EXIF", None),
         (f" {C.G}[03]{C.RS} Coordonnees GPS", None),
@@ -121,7 +105,6 @@ def menu() -> None:
         (f" {C.G}[06]{C.RS} Cookies Firefox", None),
         ("", None),
         (f"{C.VB}{C.BD}Analyse Avancée{C.RS}", None),
-        (f"{C.R}    {C.RS}", None),
         (f" {C.G}[07]{C.RS} Steganographie", None),
         (f" {C.G}[08]{C.RS} File Carving", None),
         (f" {C.G}[09]{C.RS} Analyse PCAP", None),
@@ -129,16 +112,13 @@ def menu() -> None:
 
     right = [
         (f"{C.VB}{C.BD}Analyse Système{C.RS}", None),
-        (f"{C.R}    {C.RS}", None),
         (f" {C.G}[10]{C.RS} Windows Event Logs", None),
         (f" {C.G}[11]{C.RS} Registre Windows", None),
         (f" {C.G}[12]{C.RS} Artefacts Linux", None),
         (f" {C.G}[13]{C.RS} Analyse Memoire", None),
         (f" {C.G}[14]{C.RS} Forensique Disque", None),
         ("", None),
-        ("", None),
         (f"{C.VB}{C.BD}Threat Hunting{C.RS}", None),
-        (f"{C.R}    {C.RS}", None),
         (f" {C.G}[15]{C.RS} Scan YARA", None),
         (f" {C.G}[16]{C.RS} Extraction IOC", None),
         (f" {C.G}[17]{C.RS} Timeline DFIR", None),
@@ -155,8 +135,7 @@ def menu() -> None:
         print(f"{MARGIN}   {l_text}{' ' * pad}{r_text}")
 
     print()
-    print()
-    print(f"{MARGIN}   {C.VB}{C.BD}Outils{C.RS}\n")
+    print(f"{MARGIN}   {C.VB}{C.BD}Outils{C.RS}")
     print(f"{MARGIN}    {C.Y}[88]{C.RS} Scan Automatique")
     print(f"{MARGIN}    {C.Y}[99]{C.RS} Exporter Rapport")
     print(f"{MARGIN}    {C.R}[00]{C.RS} Quitter")
@@ -167,7 +146,6 @@ def export_menu() -> None:
     """Affiche le sous-menu d'export avec double-lignes rouges."""
     print()
     print(f"{MARGIN}   {C.VB}{C.BD}Export{C.RS}")
-    print(f"{MARGIN}   {C.R}    {C.RS}")
     print(f"{MARGIN}    {C.G}[J]{C.RS}  Export JSON")
     print(f"{MARGIN}    {C.G}[H]{C.RS}  Export HTML (interactif)")
     print(f"{MARGIN}    {C.G}[C]{C.RS}  Export CSV Timeline")
