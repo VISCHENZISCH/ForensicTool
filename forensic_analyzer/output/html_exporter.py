@@ -137,10 +137,10 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
     <div class="{card_cls}">
       <div class="card-header">
         <span class="caption {tag_cls}">{f.type.upper()}</span>
-        <h3 class="card-title {text_cls}" style="margin-top: 16px; margin-bottom: 4px;">{label}</h3>
+        <h3 class="card-title {text_cls}" style="margin-top: 12px; margin-bottom: 2px;">{label}</h3>
         <div class="caption {muted_cls} mono" style="word-break: break-all;">{html.escape(f.file)}</div>
       </div>
-      <div class="table-wrapper" style="margin-top: 24px;">
+      <div class="table-wrapper" style="margin-top: 16px;">
         {rows}{extra_rows}
       </div>
     </div>"""
@@ -175,7 +175,7 @@ def _build_executive_summary(report: ReportModel) -> str:
     items = "".join(f"<li class='body-sm' style='margin-bottom: 12px; display: flex; gap: 12px;'><span class='eyebrow' style='color: var(--accent-magenta);'>ALERT</span> {html.escape(a)}</li>" for a in alerts)
     return f"""
     <div class="color-block block-pink">
-      <h2 class="display-lg" style="margin-bottom: 48px;">Critical Alerts</h2>
+      <h2 class="display-lg" style="margin-bottom: 24px;">Critical Alerts</h2>
       <ul style="list-style: none; padding: 0; margin: 0;">{items}</ul>
     </div>
     """
@@ -202,7 +202,7 @@ def build_interactive_html(report: ReportModel) -> str:
         
         sections_html += f"""
         <div class="color-block {cat_info['class']}">
-          <h2 class="{title_cls}" style="margin-bottom: 48px;">{cat_info['title']}</h2>
+          <h2 class="{title_cls}" style="margin-bottom: 24px;">{cat_info['title']}</h2>
           <div class="grid-2up">
             {cards_html}
           </div>
@@ -251,17 +251,17 @@ body {{
 }}
 
 /* Typography */
-.display-xl {{ font-family: var(--font-sans); font-size: 86px; font-weight: 300; line-height: 1.0; letter-spacing: -1.72px; }}
-.display-lg {{ font-family: var(--font-sans); font-size: 64px; font-weight: 300; line-height: 1.1; letter-spacing: -0.96px; }}
-.headline {{ font-family: var(--font-sans); font-size: 26px; font-weight: 500; line-height: 1.35; letter-spacing: -0.26px; }}
-.subhead {{ font-family: var(--font-sans); font-size: 26px; font-weight: 300; line-height: 1.35; letter-spacing: -0.26px; }}
-.card-title {{ font-family: var(--font-sans); font-size: 24px; font-weight: 700; line-height: 1.45; }}
-.body-lg {{ font-family: var(--font-sans); font-size: 20px; font-weight: 300; line-height: 1.4; letter-spacing: -0.14px; }}
-.body {{ font-family: var(--font-sans); font-size: 18px; font-weight: 300; line-height: 1.45; letter-spacing: -0.26px; }}
-.body-sm {{ font-family: var(--font-sans); font-size: 16px; font-weight: 300; line-height: 1.45; letter-spacing: -0.14px; }}
-.button {{ font-family: var(--font-sans); font-size: 20px; font-weight: 500; line-height: 1.4; letter-spacing: -0.1px; }}
-.eyebrow {{ font-family: var(--font-mono); font-size: 18px; font-weight: 400; line-height: 1.3; letter-spacing: 0.54px; text-transform: uppercase; }}
-.caption {{ font-family: var(--font-mono); font-size: 12px; font-weight: 400; line-height: 1.0; letter-spacing: 0.6px; text-transform: uppercase; }}
+.display-xl {{ font-family: var(--font-sans); font-size: 52px; font-weight: 300; line-height: 1.05; letter-spacing: -1px; }}
+.display-lg {{ font-family: var(--font-sans); font-size: 36px; font-weight: 300; line-height: 1.15; letter-spacing: -0.5px; }}
+.headline {{ font-family: var(--font-sans); font-size: 20px; font-weight: 500; line-height: 1.35; letter-spacing: -0.2px; }}
+.subhead {{ font-family: var(--font-sans); font-size: 18px; font-weight: 300; line-height: 1.35; letter-spacing: -0.2px; }}
+.card-title {{ font-family: var(--font-sans); font-size: 16px; font-weight: 700; line-height: 1.4; }}
+.body-lg {{ font-family: var(--font-sans); font-size: 16px; font-weight: 300; line-height: 1.4; letter-spacing: -0.1px; }}
+.body {{ font-family: var(--font-sans); font-size: 14px; font-weight: 300; line-height: 1.45; letter-spacing: -0.1px; }}
+.body-sm {{ font-family: var(--font-sans); font-size: 13px; font-weight: 300; line-height: 1.4; letter-spacing: -0.05px; }}
+.button {{ font-family: var(--font-sans); font-size: 16px; font-weight: 500; line-height: 1.4; letter-spacing: -0.1px; }}
+.eyebrow {{ font-family: var(--font-mono); font-size: 11px; font-weight: 400; line-height: 1.3; letter-spacing: 0.4px; text-transform: uppercase; }}
+.caption {{ font-family: var(--font-mono); font-size: 10px; font-weight: 400; line-height: 1.0; letter-spacing: 0.5px; text-transform: uppercase; }}
 .mono {{ font-family: var(--font-mono); }}
 
 .text-ink {{ color: var(--ink); }}
@@ -270,13 +270,13 @@ body {{
 .text-inverse-muted {{ color: rgba(255,255,255,0.5); }}
 
 /* Layout */
-.nav-bar {{ padding: 24px 48px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--hairline); }}
-.page-container {{ max-width: 1400px; margin: 0 auto; padding: 48px; }}
-.hero-section {{ padding: 96px 0; max-width: 900px; }}
-.marquee-strip {{ background: var(--inverse-canvas); color: var(--inverse-ink); padding: 12px 48px; display: flex; gap: 48px; }}
+.nav-bar {{ padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--hairline); }}
+.page-container {{ max-width: 1400px; margin: 0 auto; padding: 32px; }}
+.hero-section {{ padding: 48px 0; max-width: 900px; }}
+.marquee-strip {{ background: var(--inverse-canvas); color: var(--inverse-ink); padding: 8px 32px; display: flex; gap: 32px; }}
 
 /* Color Blocks */
-.color-block {{ border-radius: 24px; padding: 48px; margin-bottom: 96px; }}
+.color-block {{ border-radius: 20px; padding: 32px; margin-bottom: 48px; }}
 .block-lime {{ background: var(--block-lime); color: var(--ink); }}
 .block-lilac {{ background: var(--block-lilac); color: var(--ink); }}
 .block-cream {{ background: var(--block-cream); color: var(--ink); }}
@@ -286,8 +286,8 @@ body {{
 .block-mint {{ background: var(--block-mint); color: var(--ink); }}
 
 /* Cards & Components */
-.grid-2up {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
-.card {{ background: var(--surface-soft); border-radius: 8px; padding: 24px; }}
+.grid-2up {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }}
+.card {{ background: var(--surface-soft); border-radius: 8px; padding: 16px; }}
 .card-inverse {{ background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }}
 
 .pill-primary {{ background: var(--primary); color: var(--on-primary); border-radius: 50px; padding: 10px 20px; display: inline-flex; align-items: center; }}
@@ -295,21 +295,48 @@ body {{
 .pill-inverse {{ background: rgba(255,255,255,0.1); color: var(--inverse-ink); border-radius: 50px; padding: 8px 18px 10px; border: 1px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; }}
 
 /* Tables */
-.table-row {{ display: flex; padding: 12px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; }}
+.table-row {{ display: flex; padding: 6px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; }}
 .table-row-inverse {{ border-bottom: 1px solid rgba(255,255,255,0.1); }}
 .table-row:last-child {{ border-bottom: none; }}
-.cell-key {{ width: 35%; flex-shrink: 0; padding-right: 16px; word-break: break-word; }}
+.cell-key {{ width: 35%; flex-shrink: 0; padding-right: 12px; word-break: break-word; }}
 .cell-val {{ width: 65%; word-break: break-word; }}
-.section-header {{ padding-top: 24px; padding-bottom: 8px; border-bottom: 2px solid var(--primary); }}
+.section-header {{ padding-top: 16px; padding-bottom: 6px; border-bottom: 2px solid var(--primary); }}
 .table-row-inverse.section-header {{ border-bottom: 2px solid var(--inverse-ink); }}
 
 /* Responsive */
 @media (max-width: 960px) {{
   .grid-2up {{ grid-template-columns: 1fr; }}
-  .display-xl {{ font-size: 56px; letter-spacing: -1px; }}
-  .display-lg {{ font-size: 44px; letter-spacing: -0.5px; }}
-  .color-block {{ padding: 32px; border-radius: 0; margin-left: -24px; margin-right: -24px; }}
-  .page-container {{ padding: 24px; }}
+  .display-xl {{ font-size: 36px; letter-spacing: -0.5px; }}
+  .display-lg {{ font-size: 26px; letter-spacing: -0.3px; }}
+  .color-block {{ padding: 20px; border-radius: 0; margin-left: -16px; margin-right: -16px; }}
+  .page-container {{ padding: 16px; }}
+}}
+
+@media print {{
+  @page {{ margin: 15mm; size: A4; }}
+  body {{ background: white !important; font-size: 11pt !important; line-height: 1.3 !important; }}
+  
+  /* Empêcher Weasyprint de couper des éléments à travers les pages */
+  .card, .color-block, .table-row, h2, h3 {{ page-break-inside: avoid !important; break-inside: avoid !important; }}
+  
+  /* Réduire les tailles gigantesques pour l'impression */
+  .display-xl {{ font-size: 32pt !important; margin-bottom: 12pt !important; line-height: 1.1 !important; }}
+  .display-lg {{ font-size: 24pt !important; margin-bottom: 16pt !important; line-height: 1.2 !important; }}
+  .subhead {{ font-size: 14pt !important; }}
+  
+  /* Remplacer le Grid 2up par un bloc normal car Weasyprint gère mal le Grid sur plusieurs pages */
+  .grid-2up {{ display: block !important; }}
+  .card {{ width: 100% !important; margin-bottom: 24px !important; box-sizing: border-box !important; }}
+  
+  /* Forcer l'impression des couleurs d'arrière-plan */
+  * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
+  
+  /* Réduire le padding excessif pour économiser du papier */
+  .color-block {{ padding: 24px !important; margin-bottom: 32px !important; border-radius: 12px !important; }}
+  .page-container {{ padding: 0 !important; max-width: none !important; }}
+  
+  /* Gérer les très longs textes */
+  .cell-val, .cell-key {{ word-break: break-all !important; overflow-wrap: break-word !important; }}
 }}
 </style>
 </head>
@@ -317,10 +344,10 @@ body {{
 
 <div class="page-container">
 
-  <div class="color-block" style="background: var(--inverse-canvas); color: var(--inverse-ink); margin-bottom: 96px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 48px;">
+  <div class="color-block" style="background: var(--inverse-canvas); color: var(--inverse-ink); margin-bottom: 48px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 32px;">
       <div>
-        <h1 class="display-xl" style="margin-bottom: 24px;">Investigation<br>Report</h1>
+        <h1 class="display-xl" style="margin-bottom: 16px;">Investigation<br>Report</h1>
         <p class="subhead" style="color: rgba(255,255,255,0.7); max-width: 500px;">A comprehensive digital forensics and incident response summary.</p>
       </div>
       
@@ -350,7 +377,7 @@ body {{
 
   {sections_html}
 
-  <div style="margin-top: 96px; padding-top: 48px; border-top: 1px solid var(--hairline); text-align: center;">
+  <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--hairline); text-align: center;">
     <div class="caption text-muted">© 2026 Félix TOVIGNAN • VISCHENZISCH</div>
   </div>
 </div>

@@ -35,6 +35,10 @@ class PDFExporter:
                 build_interactive_html
             html_content = build_interactive_html(report)
             
+            # Remove remote fonts to prevent WeasyPrint network hang
+            font_link = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">'
+            html_content = html_content.replace(font_link, '')
+            
             # Generer le PDF directement a partir du contenu HTML
             weasyprint.HTML(string=html_content).write_pdf(target_path)
             log.info("Rapport PDF exporte -> %s", target_path)
