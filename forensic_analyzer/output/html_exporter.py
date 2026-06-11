@@ -6,7 +6,7 @@ import json
 import os
 from collections import defaultdict
 
-from forensic_analyzer.analyzers.timeline_analyzer import build_timeline
+from forensic_analyzer.analyzers.timeline import build_timeline
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
@@ -75,24 +75,24 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
 
     if f.type == "strings" and "strings" in ext:
         extra_rows += section_header("Chaines (Top 100)")
-        for i, s in enumerate(ext["strings"][:100], 1):
+        for i, s in enumerate(ext["strings"], 1):
             extra_rows += render_row(f"#{i}", s)
     elif f.type == "firefox_history" and "entries" in ext:
         extra_rows += section_header("Historique")
-        for e in ext["entries"][:50]:
+        for e in ext["entries"]:
             extra_rows += render_row(e.get('date') or '-', e.get('url','')[:80])
     elif f.type == "firefox_cookies" and "entries" in ext:
         extra_rows += section_header("Cookies")
-        for e in ext["entries"][:50]:
+        for e in ext["entries"]:
             extra_rows += render_row(e.get('host') or '-', f"{e.get('name','')} = {e.get('value','')[:60]}")
     elif f.type == "chromium_artifacts":
         if ext.get("chromium_urls"):
             extra_rows += section_header("URLs (Top 10)")
-            for u in ext["chromium_urls"][:10]:
+            for u in ext["chromium_urls"]:
                 extra_rows += render_row(f"VISITES: {u.get('visites', 0)}", u.get('url','')[:80])
         if ext.get("chromium_downloads"):
             extra_rows += section_header("Téléchargements")
-            for d in ext["chromium_downloads"][:10]:
+            for d in ext["chromium_downloads"]:
                 extra_rows += render_row(f"TAILLE: {d.get('taille_octets', 0)}", str(d.get('fichier', ''))[:80], is_danger=bool(d.get('danger_type')))
     elif f.type == "pe_analysis":
         if ext.get("sections_pe"):
@@ -102,26 +102,26 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
                 extra_rows += render_row(sec.get('Nom', ''), f"Entropie: {ent} | Taille: {sec.get('Taille Virtuelle', 0)}", is_danger="CRITIQUE" in ent)
         if ext.get("dll_imports"):
             extra_rows += section_header("Imports DLL")
-            for dll in ext["dll_imports"][:15]:
+            for dll in ext["dll_imports"]:
                 extra_rows += render_row("DLL", dll)
     elif f.type == "pcap" and ext.get("credentials"):
         extra_rows += section_header("Credentials Réseau")
-        for c in ext["credentials"][:20]:
+        for c in ext["credentials"]:
             extra_rows += render_row(c.get('protocol', '?'), c.get('data', c.get('user', str(c))), is_danger=True)
     elif f.type == "ioc" and ext.get("iocs"):
         for ioc_type, items in ext["iocs"].items():
-            for item in items[:10]:
+            for item in items:
                 extra_rows += render_row(ioc_type, item)
     elif f.type == "timeline" and ext.get("events"):
         extra_rows += section_header("Chronologie")
-        for e in ext["events"][:50]:
+        for e in ext["events"]:
             extra_rows += render_row(e.get('timestamp', '?') or "N/A", f"[{e.get('source', '')}] {e.get('detail', '')[:80]}")
     elif f.type in ("carving", "stego"):
         for extra_key in ("embedded_files", "polyglots", "lsb_data", "matches"):
             items = ext.get(extra_key)
             if items and isinstance(items, list):
                 extra_rows += section_header(extra_key.replace('_', ' '))
-                for item in items[:20]:
+                for item in items:
                     if isinstance(item, dict):
                         for ik, iv in item.items():
                             extra_rows += render_row(ik, str(iv)[:80])
@@ -387,7 +387,7 @@ body {{
 
 
 class HTMLExporter:
-    """Genere un rapport HTML/PDF premium utilisant le design system Figma."""
+    """Genere un rapport HTML/PDF  utilisant le design system Figma."""
 
     def export(self, report: ReportModel, output_path: str) -> None:
         filename = os.path.basename(output_path)

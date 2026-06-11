@@ -8,28 +8,29 @@ Couche CLI pour Forensic Analyzer.
 
 import argparse
 
-from forensic_analyzer.analyzers.carving_analyzer import CarvingAnalyzer
-from forensic_analyzer.analyzers.chromium_analyzer import ChromiumAnalyzer
-from forensic_analyzer.analyzers.disk_analyzer import DiskAnalyzer
-from forensic_analyzer.analyzers.evtx_analyzer import EVTXAnalyzer
-from forensic_analyzer.analyzers.firefox_analyzer import (
+from forensic_analyzer.analyzers.carving import CarvingAnalyzer
+from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
+from forensic_analyzer.analyzers.disk import DiskAnalyzer
+from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
+from forensic_analyzer.analyzers.firefox import (
     FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
-from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
-from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
-from forensic_analyzer.analyzers.ioc_analyzer import IOCAnalyzer
-from forensic_analyzer.analyzers.linux_artifacts_analyzer import \
+from forensic_analyzer.analyzers.gps import GPSAnalyzer
+from forensic_analyzer.analyzers.image import ImageAnalyzer
+from forensic_analyzer.analyzers.ioc import IOCAnalyzer
+from forensic_analyzer.analyzers.linux import \
     LinuxArtifactsAnalyzer
-from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
-from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
-from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
-from forensic_analyzer.analyzers.pe_analyzer import PEAnalyzer
-from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
-from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
-from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
-from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
-from forensic_analyzer.analyzers.windows_execution_analyzer import \
+from forensic_analyzer.analyzers.memory import MemoryAnalyzer
+from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
+from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+from forensic_analyzer.analyzers.ids import IDSAnalyzer
+from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
+from forensic_analyzer.analyzers.registry import RegistryAnalyzer
+from forensic_analyzer.analyzers.stego import StegoAnalyzer
+from forensic_analyzer.analyzers.strings import StringsAnalyzer
+from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
+from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
-from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
+from forensic_analyzer.analyzers.yara import YARAAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry
 from forensic_analyzer.core.scanner import auto_scan
 from forensic_analyzer.models.finding import ReportModel
@@ -98,6 +99,7 @@ Exemples :
     g5.add_argument("--export-html", metavar="HTML", help="Export HTML interactif")
     g5.add_argument("--export-csv",  metavar="CSV",  help="Export CSV timeline DFIR")
     g5.add_argument("--export-pdf",  metavar="PDF",  help="Export PDF")
+    g5.add_argument("--export-rules", action="store_true", help="Générer des règles YARA et Suricata à partir des IOCs trouvés")
 
     return p
 
@@ -115,6 +117,7 @@ def cli_dispatch():
         PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
         MemoryAnalyzer(), DiskAnalyzer(), PEAnalyzer(),
         ChromiumAnalyzer(), WindowsExecutionAnalyzer(),
+        IDSAnalyzer(),
     )
 
     findings = []
@@ -185,7 +188,11 @@ def cli_dispatch():
         CSVExporter().export(report, args.export_csv)
     if args.export_pdf and report.findings:
         PDFExporter().export(report, args.export_pdf)
-
+        
+    if getattr(args, 'export_rules', False) and report.findings:
+        from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
+        # Générer dans le dossier courant ou un sous-dossier rules_export/
+        DefenseRulesGenerator().generate(report, output_dir="rules_export")
 
 def main():
     """Point d'entree : menu interactif par defaut, CLI si arguments."""

@@ -1,161 +1,67 @@
 # Forensic Analyzer
 
-[![License](https://img.shields.io/github/license/VISCHENZISCH/ForensicTool?style=flat-squared&color=00d4ff)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue?style=flat-squared)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-lightgrey?style=flat-squared)](#)
-[![Tests](https://img.shields.io/badge/tests-18%2F18%20passed-success?style=flat-squared)](test.py)
+Une plateforme d'investigation numérique de classe militaire (DFIR) entièrement automatisée. Elle collecte, parse, corrèle et génère une timeline de bout-en-bout à partir de disques, mémoire, journaux systèmes et captures réseau.
 
-**Forensic Analyzer** est une suite d'outils forensiques (DFIR) unifiée, modulaire et hautement performante écrite en Python. Conçue pour les analystes SOC, les chasseurs de menaces (Threat Hunters) et les experts en réponse aux incidents, elle permet d'extraire, analyser et corréler des preuves numériques à travers 5 niveaux de profondeur technique.
-
-Le projet propose une interface terminal interactive et colorée pur ANSI  sans dépendance lourde, ainsi qu'un mode ligne de commande scriptable pour l'automatisation en pipeline.
-
----
-
-##Menu Interactif & Aperçu Visuel
-
-Lancé sans argument, **Forensic Analyzer** ouvre son menu interactif principal :
-
-```text
-0 1 ▓█████   ▒█████ 1 ██▀███  ▓█████ 0███▄    █   ██████  ██▓ ▄████▄ 1
- 1  ▓█   ▀ 0▒██▒  ██▒▓██ ▒ ██▒▓█   ▀ 1██ ▀█   █ ▒██    ▒ ▓██▒▒██▀ ▀█ 0
- 01 ▒███  1 ▒██░  ██▒▓██ ░▄█ ▒▒███  0▓██  ▀█ ██▒░ ▓██▄ 1 ▒██▒▒▓█    ▄ 
- 1  ▒▓█     ▒██   ██░▒██▀▀█▄ 1▒▓█  ▄ ▓██▒ 0▐▌██▒ 1▒   ██▒░██░▒▓▓▄ ▄██0
-0 1 ░▒█ █▒ 1░ ████▓▒░░██▓ ▒██▒░▒████▒▒██░ 0 ▓██░▒██████▒▒░██░▒ ▓███▀ 1
- 10 ░░ ▒░ ░ ░ ▒░▒░▒░ 0 ▒▓ ░▒▓░░░ ▒░ ░░ ▒░ 1 ▒ ▒ ▒ ▒▓▒ ▒ ░░▓ 0░ ░▒ ▒ 0 
-0    ░ ░  ░   ░ ▒ ▒░   ░▒ ░ ▒░ ░ ░  ░░ ░░ 0 ░ ▒░░ ░▒  ░ ░ ▒ ░  ░  ▒  1
- 1 0   ░  1 ░ ░ ░ ▒ 0  ░░   ░ 1  ░  0   ░ 1 ░ ░ ░  ░  ░ 1 ▒ ░░  0 1 
-  0 1  ░  ░   0 ░ ░  1  ░   0    ░  ░    1    ░    1  ░   ░  ░ 0  1   
-  0x4A 0x7F FF AF EB C3 0x00 0F EAX RAX rbp rip rcx rsp EIP rdi rsi r8
-  jmp push pop ret xor test cmp mov lea call syscall nop hlt out in 00
-
-                          © 2026 Félix TOVIGNAN
-             https://github.com/VISCHENZISCH/ForensicTool.git
-
-      usage Linux : ./run.sh --help
-      usage Win   : .\run.ps1 --help
-      exemple     : $ ./run.sh --scan ./evidence --export-html rapport.html
-
-   Analyse Fichiers                  Analyse Système
-    [01] PDF - Metadonnees            [12] Windows Event Logs
-    [02] Image / EXIF                 [13] Registre Windows
-    [03] Coordonnees GPS              [14] Artefacts Linux
-    [04] Extraction Strings           [15] Analyse Memoire
-    [05] Historique Firefox           [16] Forensique Disque
-    [06] Cookies Firefox              [17] Exécution Windows
-    [07] Artefacts Chromium          
-                                     Threat Hunting
-   Analyse Avancée                    [18] Scan YARA
-    [08] Steganographie               [19] Extraction IOC
-    [09] File Carving                 [20] Timeline DFIR
-    [10] Analyse PCAP                
-    [11] Triage Malware (PE)         
-
-   Outils
-    [88] Scan Automatique
-    [99] Exporter Rapport
-    [00] Quitter
-
-┌─[forensic-analyzer]─[menu]
-└──╼ $
-```
+## Fonctionnalités Clés (20 Modules)
+- **Analyse Fichier & Stegano** : Outils complets pour PDF, Images (EXIF, LSB, Carving), extraction de strings.
+- **Investigation Navigateur** : Extraction des historiques, cookies, favoris, et téléchargements (Chromium & Firefox).
+- **Triage Réseau (PCAP)** : Extraction de flux TCP/UDP, détection de scans, extraction de credentials en clair et fingerprinting TLS (JA3).
+- **Analyse Malware (PE)** : Moteur d'analyse statique des exécutables, détection de packers, imports d'APIs suspectes, hashes multiples (SSDEEP), IOCs et macro OLE.
+- **Scan YARA & Threat Hunting** : Moteur de scan YARA compatible avec les processus mémoires et les fichiers (Webshells, CobaltStrike, Mineurs).
+- **Forensique Système (Windows & Linux)** : Parseurs robustes pour MFT NTFS, Event Logs EVTX, Registres (BAM, UserAssist, AmCache), Prefetch, LNK, Bash History, Auth.log et fichiers SUID.
+- **Analyse Mémoire RAM** : Intégration de Volatility 3 pour le scan de processus injectés (Process Hollowing), DLLs cachées et Rootkits (Hooks SSDT).
+- **Super-Timeline DFIR** : Fusion de tous les artefacts en une chronologie universelle (UTC) avec détection de périodes d'anti-forensics et export CSV.
 
 ---
 
-##  Architecture Multi-Niveaux (L1 - L5)
+## Installation (Linux)
 
-La suite est structurée en 5 niveaux d'investigation progressive :
-
-### L1 : Tri initial & Métadonnées de base
-* **PDF Analyzer** : Informations sur le document, version, chiffrement, permissions, créateur, etc.
-* **Image/EXIF & GPS Analyzer** : Extraction des métadonnées géographiques avec liens automatiques vers Google Maps et OpenStreetMap.
-* **Strings Analyzer** : Extraction optimisée des chaînes ASCII/Unicode depuis les exécutables et fichiers binaires.
-* **Firefox Artifacts** : Extraction de l'historique et des cookies depuis les bases SQLite de profil.
-* **Chromium Artifacts** : Extraction des historiques de navigation et détection des téléchargements dangereux.
-
-### L2 : Analyse Secrète & Carving
-* **Stego Analyzer** : Détection de stéganographie LSB (Least Significant Bit), analyse de distribution DCT (JPEG) et détection des canaux Alpha masqués.
-* **File Carving Analyzer** : Extraction par Magic Bytes de fichiers imbriqués (PNG, ZIP, ELF, PDF) et détection des fichiers polyglotes.
-
-### L3 : Réseau & Mémoire Vive (RAM)
-* **PCAP Analyzer** : Reconstruction de sessions, extraction de credentials (FTP, HTTP Basic, etc.), détection de patterns C2 (beacons) et de requêtes d'exfiltration DNS.
-* **Memory Analyzer** : Wrapper d'intégration avec **Volatility3** permettant d'exécuter des plugins d'analyse RAM (Windows/Linux) et d'extraire les chaînes de caractères sensibles.
-* **PE Analyzer (Triage Malware)** : Analyse statique de binaires (PE), calcul d'entropie critique et extraction des imports DLL suspects.
-
-### L4 : Forensique Système & Disque
-* **Disk/MFT Analyzer** : Analyse de bas niveau de la Master File Table (MFT) NTFS, recherche de flux ADS (Alternate Data Streams) et d'inodes Ext4.
-* **EVTX Analyzer** : Parsing ultra-rapide des Windows Event Logs avec détection des tentatives de brute-force SSH/SMB et de suppression des journaux d'audit.
-* **Registry Analyzer** : Analyse des ruches Windows (SAM, SYSTEM, NTUSER.DAT) avec extraction des mécanismes de persistance (Autorun/Services) et informations d'utilisateurs.
-* **Windows Execution Artifacts** : Parsing des fichiers Prefetch et LNK pour retracer l'exécution des binaires sur le système.
-* **Linux Artifacts** : Analyse de `bash_history`, `auth.log`, et autres journaux pour détecter le brute-force ou l'exécution de commandes malveillantes.
-
-### L5 : Threat Hunting & Corrélation
-* **YARA Scanner** : Scan multi-threadé basé sur des règles YARA pour détecter des empreintes de malwares et payloads.
-* **IOC Extractor** : Extraction regex haute fidélité d'adresses IPv4/IPv6, d'URLs, de clés de registre, de hashes (MD5, SHA-1, SHA-256) et d'emails.
-* **Timeline Generator** : Corrélateur temporel générant une chronologie DFIR unifiée et chronologique de tous les événements découverts au cours de l'investigation.
-
----
-
-## Rapports & Exports Professionnels
-
-* **HTML Interactif** : Génération d'un tableau de bord de réponse aux incidents responsive incluant des graphiques de distribution analytique (Chart.js), des boîtes d'alerte contextuelles, et des filtres dynamiques par type de preuve.
-* **JSON Structuré** : Format d'échange brut standardisé pour intégration avec des plateformes SOAR ou SIEM.
-* **CSV Timeline** : Format tabulaire chronologique compatible avec **Plaso (Log2Timeline)**.
-* **PDF Exporter** : Export de rapports imprimables et soignés via WeasyPrint.
-
----
-
-##  Installation & Configuration
-
-### Prérequis Système (Optionnels)
-Pour exploiter pleinement tous les modules :
-* **YARA** : `libyara` (installé par défaut sur la plupart des distributions de sécurité comme Kali Linux).
-* **Volatility3** : Nécessaire uniquement pour l'analyse de dumps RAM complexes.
-
-### Lancement rapide
+Le script principal fait également office d'installeur interactif pour résoudre les dépendances systèmes (comme `tshark` pour les PCAP et `ssdeep` pour les hashes).
 
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/VISCHENZISCH/ForensicTool.git
-cd "ForensicTool"
-
-# 2. Configurer l'environnement virtuel et installer les dépendances
-./run.sh    # Sous Linux / macOS
-# ou run.ps1 sous Windows
+chmod +x run.sh
+./run.sh --install
 ```
+
+*(Si vous êtes sous Windows, installez Python 3.11+ et exécutez `pip install -r requirements.txt` manuellement).*
 
 ---
 
-## Exemples d'Utilisation en Ligne de Commande (CLI)
-
-Forensic Analyzer est entièrement scriptable pour s'intégrer dans vos outils ou scripts de tri :
-
+### Lancement Interactif
 ```bash
-# Scan automatique de tout un dossier de preuves et génération de rapports HTML & JSON
-./run.sh --scan ./preuves --export-html rapport.html --export-json rapport.json
-
-# Analyse réseau PCAP à la recherche de credentials et d'anomalies
-./run.sh --pcap capture.pcap --export-csv timeline.csv
-
-# Scan YARA d'un répertoire suspect avec des règles personnalisées
-./run.sh --yara /path/to/rules.yar --scan ./fichiers_suspects
-
-# Extraction des données GPS d'une photo de scène d'incident
-./run.sh --gps image.jpg
-# (Note: sous Windows, utilisez .\run.ps1 au lieu de ./run.sh)
+./run.sh
 ```
 
----
-
-## Validation & Tests
-
-La suite de tests unitaires valide l'intégralité des fonctionnalités en mockant les entrées physiques :
-
+### Scan Automatisé (Triage rapide)
+Idéal pour ingérer directement un dump disque, un dossier réseau ou une collection d'artefacts KAPE/Triage.
 ```bash
-python test.py
+./run.sh --scan /chemin/vers/dossier_evidence --export-html rapport_forensic.html
 ```
 
 ---
 
-## Licence
+## Scénarios Pratiques de Test
 
-Ce projet est distribué sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+### 1. Triage d'un Malware
+Soumettez un exécutable potentiellement malveillant au moteur :
+```bash
+./run.sh --scan malware_sample.exe
+```
+*Le moteur PE extraira l'entropie (pour détecter s'il est chiffré), les ressources cachées, le packer (UPX, etc.), et les règles YARA intégrées vous diront s'il s'agit d'un Stealer ou d'un Webshell.*
+
+### 2. Investigation Système & Timeline
+Placez un fichier `NTUSER.DAT`, un fichier `.evtx` et un fichier `.pf` dans un dossier `evidence_dir`.
+```bash
+./run.sh --scan ./evidence_dir/ --export-csv timeline.csv
+```
+*Ouvrez le fichier `timeline.csv` généré avec **Timeline Explorer** : vous verrez les accès fichiers croisés avec l'historique de lancement Prefetch et les logs d'authentification.*
+
+### 3. Extraction d'un Rootkit en Mémoire
+```bash
+./run.sh --scan infected_dump.raw --plugins malfind,ssdt,netscan
+```
+*Le module mémoire appellera Volatility 3, ciblera les hooks dans la table de dispatch système (SSDT) et listera toutes les connexions réseau figées au moment du dump.*
+
+
+## Avertissement Légal
+Cet outil automatise des procédures extrêmement poussées d'investigation. À utiliser strictement dans un cadre légal (Réponse à Incident, CTF, Lab SOC).

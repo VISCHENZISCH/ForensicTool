@@ -6,29 +6,29 @@ from __future__ import annotations
 
 import os
 
-from forensic_analyzer.analyzers.carving_analyzer import CarvingAnalyzer
-from forensic_analyzer.analyzers.chromium_analyzer import ChromiumAnalyzer
-from forensic_analyzer.analyzers.disk_analyzer import DiskAnalyzer
-from forensic_analyzer.analyzers.evtx_analyzer import EVTXAnalyzer
-from forensic_analyzer.analyzers.firefox_analyzer import (
+from forensic_analyzer.analyzers.carving import CarvingAnalyzer
+from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
+from forensic_analyzer.analyzers.disk import DiskAnalyzer
+from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
+from forensic_analyzer.analyzers.firefox import (
     FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
-from forensic_analyzer.analyzers.gps_analyzer import GPSAnalyzer
-from forensic_analyzer.analyzers.image_analyzer import ImageAnalyzer
-from forensic_analyzer.analyzers.ioc_analyzer import IOCAnalyzer
-from forensic_analyzer.analyzers.linux_artifacts_analyzer import \
+from forensic_analyzer.analyzers.gps import GPSAnalyzer
+from forensic_analyzer.analyzers.image import ImageAnalyzer
+from forensic_analyzer.analyzers.ioc import IOCAnalyzer
+from forensic_analyzer.analyzers.linux import \
     LinuxArtifactsAnalyzer
-from forensic_analyzer.analyzers.memory_analyzer import MemoryAnalyzer
-from forensic_analyzer.analyzers.pcap_analyzer import PCAPAnalyzer
+from forensic_analyzer.analyzers.memory import MemoryAnalyzer
+from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
 #Imports analyzers
-from forensic_analyzer.analyzers.pdf_analyzer import PDFAnalyzer
-from forensic_analyzer.analyzers.pe_analyzer import PEAnalyzer
-from forensic_analyzer.analyzers.registry_analyzer import RegistryAnalyzer
-from forensic_analyzer.analyzers.stego_analyzer import StegoAnalyzer
-from forensic_analyzer.analyzers.strings_analyzer import StringsAnalyzer
-from forensic_analyzer.analyzers.timeline_analyzer import TimelineAnalyzer
-from forensic_analyzer.analyzers.windows_execution_analyzer import \
+from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
+from forensic_analyzer.analyzers.registry import RegistryAnalyzer
+from forensic_analyzer.analyzers.stego import StegoAnalyzer
+from forensic_analyzer.analyzers.strings import StringsAnalyzer
+from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
+from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
-from forensic_analyzer.analyzers.yara_analyzer import YARAAnalyzer
+from forensic_analyzer.analyzers.yara import YARAAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry
 from forensic_analyzer.core.scanner import auto_scan
 from forensic_analyzer.models.finding import FindingModel, ReportModel
@@ -188,7 +188,8 @@ def _boot_sequence() -> None:
             spec = importlib.util.find_spec(import_name)
             if spec is None:
                 raise ImportError(f"Module {import_name} not found")
-        except Exception:
+        except Exception as exc:
+            pass  # TODO: log.debug(exc)
             sys.stdout.write(f"\n\n{ui.C.HR}[!] ERREUR CRITIQUE: Le module '{import_name}' n'est pas installe.{ui.C.RS}\n")
             sys.stdout.write(f"{ui.C.HY}Veuillez relancer avec ./run.sh ou executer: pip install -r requirements.txt{ui.C.RS}\n")
             sys.exit(1)

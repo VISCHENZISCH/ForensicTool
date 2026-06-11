@@ -52,6 +52,7 @@ Thumbs.db
 *.log
 *.pid
 *.sqlite3
+lab/*
 
 # Forensic evidence and generated reports
 export/
@@ -72,3 +73,6 @@ cookies_*.html
 *.bmp
 *.tiff
 *.webp
+VERSIONS.md
+INTEGRATION.md
+OUTILS.md

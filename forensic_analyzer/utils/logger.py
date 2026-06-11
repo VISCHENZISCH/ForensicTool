@@ -3,29 +3,30 @@ import logging
 import re
 import sys
 
-# Constantes de couleurs Matrix Theme
-MG1 = "\033[38;5;22m"  # Très sombre
-MG2 = "\033[38;5;28m"  # Sombre
-MG3 = "\033[38;5;34m"  # Hacker Green
-MG4 = "\033[38;5;40m"  # Vert clair
-MG5 = "\033[38;5;46m"  # Émeraude vif
-MG6 = "\033[38;5;118m" # Vert-Jaune intense
+# Constantes de couleurs Premium DFIR
+MG1 = "\033[38;5;28m"  # Vert sombre (Hacker)
+MG2 = "\033[38;5;34m"  # Vert moyen (Hacker)
+MG3 = "\033[38;5;75m"   # Bleu ciel / Cyan
+MG4 = "\033[38;5;141m"  # Violet clair
+MG5 = "\033[38;5;46m"  # Vert vif (Hacker)
+MG6 = "\033[38;5;220m"  # Or / Jaune
+
 COLOR_RESET = "\033[0m"
 
-HR = "\033[38;5;196m"  # Hacker Red
-HY = "\033[38;5;226m"  # Hacker Yellow
+HR = "\033[38;5;196m"  # Hacker Red / Alert
+HY = "\033[38;5;220m"  # Gold
 
-PURPLE = MG3  
-COLOR_TIME = MG5
+PURPLE = MG4  
+COLOR_TIME = MG2
 COLOR_MUTED = MG1
-COLOR_CYAN = MG4
-COLOR_BRIGHT_BLUE = MG4
+COLOR_CYAN = MG3
+COLOR_BRIGHT_BLUE = MG3
 COLOR_YELLOW = HY
 COLOR_RED = HR
 
 LEVEL_COLORS = {
     "DEBUG": COLOR_MUTED,
-    "INFO": COLOR_BRIGHT_BLUE,
+    "INFO": COLOR_CYAN,
     "WARNING": COLOR_YELLOW,
     "ERROR": COLOR_RED,
     "CRITICAL": COLOR_RED,
@@ -58,10 +59,10 @@ class ColoredFormatter(logging.Formatter):
             msg = msg.replace(f"[{tag}]", f"{PURPLE}[{tag}]{MG3}")
 
         # Coloration de la flèche
-        msg = msg.replace("→", f"{COLOR_RED}→{MG3}")
+        msg = msg.replace("→", f"{COLOR_CYAN}→{COLOR_RESET}")
 
-        # Le séparateur '-' en jaune, le message en Hacker Green
-        return f"{time_str} {level_str} {logger_name} {HY}-{COLOR_RESET} {MG3}{msg}{COLOR_RESET}"
+        # Le séparateur '-' en gris, le message en clair
+        return f"{time_str} {level_str} {logger_name} {COLOR_MUTED}-{COLOR_RESET} {MG5}{msg}{COLOR_RESET}"
 
 
 class DynamicStreamHandler(logging.StreamHandler):

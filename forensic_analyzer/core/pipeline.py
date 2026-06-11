@@ -52,31 +52,42 @@ class AnalyzerRegistry:
 def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
     """
     Exécute le pipeline d'analyse sur une liste de fichiers.
+    Optimisé pour le parallélisme via ThreadPoolExecutor.
 
     Args:
-        paths:    Liste de chemins absolus à analyser.
-        registry: Registre des analyzers disponibles.
+        paths (list[str]): Liste de chemins absolus à analyser.
+        registry (AnalyzerRegistry): Registre des analyzers disponibles.
+        
     Returns:
-        ReportModel consolidé avec tous les résultats.
+        ReportModel: Modèle consolidé avec tous les résultats.
     """
     findings: list[FindingModel] = []
-
-    for path in paths:
+    
+    import concurrent.futures
+    
+    def process_path(path: str) -> FindingModel | None:
         if not os.path.isfile(path):
             log.warning("Fichier introuvable, ignoré : %s", path)
-            continue
+            return None
 
         analyzer = registry.get_for(path)
         if analyzer is None:
-            log.debug("Aucun analyzer pour : %s", os.path.basename(path))
-            continue
+            return None
 
-        log.info("[%s] → %s", analyzer.name.upper(), os.path.basename(path))
+        fname = os.path.basename(path)
+        if len(fname) > 50:
+            fname = fname[:40] + "..." + fname[-7:]
+            
+        log.info("[%s] → %s", analyzer.name.upper(), fname)
         try:
-            result = analyzer.analyze(path)
-            if result:
-                findings.append(result)
+            return analyzer.analyze(path)
         except Exception as exc:
-            log.error("Erreur dans %s sur '%s' : %s", analyzer.name, path, exc)
+            log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
+            return None
 
+    # Parallélisation du traitement (I/O & CPU-bound mixtes)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
+        results = executor.map(process_path, paths)
+        
+    findings = [res for res in results if res is not None]
     return ReportModel.from_findings(findings)

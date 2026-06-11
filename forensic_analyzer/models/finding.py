@@ -4,12 +4,18 @@ from __future__ import annotations
 import hashlib
 import os
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 
+@lru_cache(maxsize=1024)
 def compute_hashes(filepath: str) -> dict[str, str]:
+    """
+    Calcule les hashes MD5 et SHA-256 d'un fichier.
+    Optimisation: Cache LRU pour éviter de relire le même fichier plusieurs fois.
+    """
     if not os.path.isfile(filepath):
         return {}
     
@@ -17,15 +23,17 @@ def compute_hashes(filepath: str) -> dict[str, str]:
     md5 = hashlib.md5()
     
     try:
+        # Optimisation : Lecture par chunks de 64KB (au lieu de 4KB) pour réduire l'overhead I/O
         with open(filepath, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
+            for chunk in iter(lambda: f.read(65536), b""):
                 sha256.update(chunk)
                 md5.update(chunk)
         return {
             "MD5": md5.hexdigest(),
             "SHA-256": sha256.hexdigest()
         }
-    except Exception:
+    except Exception as exc:
+        pass  # TODO: log.debug(exc)
         return {}
 
 

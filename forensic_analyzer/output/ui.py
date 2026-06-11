@@ -21,8 +21,19 @@ DARK_GREY = "\033[38;5;243m"
 # Le blanc a été intégralement supprimé pour le thème Matrix
 
 class C:
-    """Palette premium de WebMapper. Theme Matrix."""
-    # Matrix Colors
+    """Palette de couleurs sémantiques propres."""
+    # Couleurs Sémantiques Spécifiques
+    C_IP       = "\033[38;5;39m"   # Bleu ciel pour IPs
+    C_MAC      = "\033[38;5;141m"  # Violet clair pour MACs
+    C_HOST     = "\033[38;5;220m"  # Or/Jaune pour Hostnames
+    C_USER     = "\033[38;5;208m"  # Orange pour Utilisateurs
+    C_DNS      = "\033[38;5;75m"   # Bleu indigo pour DNS/URLs
+    C_PARAM    = "\033[38;5;45m"   # Cyan/Vert pour Paramètres/Clés
+    C_RESULT   = "\033[38;5;253m"  # Blanc/Gris clair pour Résultats
+    C_DANGER   = "\033[38;5;196m"  # Rouge vif pour Alertes/Malwares
+    C_STRUCT   = "\033[38;5;239m"  # Gris sombre pour Structure
+    
+    # Matrix Colors (Pour la bannière historique)
     MG1 = "\033[38;5;22m"  # Très sombre
     MG2 = "\033[38;5;28m"  # Sombre
     MG3 = "\033[38;5;34m"  # Hacker Green
@@ -30,19 +41,18 @@ class C:
     MG5 = "\033[38;5;46m"  # Émeraude vif
     MG6 = "\033[38;5;118m" # Vert-Jaune intense
 
-    HR = "\033[38;5;196m"  # Hacker Red
-    HY = "\033[38;5;226m"  # Hacker Yellow
-    
-    # Redéfinition des couleurs sémantiques pour le thème Matrix
-    R   = MG2  # Structure (lignes, boîtes) -> Vert Sombre
-    G   = MG5  # Succès, Composants actifs -> Émeraude vif
-    Y   = MG6  # Avertissements, Valeurs -> Vert-Jaune
-    B   = MG4  # Identité Projet, Info -> Vert clair
-    VB  = MG4  # Données, Variables -> Vert clair
-    M   = MG3  # Autres -> Hacker Green
-    P   = MG3  # Autres -> Hacker Green
-    W   = MG3  # Texte principal (anciennement Blanc) -> Hacker Green
-    D   = MG1  # Texte atténué (anciennement Gris foncé) -> Vert très sombre
+    # Couleurs de base existantes (pour compatibilité)
+    R   = C_STRUCT
+    G   = "\033[38;5;46m"
+    Y   = "\033[38;5;226m"
+    B   = "\033[38;5;33m"
+    VB  = "\033[38;5;45m"
+    M   = "\033[38;5;201m"
+    P   = "\033[38;5;141m"
+    W   = "\033[38;5;253m"
+    D   = "\033[38;5;244m"
+    HR  = C_DANGER
+    HY  = Y
 
     BD  = "\033[1m"
     RS  = "\033[0m"
@@ -61,7 +71,8 @@ def _width() -> int:
     """Largeur du terminal, capped a 80."""
     try:
         return min(shutil.get_terminal_size().columns, 80)
-    except Exception:
+    except Exception as exc:
+        pass  # TODO: log.debug(exc)
         return 80
 
 
@@ -252,17 +263,17 @@ def status(msg: str) -> None:
 # Affichage des resultats
 
 MODULE_TAGS = {
-    "pdf": "PDF", "image": "IMG", "gps": "GPS", "strings": "STR",
+    "pdf": "PDF", "pdf_analysis": "PDF", "image": "IMG", "gps": "GPS", "strings": "STR",
     "firefox_history": "FHX", "firefox_cookies": "FCK",
     "stego": "SGO", "carving": "CRV", "pcap": "NET", "memory": "MEM",
     "disk": "DSK", "evtx": "EVT", "registry": "REG",
     "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
-    "pe_analysis": "MAL", "chromium_artifacts": "WEB", 
+    "pe_analysis": "MAL", "malware_analysis": "MAL", "chromium_artifacts": "WEB", 
     "prefetch": "PF", "lnk_shortcut": "LNK"
 }
 
 MODULE_NAMES = {
-    "pdf": "Analyse PDF", "image": "Analyse Image / EXIF",
+    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "image": "Analyse Image / EXIF",
     "gps": "Coordonnees GPS", "strings": "Extraction Strings",
     "firefox_history": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
     "stego": "Steganographie", "carving": "File Carving",
@@ -270,17 +281,27 @@ MODULE_NAMES = {
     "disk": "Forensique Disque", "evtx": "Windows Event Logs",
     "registry": "Registre Windows", "linux_artifacts": "Artefacts Linux",
     "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
-    "pe_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
+    "pe_analysis": "Triage Malware (PE)", "malware_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
     "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)"
 }
 
+MODULE_COLORS = {
+    "pdf": C.R, "pdf_analysis": C.R, "image": C.Y, "gps": C.B, "strings": C.D,
+    "firefox_history": C.M, "firefox_cookies": C.P,
+    "stego": "\033[38;5;198m", "carving": "\033[38;5;208m", 
+    "pcap": C.VB, "memory": "\033[38;5;111m",
+    "disk": "\033[38;5;240m", "evtx": "\033[38;5;45m", "registry": "\033[38;5;99m",
+    "linux_artifacts": "\033[38;5;214m", "yara": C.HR, "ioc": C.HR, "timeline": C.G,
+    "pe_analysis": "\033[38;5;160m", "malware_analysis": "\033[38;5;160m", "chromium_artifacts": "\033[38;5;33m", 
+    "prefetch": "\033[38;5;184m", "lnk_shortcut": "\033[38;5;136m"
+}
 
-def separator(label: str = "", dynamic_width: int = 0) -> None:
+def separator(label: str = "", dynamic_width: int = 0, custom_color: str = C.G) -> None:
     """Separateur double-ligne style hacker avec taille fixe de 85."""
     target_width = 85
     if label:
-        text = f" {C.G}{label}{C.RS} "
-        label_len = len(label) + 2
+        text = f" {custom_color}{label}{C.RS} "
+        label_len = len(_strip_ansi(text))
         rem = target_width - label_len
         left = rem // 2
         right = rem - left
@@ -293,9 +314,10 @@ def finding_header(finding_type: str, filename: str, dynamic_width: int = 0) -> 
     """Affiche l'entete d'un finding."""
     tag = MODULE_TAGS.get(finding_type, "???")
     name = MODULE_NAMES.get(finding_type, finding_type)
+    color = MODULE_COLORS.get(finding_type, C.G)
     print()
-    separator(f"{tag} | {name}")
-    print(f"{MARGIN}   {C.G}Fichier                      {C.HY}:{C.RS} {C.W}{filename}{C.RS}")
+    separator(f"{tag} | {name}", custom_color=color)
+    print(f"{MARGIN}   {color}Fichier                      {C.HY}:{C.RS} {C.W}{filename}{C.RS}")
     print()
 
 
@@ -313,11 +335,20 @@ def kv(key: str, value, indent: int = 3) -> None:
     if not lines:
         lines = [""]
 
-    key_display = f"{C.G}{key:<28}{C.RS}"
-    print(f"{MARGIN}{pad} {key_display} {C.HY}:{C.RS} {C.W}{lines[0]}{C.RS}")
+    import re
+    def colorize(t):
+        t = re.sub(r'\[([^\]]+)\]', f'[{C.C_DNS}\\1{C.C_RESULT}]', t)
+        t = re.sub(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', f'{C.C_IP}\\1{C.C_RESULT}', t)
+        t = re.sub(r'\((\d+)\)', f'{C.C_STRUCT}({C.C_USER}\\1{C.C_STRUCT}){C.C_RESULT}', t)
+        return t
+
+    key_display = f"{C.C_PARAM}{key:<28}{C.RS}"
+    c_line0 = colorize(lines[0])
+    print(f"{MARGIN}{pad} {key_display} {C.C_STRUCT}:{C.RS} {C.C_RESULT}{c_line0}{C.RS}")
     
     for line in lines[1:]:
-        print(f"{MARGIN}{' ' * offset}{C.W}{line}{C.RS}")
+        c_line = colorize(line)
+        print(f"{MARGIN}{' ' * offset}{C.C_RESULT}{c_line}{C.RS}")
 
 
 def render_finding(finding) -> None:
@@ -336,20 +367,18 @@ def render_finding(finding) -> None:
         strings = extra["strings"]
         print()
         separator("Chaines extraites")
-        for i, s in enumerate(strings[:100], 1):
+        for i, s in enumerate(strings, 1):
             print(f"{MARGIN}    {C.D}{i:>4}.{C.RS} {C.W}{s}{C.RS}")
-        if len(strings) > 100:
-            print(f"{MARGIN}    {C.D}     ... +{len(strings) - 100} de plus{C.RS}")
 
     elif finding.type == "firefox_history" and "entries" in extra:
         entries = extra["entries"]
         if entries:
             print()
             separator("Historique")
-            for e in entries[:50]:
+            for e in entries:
                 date = e.get("date", "?")
                 url = e.get("url", "")
-                print(f"{MARGIN}    {C.G}{date:<22}{C.RS} {C.W}{url}{C.RS}")
+                print(f"{MARGIN}    {C.D}{date:<22}{C.RS} {C.C_DNS}{url}{C.RS}")
 
     elif finding.type == "yara" and "matches" in extra:
         matches = extra["matches"]
@@ -372,46 +401,71 @@ def render_finding(finding) -> None:
         if "dll_imports" in extra and extra["dll_imports"]:
             print()
             separator("Imports DLL")
-            for dll in extra["dll_imports"][:15]:
+            for dll in extra["dll_imports"]:
                 print(f"{MARGIN}    {C.G}DLL{C.HY}:{C.RS} {C.W}{dll}{C.RS}")
-            if len(extra["dll_imports"]) > 15:
-                print(f"{MARGIN}    {C.D}     ... +{len(extra['dll_imports']) - 15} de plus{C.RS}")
 
     elif finding.type == "chromium_artifacts":
         if "chromium_downloads" in extra and extra["chromium_downloads"]:
             print()
             separator("Téléchargements")
-            for d in extra["chromium_downloads"][:10]:
+            for d in extra["chromium_downloads"]:
                 color = C.HR if d.get('danger_type') else C.G
                 fname = str(d.get('fichier', ''))[:50]
                 print(f"{MARGIN}    {color}{fname:<50}{C.RS} {C.HY}Taille:{C.RS} {C.W}{d.get('taille_octets', 0)}{C.RS}")
         if "chromium_urls" in extra and extra["chromium_urls"]:
             print()
-            separator("Historique URLs (Top 10)")
-            for u in extra["chromium_urls"][:10]:
+            separator("Historique URLs")
+            for u in extra["chromium_urls"]:
                 url = str(u.get('url', ''))[:65]
-                print(f"{MARGIN}    {C.VB}{u.get('visites', 0):>4}x{C.RS} {C.W}{url}{C.RS}")
+                print(f"{MARGIN}    {C.VB}{u.get('visites', 0):>4}x{C.RS} {C.C_DNS}{url}{C.RS}")
 
     elif finding.type == "firefox_cookies" and "entries" in extra:
         entries = extra["entries"]
         if entries:
             print()
             separator("Cookies")
-            for e in entries[:50]:
+            for e in entries:
                 name = e.get("name", "")
                 host = e.get("host", "")
                 val = e.get("value", "")[:40]
-                print(f"{MARGIN}    {C.G}{name}{C.RS} {C.W}@{C.RS} {C.VB}{host:<30}{C.RS} {C.W}{val}{C.RS}")
+                print(f"{MARGIN}    {C.C_PARAM}{name}{C.RS} {C.C_STRUCT}@{C.RS} {C.C_HOST}{host:<30}{C.RS} {C.C_RESULT}{val}{C.RS}")
 
-    elif finding.type == "pcap" and "credentials" in extra:
-        creds = extra["credentials"]
+    elif finding.type == "pcap":
+        creds = extra.get("credentials", [])
         if creds:
             print()
             separator("Credentials detectes")
-            for c_item in creds[:20]:
+            for c_item in creds:
                 proto = c_item.get("protocol", "?")
                 data = c_item.get("data", c_item.get("user", str(c_item)))
                 print(f"{MARGIN}    {C.G}{proto:<14}{C.RS} {C.W}{data}{C.RS}")
+                
+        hosts = extra.get("host_identities", {})
+        if hosts:
+            print()
+            separator("Hotes / Identites")
+            # If hosts is a dict (IP -> details)
+            if isinstance(hosts, dict):
+                for ip, h in list(hosts.items()):
+                    macs = ", ".join(h.get("mac", []))
+                    names = ", ".join(h.get("hostnames", []))
+                    users = ", ".join(h.get("users", []))
+                    print(f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{macs:<18}{C.RS} {C.C_HOST}{names:<20}{C.RS} {C.C_USER}{users}{C.RS}")
+            else:
+                for h in hosts:
+                    ip = h.get("ip", "?")
+                    mac = h.get("mac", "?")
+                    name = h.get("hostname", "?")
+                    user = h.get("user", "")
+                    print(f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{mac:<18}{C.RS} {C.C_HOST}{name:<20}{C.RS} {C.C_USER}{user}{C.RS}")
+
+        ua_list = extra.get("user_agents", [])
+        if ua_list:
+            print()
+            separator("User-Agents suspects (Top 10)")
+            suspects = [ua for ua in ua_list if "Windows NT" not in ua.get("user_agent", "") and "Macintosh" not in ua.get("user_agent", "")]
+            for ua in suspects:
+                print(f"{MARGIN}    {C.C_DANGER}[!]{C.RS} {C.C_RESULT}{ua.get('user_agent', '')[:75]}{C.RS}")
 
     elif finding.type == "ioc" and "iocs" in extra:
         iocs = extra["iocs"]
@@ -419,7 +473,7 @@ def render_finding(finding) -> None:
             print()
             separator("IOC detectes")
             for ioc_type, items in iocs.items():
-                for item in (items[:10] if isinstance(items, list) else [items]):
+                for item in (items if isinstance(items, list) else [items]):
                     print(f"{MARGIN}    {C.G}{ioc_type:<14}{C.RS} {C.W}{item}{C.RS}")
 
     elif finding.type == "timeline" and "events" in extra:
@@ -427,7 +481,7 @@ def render_finding(finding) -> None:
         if events:
             print()
             separator("Timeline")
-            for e in events[:30]:
+            for e in events:
                 ts = e.get("timestamp", "?")
                 src = e.get("source", "")
                 detail = e.get("detail", "")[:50]
@@ -439,7 +493,7 @@ def render_finding(finding) -> None:
             if items and isinstance(items, list):
                 print()
                 separator(extra_key.replace("_", " ").title())
-                for item in items[:20]:
+                for item in items:
                     if isinstance(item, dict):
                         for ik, iv in item.items():
                             print(f"{MARGIN}    {C.G}{ik:<20}{C.RS} {C.W}{str(iv)[:60]}{C.RS}")

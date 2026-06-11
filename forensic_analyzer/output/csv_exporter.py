@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import csv
 
-from forensic_analyzer.analyzers.timeline_analyzer import build_timeline
+from forensic_analyzer.analyzers.timeline import build_timeline
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
