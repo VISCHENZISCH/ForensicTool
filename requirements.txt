@@ -10,3 +10,8 @@ requests
 beautifulsoup4
 volatility3
 weasyprint
+rich
+exifread
+oletools
+pypdf
+pyvis
