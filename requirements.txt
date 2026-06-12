@@ -4,7 +4,6 @@ python-registry
 python-evtx
 scapy
 yara-python
-pyscca
 LnkParse3
 Pillow
 ssdeep
