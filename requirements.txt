@@ -6,7 +6,6 @@ scapy
 yara-python
 LnkParse3
 Pillow
-ssdeep
 requests
 beautifulsoup4
 volatility3
