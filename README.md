@@ -1,15 +1,6 @@
 # Forensic Analyzer
 
-Une plateforme d'investigation numérique 
-## Fonctionnalités Clés (20 Modules)
-- **Analyse Fichier & Stegano** : Outils complets pour PDF, Images (EXIF, LSB, Carving), extraction de strings.
-- **Investigation Navigateur** : Extraction des historiques, cookies, favoris, et téléchargements (Chromium & Firefox).
-- **Triage Réseau (PCAP)** : Extraction de flux TCP/UDP, détection de scans, extraction de credentials en clair et fingerprinting TLS (JA3).
-- **Analyse Malware (PE)** : Moteur d'analyse statique des exécutables, détection de packers, imports d'APIs suspectes, hashes multiples (SSDEEP), IOCs et macro OLE.
-- **Scan YARA & Threat Hunting** : Moteur de scan YARA compatible avec les processus mémoires et les fichiers (Webshells, CobaltStrike, Mineurs).
-- **Forensique Système (Windows & Linux)** : Parseurs robustes pour MFT NTFS, Event Logs EVTX, Registres (BAM, UserAssist, AmCache), Prefetch, LNK, Bash History, Auth.log et fichiers SUID.
-- **Analyse Mémoire RAM** : Intégration de Volatility 3 pour le scan de processus injectés (Process Hollowing), DLLs cachées et Rootkits (Hooks SSDT).
-- **Super-Timeline DFIR** : Fusion de tous les artefacts en une chronologie universelle (UTC) avec détection de périodes d'anti-forensics et export CSV.
+Une plateforme d'investigation numérique. Elle collecte, parse, corrèle et génère une timeline de bout-en-bout à partir de disques, mémoire, journaux systèmes et captures réseau.
 
 ---
 
