@@ -7,7 +7,7 @@ from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 
-from .scanner import YaraScanner, Ok, Err, HAS_YARA
+from .scanner import YaraScanner, HAS_YARA
 
 log = get_logger("yara")
 

@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import html
-import json
 import os
 from collections import defaultdict
 
-from forensic_analyzer.analyzers.timeline import build_timeline
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
@@ -51,7 +49,7 @@ _CATEGORIES = {
 
 def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
     label = _TYPE_LABELS.get(f.type, f.type.upper())
-    fname = html.escape(os.path.basename(f.file))
+    html.escape(os.path.basename(f.file))
     
     card_cls = "card card-inverse" if is_inverse else "card"
     row_cls = "table-row table-row-inverse" if is_inverse else "table-row"

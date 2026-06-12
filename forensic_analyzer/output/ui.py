@@ -71,7 +71,7 @@ def _width() -> int:
     """Largeur du terminal, capped a 80."""
     try:
         return min(shutil.get_terminal_size().columns, 80)
-    except Exception as exc:
+    except Exception:
         pass  # TODO: log.debug(exc)
         return 80
 

@@ -31,7 +31,7 @@ def extract_host_identities(packets, streams: dict[str, bytes], path: str) -> di
                     if idx + 2 + length <= len(raw_payload):
                         hostname = raw_payload[idx+2 : idx+2+length].decode('utf-8', 'ignore')
                         if hostname and len(hostname) > 1: mac_info[mac]["hostnames"].add(hostname)
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
 
     ntlm_sig = b"NTLMSSP\x00\x03\x00\x00\x00"
@@ -52,7 +52,7 @@ def extract_host_identities(packets, streams: dict[str, bytes], path: str) -> di
                 if ws_len > 0 and idx + ws_off + ws_len <= len(data):
                     ws = data[idx + ws_off : idx + ws_off + ws_len].decode('utf-16le', 'ignore')
                     if ws and len(ws) > 1: mac_info[mac]["hostnames"].add(ws)
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
             idx += 8
 

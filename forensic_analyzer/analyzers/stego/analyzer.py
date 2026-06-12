@@ -159,7 +159,7 @@ def _extract_jpeg_comments(path: str) -> list[str]:
                 idx += 2 + length
             else:
                 idx += 1
-    except: pass
+    except Exception: pass
     return comments
 
 def _check_stego_signatures(path: str) -> list[str]:
@@ -171,7 +171,7 @@ def _check_stego_signatures(path: str) -> list[str]:
             if b"OpenStego" in data: found.append("OpenStego")
             if b"SilentEye" in data: found.append("SilentEye")
             if b"OutGuess" in data: found.append("OutGuess")
-    except: pass
+    except Exception: pass
     return found
 
 
@@ -270,7 +270,7 @@ class StegoAnalyzer(BaseAnalyzer):
                     try:
                         rgba = img.convert("RGBA")
                         results["alpha_analysis"] = _analyze_alpha_channel(rgba)
-                    except Exception as exc:
+                    except Exception:
                         pass  # TODO: log.debug(exc)
                         results["alpha_analysis"] = {"detail": "Conversion RGBA echouee"}
 
@@ -311,7 +311,7 @@ class StegoAnalyzer(BaseAnalyzer):
                             flat_meta["Outil Détecté"] = f"Steghide (Mot de passe: '{w}') (CRITIQUE)"
                             suspicion_score += 10
                             break
-                    except Exception as exc:
+                    except Exception:
                         pass  # TODO: log.debug(exc)
                         pass # Steghide non installé ou erreur
 

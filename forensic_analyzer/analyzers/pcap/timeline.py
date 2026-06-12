@@ -1,5 +1,4 @@
 import datetime
-import math
 
 try:
     from scapy.all import DNS, TCP, UDP, IP
@@ -32,7 +31,7 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
             # 2. HTTP Downloads / Beacons Start
             if pkt.haslayer(TCP) and pkt.haslayer(IP):
                 dst = pkt[IP].dst
-                dport = pkt[TCP].dport
+                pkt[TCP].dport
                 if dst in c2_ips:
                     # We only log the first packet per C2 to avoid spam
                     if not any(e["desc"].endswith(dst) for e in timeline if e["type"] == "C2 CONNECT"):
@@ -50,11 +49,10 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
                             if "ip-api" in payload.decode('utf-8', 'ignore') or "NCSI" in payload.decode('utf-8', 'ignore'):
                                 if not any("GeoIP" in e["desc"] for e in timeline):
                                     timeline.append({"time": ts, "type": "RECON (GEOIP)", "desc": "Requête de géolocalisation ou vérification de connectivité"})
-                        except:
+                        except Exception:
                             pass
-        except Exception as exc:
+        except Exception:
             pass  # TODO: log.debug(exc)
-            pass
             
     # Sort and deduplicate timeline
     timeline.sort(key=lambda x: x["time"])

@@ -17,14 +17,14 @@ def extract_strings_with_offsets(data: bytes, min_length: int = 4) -> list[tuple
     for match in re.finditer(utf16le_pattern, data):
         try:
             strings.append((match.start(), match.group().decode('utf-16-le')))
-        except: pass
+        except Exception: pass
 
     # UTF-16 BE
     utf16be_pattern = rb"(?:\x00[\x20-\x7E]){" + str(min_length).encode() + rb",}"
     for match in re.finditer(utf16be_pattern, data):
         try:
             strings.append((match.start(), match.group().decode('utf-16-be')))
-        except: pass
+        except Exception: pass
 
     # Sort by offset
     strings.sort(key=lambda x: x[0])
@@ -70,7 +70,7 @@ def categorize_strings(strings_with_offsets: list[tuple[int, str]]) -> dict[str,
                 decoded = base64.b64decode(b64).decode('utf-8', 'ignore')
                 if len(decoded) > 5 and re.match(r'^[\x20-\x7E\r\n\t]+$', decoded):
                     categories["base64"].append({"offset": hex(offset), "value": b64, "decoded": decoded})
-            except: pass
+            except Exception: pass
 
     # Remove duplicates within categories
     for cat in categories:

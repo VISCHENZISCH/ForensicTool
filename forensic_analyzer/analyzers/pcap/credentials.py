@@ -27,7 +27,7 @@ def extract_credentials(streams: dict[str, bytes]) -> list[dict]:
                 decoded = base64.b64decode(auth).decode('utf-8', 'replace')
                 parts = decoded.split(':', 1)
                 creds.append({"protocol": "HTTP Basic", "stream": stream_id, "host": host, "username": parts[0], "password": parts[1] if len(parts) > 1 else ""})
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
         logins = _TELNET_LOGIN.findall(data)
         for login in logins:

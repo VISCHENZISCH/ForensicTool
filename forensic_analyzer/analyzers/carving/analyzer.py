@@ -341,12 +341,7 @@ class CarvingAnalyzer(BaseAnalyzer):
                     except Exception as e:
                         log.warning(f"Impossible d'extraire {ext} à {emb['offset_hex']}: {e}")
             
-            metadata = {
-                "Fichier Analysé": os.path.basename(path),
-                "Taille Scan (Mo)": str(round(len(data)/1024/1024, 2)),
-                "Magic Bytes Détectés": str(len(magic_hits)),
-                "Fichiers Embarqués (Carvés)": str(len(embedded)),
-            }
+
 
             # 4. Tenter de reparer les ZIP corrompus si trouves
             zip_repairs = []

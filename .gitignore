@@ -34,7 +34,7 @@ venv/
 
 # Tests and debug
 /test_samples/*
-generate_test_samples.py
+
 test_debug.pcap
 .pytest_cache/
 .coverage
@@ -53,7 +53,7 @@ Thumbs.db
 *.pid
 *.sqlite3
 lab/*
-
+VERSION.md
 # Forensic evidence and generated reports
 export/
 agent.md

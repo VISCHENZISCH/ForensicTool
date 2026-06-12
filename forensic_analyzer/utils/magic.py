@@ -57,8 +57,7 @@ def get_file_magic_extension(filepath: str) -> str:
         if header.startswith(b'#!'):
             return '.sh'
 
-    except Exception as exc:
+    except Exception:
         pass  # TODO: log.debug(exc)
-        pass
         
     return ""

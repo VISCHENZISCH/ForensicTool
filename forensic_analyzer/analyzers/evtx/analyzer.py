@@ -134,7 +134,7 @@ class EVTXAnalyzer(BaseAnalyzer):
 
                             if eid in _SECURITY_EVENTS:
                                 security_events.append(parsed)
-                    except Exception as exc:
+                    except Exception:
                         pass  # TODO: log.debug(exc)
                         continue
 
@@ -192,7 +192,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                                     if hour < 6 or hour > 22: # Entre 22h et 6h
                                         if user and not user.endswith("$"): # Ignore system accounts
                                             anomalies.append(f"Activité hors heures ({hour}h) par {user} (Event {eid})")
-                            except: pass
+                            except Exception: pass
                             
                         writer.writerow([ts, eid, e["description"], user, e.get("computer",""), details])
             except Exception as e:

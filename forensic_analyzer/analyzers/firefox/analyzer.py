@@ -64,22 +64,22 @@ class FirefoxHistoryAnalyzer(BaseAnalyzer):
             # 1. Historique & Visites
             try:
                 hist_rows = conn.execute(_HISTORY_SQL).fetchall()
-            except: hist_rows = []
+            except Exception: hist_rows = []
             
             # 2. Input History (Recherches)
             try:
                 input_rows = conn.execute(_INPUT_HISTORY_SQL).fetchall()
-            except: input_rows = []
+            except Exception: input_rows = []
             
             # 3. Bookmarks
             try:
                 book_rows = conn.execute(_BOOKMARKS_SQL).fetchall()
-            except: book_rows = []
+            except Exception: book_rows = []
             
             # 4. Téléchargements
             try:
                 down_rows = conn.execute(_DOWNLOADS_SQL).fetchall()
-            except: down_rows = []
+            except Exception: down_rows = []
             
             conn.close()
             
@@ -139,7 +139,7 @@ class FirefoxCookiesAnalyzer(BaseAnalyzer):
             conn = _connect_ro(path)
             try:
                 rows = conn.execute(_COOKIES_SQL).fetchall()
-            except: rows = []
+            except Exception: rows = []
             conn.close()
             
             import re
@@ -165,7 +165,7 @@ class FirefoxCookiesAnalyzer(BaseAnalyzer):
                         if len(dec) > 5 and re.match(r'^[\x20-\x7E\r\n\t]+$', dec):
                             decoded_val = dec
                             b64_decoded += 1
-                    except: pass
+                    except Exception: pass
                 
                 # Tracking
                 is_tracking = bool(tracking_pat.match(name))

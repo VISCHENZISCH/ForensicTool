@@ -32,7 +32,7 @@ def compute_hashes(filepath: str) -> dict[str, str]:
             "MD5": md5.hexdigest(),
             "SHA-256": sha256.hexdigest()
         }
-    except Exception as exc:
+    except Exception:
         pass  # TODO: log.debug(exc)
         return {}
 

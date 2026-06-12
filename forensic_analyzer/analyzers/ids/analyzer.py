@@ -36,7 +36,7 @@ class IDSAnalyzer(BaseAnalyzer):
                                     "signature": event.get("alert", {}).get("signature", "Unknown"),
                                     "severity": event.get("alert", {}).get("severity", 3)
                                 })
-                        except:
+                        except Exception:
                             continue
                 elif fname == "fast.log":
                     for line in f:

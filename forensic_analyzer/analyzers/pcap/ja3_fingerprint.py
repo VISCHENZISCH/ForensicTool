@@ -1,9 +1,8 @@
 try:
-    from scapy.all import TLSClientHello
+    pass
 except ImportError:
     pass
 
-import hashlib
 
 def get_ja3_fingerprints(packets) -> dict:
     """Extrait les empreintes JA3 (TLS Client Hello) et SNI depuis le PCAP."""
@@ -47,7 +46,7 @@ def get_ja3_fingerprints(packets) -> dict:
                 if sni_val:
                     sni_list.append(sni_val[0])
                     
-    except Exception as e:
+    except Exception:
         pass
         
     return {

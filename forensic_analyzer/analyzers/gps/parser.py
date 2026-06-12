@@ -1,7 +1,6 @@
 """Logique d'extraction avancée GPS via exifread."""
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
@@ -73,21 +72,21 @@ class GPSParser:
                     alt = av.num / av.den
                     if hasattr(alt_r, 'values') and alt_r.values[0] == 1: alt = -alt
                     meta["Altitude (m)"] = round(alt, 2)
-                except: pass
+                except Exception: pass
                 
             speed_t = tags.get("GPS GPSSpeed")
             if speed_t:
                 try:
                     val = speed_t.values[0]
                     meta["Vitesse (km/h)"] = round(val.num / val.den, 2)
-                except: pass
+                except Exception: pass
                 
             track_t = tags.get("GPS GPSTrack")
             if track_t:
                 try:
                     val = track_t.values[0]
                     meta["Direction (Degrés)"] = round(val.num / val.den, 2)
-                except: pass
+                except Exception: pass
                 
             gps_date = tags.get("GPS GPSDateStamp")
             gps_time = tags.get("GPS GPSTimeStamp")
@@ -100,7 +99,7 @@ class GPSParser:
                     s = int(gps_time.values[2].num / gps_time.values[2].den)
                     gps_timestamp_str = f"{date_str} {h:02d}:{m:02d}:{s:02d} UTC"
                     meta["Date/Heure GPS (UTC)"] = gps_timestamp_str
-                except: pass
+                except Exception: pass
                 
             exif_date = tags.get("EXIF DateTimeOriginal")
             if exif_date and gps_timestamp_str:
@@ -119,9 +118,8 @@ class GPSParser:
                     addr = data.get("display_name", "")
                     if addr:
                         meta["Adresse Approx. (OSM)"] = addr
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
-                pass
 
             return Ok(meta)
         except Exception as exc:

@@ -1,4 +1,3 @@
-import os
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("pcap.graph")

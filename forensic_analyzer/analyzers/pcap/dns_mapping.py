@@ -1,6 +1,5 @@
 import math
 from collections import defaultdict
-from difflib import SequenceMatcher
 
 def calculate_shannon_entropy(s: str) -> float:
     if not s: return 0.0
@@ -45,7 +44,7 @@ def extract_dns_mappings(packets) -> dict[str, list[str]]:
     """
     ip_to_domains = defaultdict(set)
     try:
-        from scapy.all import DNS, DNSRR
+        from scapy.all import DNS
     except ImportError:
         return {}
 
@@ -71,9 +70,8 @@ def extract_dns_mappings(packets) -> dict[str, list[str]]:
                     
                     if domain and ip:
                         ip_to_domains[ip].add(domain)
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
-                pass
 
     import difflib
 

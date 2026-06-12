@@ -75,21 +75,21 @@ class ChromiumAnalyzer(BaseAnalyzer):
                         downloads = [{"fichier": r[0], "date": r[1], "taille": r[2], "danger": r[3]} for r in cursor.fetchall()]
                         metadata["Téléchargements"] = len(downloads)
                         extra["chromium_downloads"] = downloads
-                    except: pass
+                    except Exception: pass
 
                     try:
                         cursor.execute("SELECT url, title, visit_count, datetime((last_visit_time/1000000)-11644473600, 'unixepoch') FROM urls ORDER BY last_visit_time DESC LIMIT 1000")
                         urls = [{"url": r[0], "titre": r[1], "visites": r[2], "date": r[3]} for r in cursor.fetchall()]
                         metadata["URLs visitées"] = len(urls)
                         extra["chromium_urls"] = urls
-                    except: pass
+                    except Exception: pass
                     
                     try:
                         cursor.execute("SELECT term, datetime((u.last_visit_time/1000000)-11644473600, 'unixepoch') FROM keyword_search_terms k JOIN urls u ON k.url_id = u.id")
                         searches = [{"terme": r[0], "date": r[1]} for r in cursor.fetchall()]
                         metadata["Termes de recherche"] = len(searches)
                         extra["chromium_searches"] = searches
-                    except: pass
+                    except Exception: pass
 
                 elif fname == "cookies":
                     try:
@@ -97,7 +97,7 @@ class ChromiumAnalyzer(BaseAnalyzer):
                         cookies = [{"host": r[0], "name": r[1], "valeur": r[2], "secure": r[4], "httponly": r[5], "expire": r[6]} for r in cursor.fetchall()]
                         metadata["Cookies (SQLite)"] = len(cookies)
                         extra["chromium_cookies"] = cookies
-                    except: pass
+                    except Exception: pass
 
                 elif fname == "login data":
                     try:
@@ -108,7 +108,7 @@ class ChromiumAnalyzer(BaseAnalyzer):
                             logins.append({"url": r[0], "utilisateur": r[1], "mot_de_passe": has_pass})
                         metadata["Identifiants (Logins)"] = len(logins)
                         extra["chromium_logins"] = logins
-                    except: pass
+                    except Exception: pass
 
                 elif fname == "web data":
                     try:
@@ -116,7 +116,7 @@ class ChromiumAnalyzer(BaseAnalyzer):
                         autofill = [{"champ": r[0], "valeur": r[1], "utilisation": r[2]} for r in cursor.fetchall()]
                         metadata["Champs autofill"] = len(autofill)
                         extra["chromium_autofill"] = autofill
-                    except: pass
+                    except Exception: pass
                     
                     try:
                         cursor.execute("SELECT name_on_card, expiration_month, expiration_year, card_number_encrypted FROM credit_cards")
@@ -124,7 +124,7 @@ class ChromiumAnalyzer(BaseAnalyzer):
                         if cc:
                             metadata["Cartes Bancaires"] = f"{len(cc)} trouvée(s) (Chiffré)"
                             extra["chromium_creditcards"] = cc
-                    except: pass
+                    except Exception: pass
 
                 conn.close()
 

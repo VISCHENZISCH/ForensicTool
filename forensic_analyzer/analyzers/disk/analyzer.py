@@ -349,7 +349,7 @@ class DiskAnalyzer(BaseAnalyzer):
                         serial = struct.unpack_from('<I', data, 39)[0]
                         if serial > 0:
                             meta["Volume Serial Number"] = f"{serial:X}"
-                    except: pass
+                    except Exception: pass
 
             if isinstance(data, mmap.mmap):
                 data.close()

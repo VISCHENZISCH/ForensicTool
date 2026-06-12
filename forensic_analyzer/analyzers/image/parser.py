@@ -92,7 +92,7 @@ class ImageExifParser:
                             strs = re.findall(rb'[\x20-\x7E]{10,}', tail)
                             if strs:
                                 data["Données Suspectes (EOF)"] = "Chaînes trouvées à la toute fin du fichier"
-                except:
+                except Exception:
                     pass
                     
                 return Ok(data)

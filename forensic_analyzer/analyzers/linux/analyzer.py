@@ -79,7 +79,7 @@ def parse_bash_history(path: str) -> dict:
             if line.startswith('#') and line[1:].isdigit():
                 try:
                     last_ts = datetime.datetime.fromtimestamp(int(line[1:]), tz=datetime.timezone.utc).isoformat()
-                except: pass
+                except Exception: pass
                 continue
             
             if last_ts:
@@ -177,7 +177,7 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                         line = line.strip()
                         if line and not line.startswith('#'):
                             crons.append({"source": cpath, "entry": line})
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
                 continue
         elif os.path.isdir(cpath):
@@ -190,7 +190,7 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                                 line = line.strip()
                                 if line and not line.startswith('#'):
                                     crons.append({"source": fpath, "entry": line})
-                    except Exception as exc:
+                    except Exception:
                         pass  # TODO: log.debug(exc)
                         continue
     return crons
@@ -244,7 +244,7 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
                                 content = f.read()
                             info["encrypted"] = "ENCRYPTED" in content
                         results["keys"].append(info)
-                except Exception as exc:
+                except Exception:
                     pass  # TODO: log.debug(exc)
                     continue
 
@@ -353,7 +353,7 @@ def find_suid_sgid(root_path: str = "/") -> list:
                         st = os.stat(fp)
                         if (st.st_mode & 0o4000) or (st.st_mode & 0o2000):
                             targets.append(fp)
-                    except: pass
+                    except Exception: pass
     return targets
 
 def parse_systemd(root_path: str = "/") -> list:
@@ -370,7 +370,7 @@ def parse_systemd(root_path: str = "/") -> list:
                             content = fd.read()
                             if "ExecStart=" in content:
                                 services.append(fp)
-                    except: pass
+                    except Exception: pass
     return services
     
 def parse_wtmp(root_path: str = "/") -> dict:
@@ -381,7 +381,7 @@ def parse_wtmp(root_path: str = "/") -> dict:
         try:
             out = subprocess.check_output(["last", "-f", wtmp], text=True, timeout=5)
             res = [l for l in out.splitlines() if l.strip()][:20]
-        except: pass
+        except Exception: pass
     return {"last_logins": res}
 
 

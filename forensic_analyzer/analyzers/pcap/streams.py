@@ -44,7 +44,7 @@ def extract_http_user_agents(streams: dict[str, bytes]) -> list[dict]:
                     if ua not in seen:
                         seen.add(ua)
                         uas.append({"stream": stream_id, "user_agent": ua})
-                except:
+                except Exception:
                     pass
     return uas
 
@@ -125,7 +125,7 @@ def extract_http_exfiltration(streams: dict[str, bytes]) -> list[dict]:
                     params = url.split(b"?")[1]
                     if len(params) > 50: # URL parameters unusually long
                         exfil_data.append({"stream": stream_id, "method": "GET PARAM", "payload": urllib.parse.unquote(params.decode('utf-8', 'ignore'))})
-        except:
+        except Exception:
             pass
             
     return exfil_data

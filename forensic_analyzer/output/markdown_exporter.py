@@ -198,6 +198,6 @@ class MarkdownExporter:
                 f.write("4. **Analyse de la persistance** pour nettoyer les clés de registre malveillantes créées lors de l'infection.\n")
                 
             return True
-        except Exception as exc:
+        except Exception:
             pass  # TODO: log.debug(exc)
             return False

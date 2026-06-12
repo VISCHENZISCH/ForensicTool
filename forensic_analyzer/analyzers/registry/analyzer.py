@@ -68,7 +68,7 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
     try:
         try:
             ts = key.timestamp().isoformat() if hasattr(key, 'timestamp') else ""
-        except: ts = ""
+        except Exception: ts = ""
         
         import codecs
         for value in key.values():
@@ -78,7 +78,7 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
                 # ROT13 pour UserAssist
                 if "UserAssist" in key.path() and v_name:
                     try: v_name = codecs.decode(v_name, 'rot_13')
-                    except: pass
+                    except Exception: pass
                     
                 v_val = str(value.value())[:500]
                 
@@ -102,7 +102,7 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
                     "depth": depth,
                     "suspect": suspect
                 })
-            except Exception as exc:
+            except Exception:
                 pass  # TODO: log.debug(exc)
                 continue
 
@@ -110,12 +110,11 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
             for subkey in key.subkeys():
                 try:
                     results.extend(_walk_key(subkey, depth + 1, max_depth))
-                except Exception as exc:
+                except Exception:
                     pass  # TODO: log.debug(exc)
                     continue
-    except Exception as exc:
+    except Exception:
         pass  # TODO: log.debug(exc)
-        pass
     return results
 
 
@@ -188,7 +187,7 @@ class RegistryAnalyzer(BaseAnalyzer):
                     entries = _walk_key(key, max_depth=2)
                     all_entries.extend(entries)
                     meta[f"Cle: {key_path}"] = f"{len(entries)} valeurs"
-                except Exception as exc:
+                except Exception:
                     pass  # TODO: log.debug(exc)
                     continue
 

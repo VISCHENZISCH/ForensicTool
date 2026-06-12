@@ -188,7 +188,7 @@ def _boot_sequence() -> None:
             spec = importlib.util.find_spec(import_name)
             if spec is None:
                 raise ImportError(f"Module {import_name} not found")
-        except Exception as exc:
+        except Exception:
             pass  # TODO: log.debug(exc)
             sys.stdout.write(f"\n\n{ui.C.HR}[!] ERREUR CRITIQUE: Le module '{import_name}' n'est pas installe.{ui.C.RS}\n")
             sys.stdout.write(f"{ui.C.HY}Veuillez relancer avec ./run.sh ou executer: pip install -r requirements.txt{ui.C.RS}\n")

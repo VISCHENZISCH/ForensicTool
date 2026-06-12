@@ -8,7 +8,7 @@ class Updater:
     """Gere les mises a jour de l'application via git."""
     
     def check_and_update(self) -> None:
-      """Verifie et recupere les dernieres mises a jour depuis le depot distant."""
+        """Verifie et recupere les dernieres mises a jour depuis le depot distant."""
         ui.info("Recherche de mises a jour en cours...")
         try:
             # On fetch les dernieres modifs
