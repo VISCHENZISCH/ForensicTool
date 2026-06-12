@@ -15,6 +15,7 @@ class Updater:
             fetch_res = subprocess.run(["git", "fetch"], capture_output=True, text=True)
             if fetch_res.returncode != 0:
                 ui.error("Erreur lors de la verification des mises a jour (git fetch a echoue).")
+                print(fetch_res.stderr)
                 return
             
             # On verifie s'il y a des changements
