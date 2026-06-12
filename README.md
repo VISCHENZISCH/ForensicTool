@@ -1,7 +1,6 @@
 # Forensic Analyzer
 
-Une plateforme d'investigation numérique de classe militaire (DFIR) entièrement automatisée. Elle collecte, parse, corrèle et génère une timeline de bout-en-bout à partir de disques, mémoire, journaux systèmes et captures réseau.
-
+Une plateforme d'investigation numérique 
 ## Fonctionnalités Clés (20 Modules)
 - **Analyse Fichier & Stegano** : Outils complets pour PDF, Images (EXIF, LSB, Carving), extraction de strings.
 - **Investigation Navigateur** : Extraction des historiques, cookies, favoris, et téléchargements (Chromium & Firefox).
@@ -23,9 +22,6 @@ chmod +x run.sh
 ./run.sh --install
 ```
 
-*(Si vous êtes sous Windows, installez Python 3.11+ et exécutez `pip install -r requirements.txt` manuellement).*
-
----
 
 ### Lancement Interactif
 ```bash
@@ -47,7 +43,7 @@ Soumettez un exécutable potentiellement malveillant au moteur :
 ```bash
 ./run.sh --scan malware_sample.exe
 ```
-*Le moteur PE extraira l'entropie (pour détecter s'il est chiffré), les ressources cachées, le packer (UPX, etc.), et les règles YARA intégrées vous diront s'il s'agit d'un Stealer ou d'un Webshell.*
+
 
 ### 2. Investigation Système & Timeline
 Placez un fichier `NTUSER.DAT`, un fichier `.evtx` et un fichier `.pf` dans un dossier `evidence_dir`.
@@ -56,11 +52,6 @@ Placez un fichier `NTUSER.DAT`, un fichier `.evtx` et un fichier `.pf` dans un d
 ```
 *Ouvrez le fichier `timeline.csv` généré avec **Timeline Explorer** : vous verrez les accès fichiers croisés avec l'historique de lancement Prefetch et les logs d'authentification.*
 
-### 3. Extraction d'un Rootkit en Mémoire
-```bash
-./run.sh --scan infected_dump.raw --plugins malfind,ssdt,netscan
-```
-*Le module mémoire appellera Volatility 3, ciblera les hooks dans la table de dispatch système (SSDT) et listera toutes les connexions réseau figées au moment du dump.*
 
 
 ## Avertissement Légal
