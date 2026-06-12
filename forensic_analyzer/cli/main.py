@@ -92,6 +92,7 @@ Exemples :
     g4 = p.add_argument_group("Threat Hunting")
     g4.add_argument("--yara", metavar="REGLES", help="Regles YARA (.yar ou dossier)")
     g4.add_argument("--ioc",  metavar="FICHIER", help="Extraction IOC automatique")
+    g4.add_argument("--update", action="store_true", help="Mettre a jour l'application depuis le depot distant")
 
     # Export
     g5 = p.add_argument_group("Export")
@@ -108,6 +109,11 @@ def cli_dispatch():
     """Mode CLI avec argparse."""
     parser = build_parser()
     args = parser.parse_args()
+
+    if getattr(args, 'update', False):
+        from forensic_analyzer.core.updater import Updater
+        Updater().check_and_update()
+        return
 
     renderer = RichRenderer() if HAS_RICH else PlainRenderer()
 
