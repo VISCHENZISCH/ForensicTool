@@ -9,6 +9,8 @@ Une plateforme d'investigation numérique. Elle collecte, parse, corrèle et gé
 Le script principal fait également office d'installeur interactif pour résoudre les dépendances systèmes (comme `tshark` pour les PCAP et `ssdeep` pour les hashes).
 
 ```bash
+git clone https://github.com/VISCHENZISCH/ForensicTool
+cd ForensicTool
 chmod +x run.sh
 ./run.sh --install
 ```
