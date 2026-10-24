@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 
+from forensic_analyzer.analyzers.disk import layout
+from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -30,13 +33,57 @@ _PLUGINS = {
 }
 
 _LINUX_PLUGINS = {
-    "pslist":    "linux.pslist.PsList",
-    "pstree":    "linux.pstree.PsTree",
-    "bash":      "linux.bash.Bash",
-    "lsof":      "linux.lsof.Lsof",
-    "ifconfig":  "linux.ifconfig.Ifconfig",
-    "mount":     "linux.mountinfo.MountInfo",
+    "pslist":         "linux.pslist.PsList",
+    "psscan":         "linux.psscan.PsScan",
+    "pstree":         "linux.pstree.PsTree",
+    "psaux":          "linux.psaux.PsAux",
+    "bash":           "linux.bash.Bash",
+    "envars":         "linux.envars.Envars",
+    "lsof":           "linux.lsof.Lsof",
+    "sockstat":       "linux.sockstat.Sockstat",
+    "ifconfig":       "linux.ip.Addr",
+    "mount":          "linux.mountinfo.MountInfo",
+    "malfind":        "linux.malware.malfind.Malfind",
+    "hidden_modules": "linux.malware.hidden_modules.Hidden_modules",
+    "check_syscall":  "linux.malware.check_syscall.Check_syscall",
+    "ebpf":           "linux.ebpf.EBPF",
 }
+
+_DEFAULT_WINDOWS = ["pslist", "pstree", "cmdline", "netscan", "dlllist", "malfind",
+                    "handles", "filescan", "hivelist", "ssdt"]
+# Suite de triage Linux : processus (dont caches), commandes, reseau et controles anti-rootkit
+_DEFAULT_LINUX = ["pslist", "psscan", "psaux", "bash", "sockstat", "malfind",
+                  "hidden_modules", "check_syscall", "ebpf"]
+
+_TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/")
+_SUSPICIOUS_PORTS = {4444, 4445, 1337, 31337, 6666, 6667, 8888, 9001}
+
+
+_LINUX_BANNER = re.compile(rb"Linux version (\d+\.\d+[\w.+-]*) \([^\x00\n]{1,200}")
+
+
+def detect_memory_os(path: str, chunk: int = 16 * 1024 * 1024) -> tuple[str, str]:
+    """
+    (os, banniere) : cherche la banniere du noyau Linux dans le dump, sinon Windows par defaut.
+
+    La lecture se fait par blocs chevauchants et s'arrete a la premiere banniere trouvee.
+    """
+    overlap = 512
+    with open(path, "rb") as f:
+        tail = b""
+        for block in iter(lambda: f.read(chunk), b""):
+            window = tail + block
+            m = _LINUX_BANNER.search(window)
+            if m:
+                return "linux", m.group(0).decode("utf-8", "replace")
+            tail = window[-overlap:]
+    return "windows", ""
+
+
+def find_symbols_dir(dump_path: str) -> str | None:
+    """Dossier « symbols » (ISF Volatility) a cote du dump, s'il existe."""
+    candidate = os.path.join(os.path.dirname(os.path.abspath(dump_path)), "symbols")
+    return candidate if os.path.isdir(candidate) else None
 
 
 def _find_vol3() -> str | None:
@@ -49,9 +96,13 @@ def _find_vol3() -> str | None:
 
 
 def _run_vol3_plugin(vol3_path: str, dump_path: str, plugin: str,
-                     timeout: int = 300, output_dir: str = None) -> dict:
+                     timeout: int = 300, output_dir: str = None,
+                     symbols_dir: str | None = None) -> dict:
     """Execute un plugin Volatility3 et retourne le resultat parse."""
-    cmd = [vol3_path, "-f", dump_path, "-r", "json"]
+    cmd = [vol3_path, "-q", "-f", dump_path, "-r", "json"]
+    if symbols_dir:
+        # Profil ISF du noyau (indispensable pour Linux)
+        cmd.extend(["-s", symbols_dir])
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         cmd.extend(["-o", output_dir])
@@ -128,6 +179,107 @@ def _detect_ssdt_hooks(ssdt_data: dict) -> list[dict]:
     return hooks
 
 
+def _rows(result: dict | None) -> list[dict]:
+    if not result or not result.get("success") or not isinstance(result.get("data"), list):
+        return []
+    return [r for r in result["data"] if isinstance(r, dict)]
+
+
+def _is_real_task(row: dict) -> bool:
+    """psscan recupere aussi des structures corrompues (PID <= 0, nom vide ou non imprimable)."""
+    comm = str(row.get("COMM", ""))
+    return isinstance(row.get("PID"), int) and row["PID"] > 0 and comm.isprintable() and comm != ""
+
+
+def analyze_linux_results(results: dict) -> tuple[dict, dict, set[str]]:
+    """Correlations sur les sorties Volatility Linux : (meta, extra, techniques ATT&CK)."""
+    meta: dict = {}
+    extra: dict = {}
+    techniques: set[str] = set()
+
+    pslist = _rows(results.get("pslist"))
+    psscan = _rows(results.get("psscan"))
+    if pslist and psscan:
+        known = {r["PID"] for r in pslist}
+        hidden = [r for r in psscan if _is_real_task(r) and r.get("EXIT_STATE") != "EXIT_DEAD"
+                  and r["PID"] not in known]
+        exited = [r for r in psscan if _is_real_task(r) and r.get("EXIT_STATE") == "EXIT_DEAD"]
+        meta["Processus caches (psscan hors pslist)"] = str(len(hidden))
+        meta["Taches terminees (psscan)"] = str(len(exited))
+        if hidden:
+            meta["[ALERTE] Processus caches"] = ", ".join(f"{r['COMM']} ({r['PID']})" for r in hidden[:10])
+            techniques.add("T1014")
+        extra["hidden_processes"] = hidden
+        extra["exited_tasks"] = exited
+
+    suspicious_procs = []
+    for r in _rows(results.get("psaux")):
+        args = str(r.get("ARGS", ""))
+        exe = args.split()[0] if args else ""
+        hidden_dir = any(c.startswith(".") for c in exe.split("/")[:-1])
+        if hidden_dir or exe.startswith(_TEMP_DIRS):
+            suspicious_procs.append({"pid": r.get("PID"), "ppid": r.get("PPID"), "comm": r.get("COMM"), "args": args})
+    if suspicious_procs:
+        meta["[ALERTE] Processus lances depuis un emplacement cache/temporaire"] = ", ".join(
+            f"{p['comm']} ({p['pid']}) {p['args']}" for p in suspicious_procs[:10])
+        techniques.add("T1564.001")
+    extra["suspicious_processes"] = suspicious_procs
+
+    sockets = []
+    for r in _rows(results.get("sockstat")):
+        if r.get("Family") not in ("AF_INET", "AF_INET6"):
+            continue
+        dst = str(r.get("Destination Addr", ""))
+        try:
+            dport = int(r.get("Destination Port", 0))
+        except (TypeError, ValueError):
+            dport = 0
+        if dst not in ("0.0.0.0", "::", "", "127.0.0.1", "::1") or dport in _SUSPICIOUS_PORTS:
+            sockets.append({"pid": r.get("PID"), "process": r.get("Process Name"), "proto": r.get("Proto"),
+                            "src": f"{r.get('Source Addr')}:{r.get('Source Port')}",
+                            "dst": f"{dst}:{dport}", "state": r.get("State")})
+    if "sockstat" in results:
+        meta["Connexions reseau distantes"] = str(len(sockets))
+        if any(int(s["dst"].rsplit(":", 1)[1]) in _SUSPICIOUS_PORTS for s in sockets):
+            techniques.add("T1571")
+    extra["remote_sockets"] = sockets
+
+    syscalls = _rows(results.get("check_syscall"))
+    if syscalls:
+        hooked = [r for r in syscalls if not str(r.get("Handler Symbol") or "").startswith("__")]
+        meta["Appels systeme"] = f"{len(syscalls) - len(hooked)}/{len(syscalls)} handlers vers le noyau"
+        if hooked:
+            meta["[ALERTE] Appels systeme detournes"] = str(len(hooked))
+            techniques.add("T1014")
+        extra["hooked_syscalls"] = hooked
+
+    if "hidden_modules" in results and results["hidden_modules"].get("success"):
+        mods = _rows(results["hidden_modules"])
+        meta["Modules noyau caches"] = str(len(mods))
+        if mods:
+            techniques.add("T1014")
+        extra["hidden_modules"] = mods
+
+    if "malfind" in results and results["malfind"].get("success"):
+        injected = _rows(results["malfind"])
+        meta["Regions injectees (malfind)"] = str(len(injected))
+        if injected:
+            techniques.add("T1055")
+
+    if "ebpf" in results and results["ebpf"].get("success"):
+        progs = _rows(results["ebpf"])
+        meta["Programmes eBPF charges"] = str(len(progs))
+        extra["ebpf_programs"] = progs
+
+    commands = _rows(results.get("bash"))
+    if commands:
+        meta["Commandes bash en memoire"] = str(len(commands))
+        techniques.add("T1059.004")
+        extra["bash_commands"] = commands
+
+    return meta, extra, techniques
+
+
 def _extract_strings_from_dump(dump_path: str, patterns: list[str] | None = None,
                                 max_results: int = 500) -> list[str]:
     """Extrait les chaines interessantes du dump memoire."""
@@ -174,16 +326,32 @@ class MemoryAnalyzer(BaseAnalyzer):
     name = "memory"
     supported_extensions = ('.raw', '.mem', '.dmp', '.vmem', '.lime')
 
+    def can_handle(self, path: str) -> bool:
+        # .raw est ambigu : une image disque (table de partitions, systeme de fichiers) n'est pas un dump
+        return super().can_handle(path) and not layout.is_disk_image(path)
+
     def analyze(self, path: str, plugins: list[str] | None = None,
-                os_type: str = "windows") -> FindingModel | None:
+                os_type: str | None = None, symbols_dir: str | None = None) -> FindingModel | None:
         vol3 = _find_vol3()
+        banner = ""
+        if not os_type:
+            os_type, banner = detect_memory_os(path)
+            log.info("OS detecte pour %s : %s", os.path.basename(path), os_type)
+        if os_type == "linux" and not symbols_dir:
+            symbols_dir = find_symbols_dir(path)
 
         meta: dict = {
             "Fichier dump": os.path.basename(path),
             "Taille dump": f"{os.path.getsize(path):,} octets",
-            "OS cible": os_type,
+            "OS cible": os_type + (" (detection automatique)" if banner else ""),
             "Volatility3": vol3 or "NON TROUVE",
         }
+        if banner:
+            meta["Noyau"] = banner[:150]
+        if symbols_dir:
+            meta["Symboles (ISF)"] = symbols_dir
+        elif os_type == "linux":
+            meta["Symboles (ISF)"] = "aucun (--mem-symbols ou dossier 'symbols' a cote du dump)"
 
         extra: dict = {}
 
@@ -191,11 +359,7 @@ class MemoryAnalyzer(BaseAnalyzer):
             plugin_map = _LINUX_PLUGINS if os_type == "linux" else _PLUGINS
             
             # Si non specifie, on lance une suite standard
-            target_plugins = plugins or [
-                "pslist", "pstree", "cmdline", "netscan", 
-                "dlllist", "malfind", "handles", "filescan", 
-                "hivelist", "ssdt"
-            ]
+            target_plugins = plugins or (_DEFAULT_LINUX if os_type == "linux" else _DEFAULT_WINDOWS)
 
             results = {}
             out_dir = f"{path}_vol3_dumps" if "dumpfiles" in target_plugins else None
@@ -204,7 +368,8 @@ class MemoryAnalyzer(BaseAnalyzer):
                 if pname not in plugin_map:
                     continue
                 log.info("Execution vol3 plugin : %s", pname)
-                result = _run_vol3_plugin(vol3, path, plugin_map[pname], output_dir=out_dir)
+                result = _run_vol3_plugin(vol3, path, plugin_map[pname], output_dir=out_dir,
+                                          symbols_dir=symbols_dir)
                 results[pname] = result
 
                 if result["success"]:
@@ -216,8 +381,16 @@ class MemoryAnalyzer(BaseAnalyzer):
 
             extra["vol3_results"] = results
 
+            if os_type == "linux":
+                linux_meta, linux_extra, techniques = analyze_linux_results(results)
+                meta.update(linux_meta)
+                extra.update(linux_extra)
+                if techniques:
+                    meta["MITRE ATT&CK"] = mitre.summary(techniques)
+                    extra["mitre"] = mitre.describe(techniques)
+
             # Analyse des injections (Malfind & Process Hollowing)
-            if "malfind" in results:
+            elif "malfind" in results:
                 injected = _detect_injected_processes(results["malfind"])
                 if injected:
                     meta["[ALERTE] Processus injectes"] = str(len(injected))

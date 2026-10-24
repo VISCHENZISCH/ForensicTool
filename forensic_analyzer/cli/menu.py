@@ -29,8 +29,7 @@ from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
 from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
 from forensic_analyzer.analyzers.yara import YARAAnalyzer
-from forensic_analyzer.core.pipeline import AnalyzerRegistry
-from forensic_analyzer.core.scanner import auto_scan
+from forensic_analyzer.core.scanner import auto_scan, default_registry
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output import ui
 from forensic_analyzer.output.csv_exporter import CSVExporter
@@ -189,7 +188,6 @@ def _boot_sequence() -> None:
             if spec is None:
                 raise ImportError(f"Module {import_name} not found")
         except Exception:
-            pass  # TODO: log.debug(exc)
             sys.stdout.write(f"\n\n{ui.C.HR}[!] ERREUR CRITIQUE: Le module '{import_name}' n'est pas installe.{ui.C.RS}\n")
             sys.stdout.write(f"{ui.C.HY}Veuillez relancer avec ./run.sh ou executer: pip install -r requirements.txt{ui.C.RS}\n")
             sys.exit(1)
@@ -237,13 +235,7 @@ def interactive_loop() -> None:
             if path is None:
                 continue
 
-            registry = AnalyzerRegistry()
-            registry.register_all(
-                PDFAnalyzer(), ImageAnalyzer(), StegoAnalyzer(),
-                PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
-                MemoryAnalyzer(), DiskAnalyzer(), PEAnalyzer(),
-                ChromiumAnalyzer(), WindowsExecutionAnalyzer(),
-            )
+            registry = default_registry()
             ui.status(f"Scan automatique en cours de : {path}")
             report = auto_scan(path, registry)
 
@@ -320,11 +312,14 @@ def interactive_loop() -> None:
             if path is None:
                 continue
             plugins_str = ui.prompt_input("Plugins Volatility3 (optionnels, separes par virgule)", required=False)
-            os_type = ui.prompt_input("OS cible (windows/linux, defaut: windows)", required=False) or "windows"
+            os_type = ui.prompt_input("OS cible (windows/linux, defaut: detection automatique)", required=False) or None
+            symbols = None
+            if os_type == "linux":
+                symbols = ui.prompt_input("Dossier des symboles ISF (optionnel)", required=False) or None
             plugins = plugins_str.split(",") if plugins_str else None
 
             analyzer = MemoryAnalyzer()
-            res = _run_analysis(analyzer, path, plugins=plugins, os_type=os_type)
+            res = _run_analysis(analyzer, path, plugins=plugins, os_type=os_type, symbols_dir=symbols)
             if res:
                 session_findings.append(res)
             ui.wait_for_key()
@@ -337,7 +332,10 @@ def interactive_loop() -> None:
             continue
 
         analyzer = action()
-        res = _run_analysis(analyzer, path)
+        kwargs = {}
+        if isinstance(analyzer, LinuxArtifactsAnalyzer) and os.path.isdir(path):
+            kwargs["bodyfile"] = ui.prompt_input("Bodyfile TSK de l'image (optionnel, fls -r -m /)", required=False) or None
+        res = _run_analysis(analyzer, path, **kwargs)
         if res:
             session_findings.append(res)
         ui.wait_for_key()

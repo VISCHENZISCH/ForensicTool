@@ -9,6 +9,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from forensic_analyzer.utils.logger import get_logger
+
+log = get_logger("finding")
+
 
 @lru_cache(maxsize=1024)
 def compute_hashes(filepath: str) -> dict[str, str]:
@@ -32,8 +36,8 @@ def compute_hashes(filepath: str) -> dict[str, str]:
             "MD5": md5.hexdigest(),
             "SHA-256": sha256.hexdigest()
         }
-    except Exception:
-        pass  # TODO: log.debug(exc)
+    except OSError as exc:
+        log.warning("Impossible de hasher '%s' : %s", filepath, exc)
         return {}
 
 

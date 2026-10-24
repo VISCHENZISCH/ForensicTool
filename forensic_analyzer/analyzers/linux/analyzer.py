@@ -1,4 +1,4 @@
-"""Analyzer artefacts Linux - bash_history, cron, auth.log, SSH, /proc."""
+"""Analyzer artefacts Linux - bash_history, cron, auth.log, SSH, /proc, persistance, paquets et journaux."""
 from __future__ import annotations
 
 import datetime
@@ -6,6 +6,9 @@ import glob
 import os
 import re
 
+from forensic_analyzer.analyzers.linux import bodyfile as bf
+from forensic_analyzer.analyzers.linux import logs, packages, persistence
+from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -177,8 +180,8 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                         line = line.strip()
                         if line and not line.startswith('#'):
                             crons.append({"source": cpath, "entry": line})
-            except Exception:
-                pass  # TODO: log.debug(exc)
+            except OSError as exc:
+                log.debug("Crontab illisible '%s' : %s", cpath, exc)
                 continue
         elif os.path.isdir(cpath):
             for fname in os.listdir(cpath):
@@ -190,8 +193,8 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                                 line = line.strip()
                                 if line and not line.startswith('#'):
                                     crons.append({"source": fpath, "entry": line})
-                    except Exception:
-                        pass  # TODO: log.debug(exc)
+                    except OSError as exc:
+                        log.debug("Crontab illisible '%s' : %s", fpath, exc)
                         continue
     return crons
 
@@ -244,8 +247,8 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
                                 content = f.read()
                             info["encrypted"] = "ENCRYPTED" in content
                         results["keys"].append(info)
-                except Exception:
-                    pass  # TODO: log.debug(exc)
+                except Exception as exc:
+                    log.debug("Clé SSH illisible '%s' : %s", fpath, exc)
                     continue
 
     return results
@@ -356,33 +359,123 @@ def find_suid_sgid(root_path: str = "/") -> list:
                     except Exception: pass
     return targets
 
-def parse_systemd(root_path: str = "/") -> list:
-    """Parse /etc/systemd/system pour les services."""
-    services = []
-    p = os.path.join(root_path, "etc/systemd/system")
-    if os.path.isdir(p):
-        for root, _, files in os.walk(p):
-            for f in files:
-                if f.endswith(".service"):
-                    fp = os.path.join(root, f)
-                    try:
-                        with open(fp, "r", errors="replace") as fd:
-                            content = fd.read()
-                            if "ExecStart=" in content:
-                                services.append(fp)
-                    except Exception: pass
-    return services
-    
-def parse_wtmp(root_path: str = "/") -> dict:
-    import subprocess
-    wtmp = os.path.join(root_path, "var/log/wtmp")
-    res = []
-    if os.path.isfile(wtmp):
-        try:
-            out = subprocess.check_output(["last", "-f", wtmp], text=True, timeout=5)
-            res = [l for l in out.splitlines() if l.strip()][:20]
-        except Exception: pass
-    return {"last_logins": res}
+def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict) -> None:
+    """Persistance, integrite des paquets, anomalies de fichiers et journaux (enrichit meta/extra)."""
+    techniques: set[str] = set()
+    events: list[dict] = []
+
+    entries = bf.parse_bodyfile(bodyfile) if bodyfile else []
+    body = bf.index_by_path(entries) if entries else None
+    if bodyfile:
+        meta["Bodyfile"] = f"{len(entries)} entrees ({os.path.basename(bodyfile)})"
+
+    debian = packages.is_debian_root(root)
+    owned = packages.owned_paths(root) if debian else None
+
+    # Persistance systemd
+    systemd = persistence.analyze_systemd(root, body, owned)
+    suspicious = [u for u in systemd["units"] if u["suspicious"]]
+    meta["Unites systemd locales"] = str(len(systemd["units"]))
+    for u in suspicious:
+        meta[f"[ALERTE] Unite suspecte {u['unit']}"] = f"score {u['score']} : " + " ; ".join(u["reasons"])
+        techniques.update(u["mitre"])
+        if u["created"]:
+            events.append(_event(u["created"], "bodyfile", "unit_created", f"Creation de l'unite {u['unit']}"))
+        if u["modified"] and u["modified"] != u["created"]:
+            events.append(_event(u["modified"], "bodyfile", "unit_modified", f"Modification de l'unite {u['unit']}"))
+        for link in u["enabled_by"]:
+            if link["created"]:
+                events.append(_event(link["created"], "bodyfile", "unit_enabled", f"Activation : {link['link']}"))
+    extra["systemd"] = systemd
+
+    other = persistence.other_persistence(root, owned)
+    for item in other:
+        if item["severity"] != "info":
+            meta[f"[ALERTE] Persistance {item['path']}"] = f"{item['detail']} ({item['mitre']})"
+            techniques.add(item["mitre"])
+    extra["other_persistence"] = other
+
+    # Integrite des paquets Debian
+    if debian:
+        dpkg = packages.verify_dpkg(root, body)
+        meta["Integrite paquets (dpkg)"] = (f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
+                                            f"{len(dpkg['modified'])} modifies, {len(dpkg['missing'])} absents")
+        if dpkg["modified"]:
+            meta["[ALERTE] Fichiers de paquets modifies"] = ", ".join(m["path"] for m in dpkg["modified"][:15])
+        extra["dpkg"] = dpkg
+
+    # Anomalies de fichiers (necessitent le bodyfile)
+    if entries:
+        anomalies = {
+            "Fichiers systeme hors root": bf.ownership_anomalies(entries),
+            "Fichiers caches (systeme / temporaires)": bf.hidden_entries(entries),
+        }
+        if debian:
+            anomalies["Fichiers hors paquet"] = packages.files_outside_packages(root, entries, bf.PACKAGE_PREFIXES)
+        for label, found in anomalies.items():
+            if found:
+                meta[f"[ALERTE] {label}"] = ", ".join(f"{e.path} (uid {e.uid})" for e in found[:15])
+        if anomalies["Fichiers caches (systeme / temporaires)"]:
+            techniques.add("T1564.001")
+        extra["file_anomalies"] = {k: [_entry_dict(e) for e in v] for k, v in anomalies.items()}
+
+    # Journaux : audit, wtmp/lastlog, journald
+    log_dir = os.path.join(root, "var/log")
+    audit_path = os.path.join(log_dir, "audit/audit.log")
+    if os.path.isfile(audit_path):
+        audit = logs.parse_audit_log(audit_path)
+        meta["audit.log"] = (f"{len(audit['auth'])} authentifications, {len(audit['auth_failures'])} echecs, "
+                             f"{audit['execve_events']} EXECVE")
+        units = {os.path.basename(u["unit"]).rsplit(".", 1)[0] for u in suspicious}
+        for a in audit["auth"]:
+            events.append(_event(a["time"], "audit.log", "auth",
+                                 f"Authentification {a.get('acct', '?')} via {a.get('exe', '?')} ({a.get('terminal', '?')})"))
+        for svc in audit["services"]:
+            if svc.get("unit") in units:
+                events.append(_event(svc["time"], "audit.log", svc["type"].lower(), f"{svc['type']} {svc['unit']}"))
+        if not audit["execve_events"]:
+            meta["Limite audit"] = "Aucun EXECVE journalise : les commandes executees ne sont pas tracees"
+        extra["audit"] = audit
+
+    wtmp_path = os.path.join(log_dir, "wtmp")
+    if os.path.isfile(wtmp_path):
+        wtmp = logs.parse_wtmp(wtmp_path)
+        meta["wtmp"] = (f"{sum(r['type'] == 'BOOT' for r in wtmp)} demarrages, "
+                        f"{sum(r['type'] == 'USER' for r in wtmp)} sessions")
+        for r in wtmp:
+            if r["type"] in ("BOOT", "USER"):
+                desc = "Demarrage" if r["type"] == "BOOT" else f"Session {r['user']} sur {r['line']}"
+                events.append(_event(r["time"], "wtmp", r["type"].lower(), desc + (f" depuis {r['host']}" if r["host"] and r["type"] == "USER" else "")))
+        extra["wtmp"] = wtmp
+    lastlog_path = os.path.join(log_dir, "lastlog")
+    if os.path.isfile(lastlog_path):
+        extra["lastlog"] = logs.parse_lastlog(lastlog_path)
+
+    unit_names = {os.path.basename(u["unit"]) for u in suspicious}
+    for jdir in logs.find_journal_dirs(root):
+        journal = logs.parse_journal(jdir, unit_names)
+        if journal:
+            meta["journald"] = f"{len(journal['boots'])} demarrages, {len(journal['events'])} evenements retenus"
+            for e in journal["events"]:
+                events.append(_event(e["time"], "journald", e["source"], e["message"]))
+            extra["journal"] = journal
+
+    if any(u["user"] == "root" and u["type"] == "USER" for u in extra.get("wtmp", [])):
+        techniques.add("T1078.003")
+    if techniques:
+        meta["MITRE ATT&CK"] = mitre.summary(techniques)
+        extra["mitre"] = mitre.describe(techniques)
+    extra["timeline_events"] = sorted(events, key=lambda e: e["timestamp"])
+
+
+def _event(ts: str, source: str, event_type: str, description: str) -> dict:
+    return {"timestamp": ts, "source": source, "event_type": event_type,
+            "description": description, "file": "", "details": ""}
+
+
+def _entry_dict(e: bf.BodyEntry) -> dict:
+    return {"path": e.path, "uid": e.uid, "mode": e.mode, "size": e.size,
+            "created": bf.utc(e.crtime), "modified": bf.utc(e.mtime), "accessed": bf.utc(e.atime)}
 
 
 class LinuxArtifactsAnalyzer(BaseAnalyzer):
@@ -393,12 +486,15 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
     def can_handle(self, path: str) -> bool:
         return False  # Active uniquement via CLI
 
-    def analyze(self, path: str) -> FindingModel | None:
+    def analyze(self, path: str, bodyfile: str | None = None) -> FindingModel | None:
         """
         Analyse un chemin racine (/ ou un montage forensique).
         Le path peut etre :
         - Un fichier specifique (bash_history, auth.log)
         - Un repertoire racine a scanner
+
+        `bodyfile` (sortie de `fls -r -m /`) fournit les proprietaires, liens et
+        horodatages d'origine, perdus par une copie tsk_recover.
         """
         try:
             meta: dict = {"Chemin analyse": path}
@@ -495,13 +591,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 meta["Fichiers SUID/SGID"] = str(len(suid))
                 extra["suid_sgid"] = suid
                 
-                svcs = parse_systemd(path)
-                meta["Services Systemd"] = str(len(svcs))
-                extra["systemd_services"] = svcs
-                
-                wtmp = parse_wtmp(path)
-                meta["Dernières Connexions (wtmp)"] = str(len(wtmp["last_logins"]))
-                extra["wtmp_logins"] = wtmp["last_logins"]
+                _analyze_incident_artifacts(path, bodyfile, meta, extra)
 
             return FindingModel(
                 type="linux_artifacts",

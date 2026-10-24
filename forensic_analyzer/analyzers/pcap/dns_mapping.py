@@ -71,7 +71,7 @@ def extract_dns_mappings(packets) -> dict[str, list[str]]:
                     if domain and ip:
                         ip_to_domains[ip].add(domain)
             except Exception:
-                pass  # TODO: log.debug(exc)
+                pass  # réponse DNS malformée
 
     import difflib
 

@@ -1,7 +1,6 @@
-try:
-    pass
-except ImportError:
-    pass
+from forensic_analyzer.utils.logger import get_logger
+
+log = get_logger("pcap.ja3")
 
 
 def get_ja3_fingerprints(packets) -> dict:
@@ -27,6 +26,8 @@ def get_ja3_fingerprints(packets) -> dict:
         ]
         
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if res.returncode != 0:
+            log.warning("tshark a échoué (JA3) : %s", res.stderr.strip()[:200])
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout)
             for packet in data:
@@ -46,9 +47,11 @@ def get_ja3_fingerprints(packets) -> dict:
                 if sni_val:
                     sni_list.append(sni_val[0])
                     
-    except Exception:
-        pass
-        
+    except FileNotFoundError:
+        log.warning("tshark introuvable : empreintes JA3/SNI non extraites.")
+    except Exception as exc:
+        log.warning("Extraction JA3 échouée : %s", exc)
+
     return {
         "ja3": ja3_hashes,
         "sni": list(set(sni_list))

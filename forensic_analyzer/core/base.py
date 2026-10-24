@@ -25,14 +25,18 @@ class BaseAnalyzer(ABC):
     def can_handle(self, path: str) -> bool:
         """Retourne True si ce module peut traiter le fichier `path`."""
         from forensic_analyzer.utils.magic import get_file_magic_extension
+        extensions = tuple(ext.lower() for ext in self.supported_extensions)
+        if not extensions:
+            return False
+
         magic_ext = get_file_magic_extension(path)
-        
+
         # 1. Si on a pu extraire un type fort via Magic Bytes (ex: MZ = .exe),
         if magic_ext:
-            return magic_ext in self.supported_extensions
-            
-        # 2. Sinon, fallback sur l'extension classique
-        return path.lower().endswith(self.supported_extensions)
+            return magic_ext in extensions
+
+        # 2. Sinon, fallback sur l'extension classique (insensible à la casse : .E01, .DAT)
+        return path.lower().endswith(extensions)
 
     @abstractmethod
     def analyze(self, path: str) -> FindingModel | None:

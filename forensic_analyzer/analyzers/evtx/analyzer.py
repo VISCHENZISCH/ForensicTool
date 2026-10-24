@@ -134,8 +134,8 @@ class EVTXAnalyzer(BaseAnalyzer):
 
                             if eid in _SECURITY_EVENTS:
                                 security_events.append(parsed)
-                    except Exception:
-                        pass  # TODO: log.debug(exc)
+                    except Exception as exc:
+                        log.debug("Enregistrement EVTX illisible : %s", exc)
                         continue
 
             # Trier par timestamp

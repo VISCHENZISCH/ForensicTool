@@ -58,6 +58,6 @@ def get_file_magic_extension(filepath: str) -> str:
             return '.sh'
 
     except Exception:
-        pass  # TODO: log.debug(exc)
-        
+        pass
+
     return ""

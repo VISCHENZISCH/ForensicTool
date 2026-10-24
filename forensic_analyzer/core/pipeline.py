@@ -41,6 +41,15 @@ class AnalyzerRegistry:
                 return a
         return None
 
+    def get_all_for(self, path: str) -> list[BaseAnalyzer]:
+        """
+        Retourne tous les analyzers capables de traiter `path`.
+
+        Un même artefact peut intéresser plusieurs modules
+        (ex: un JPEG → EXIF, GPS et stéganographie).
+        """
+        return [a for a in self._analyzers if a.can_handle(path)]
+
     @property
     def analyzers(self) -> list[BaseAnalyzer]:
         return list(self._analyzers)
@@ -65,29 +74,30 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
     
     import concurrent.futures
     
-    def process_path(path: str) -> FindingModel | None:
+    def process_path(path: str) -> list[FindingModel]:
         if not os.path.isfile(path):
             log.warning("Fichier introuvable, ignoré : %s", path)
-            return None
-
-        analyzer = registry.get_for(path)
-        if analyzer is None:
-            return None
+            return []
 
         fname = os.path.basename(path)
         if len(fname) > 50:
             fname = fname[:40] + "..." + fname[-7:]
-            
-        log.info("[%s] → %s", analyzer.name.upper(), fname)
-        try:
-            return analyzer.analyze(path)
-        except Exception as exc:
-            log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
-            return None
+
+        results: list[FindingModel] = []
+        for analyzer in registry.get_all_for(path):
+            log.info("[%s] → %s", analyzer.name.upper(), fname)
+            try:
+                res = analyzer.analyze(path)
+            except Exception as exc:
+                log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
+                continue
+            if res is not None:
+                results.append(res)
+        return results
 
     # Parallélisation du traitement (I/O & CPU-bound mixtes)
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
         results = executor.map(process_path, paths)
-        
-    findings = [res for res in results if res is not None]
+
+    findings = [res for per_path in results for res in per_path]
     return ReportModel.from_findings(findings)

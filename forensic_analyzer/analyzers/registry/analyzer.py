@@ -102,19 +102,19 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
                     "depth": depth,
                     "suspect": suspect
                 })
-            except Exception:
-                pass  # TODO: log.debug(exc)
+            except Exception as exc:
+                log.debug("Valeur illisible sous %s : %s", key.path(), exc)
                 continue
 
         if depth < max_depth:
             for subkey in key.subkeys():
                 try:
                     results.extend(_walk_key(subkey, depth + 1, max_depth))
-                except Exception:
-                    pass  # TODO: log.debug(exc)
+                except Exception as exc:
+                    log.debug("Sous-clé illisible sous %s : %s", key.path(), exc)
                     continue
-    except Exception:
-        pass  # TODO: log.debug(exc)
+    except Exception as exc:
+        log.warning("Parcours de clé interrompu : %s", exc)
     return results
 
 
@@ -187,8 +187,8 @@ class RegistryAnalyzer(BaseAnalyzer):
                     entries = _walk_key(key, max_depth=2)
                     all_entries.extend(entries)
                     meta[f"Cle: {key_path}"] = f"{len(entries)} valeurs"
-                except Exception:
-                    pass  # TODO: log.debug(exc)
+                except Exception as exc:
+                    log.debug("Clé %s absente ou illisible : %s", key_path, exc)
                     continue
 
             # Detection de persistance

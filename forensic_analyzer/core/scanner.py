@@ -50,3 +50,30 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
 
     log.info("%d fichier(s) collecté(s) depuis '%s'", len(targets), path)
     return run_pipeline(targets, registry)
+
+
+def default_registry() -> AnalyzerRegistry:
+    """Analyzers utilises par le scan automatique (CLI --scan et menu interactif)."""
+    from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
+    from forensic_analyzer.analyzers.disk import DiskAnalyzer
+    from forensic_analyzer.analyzers.elf import ELFAnalyzer
+    from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
+    from forensic_analyzer.analyzers.gps import GPSAnalyzer
+    from forensic_analyzer.analyzers.ids import IDSAnalyzer
+    from forensic_analyzer.analyzers.image import ImageAnalyzer
+    from forensic_analyzer.analyzers.integrity import IntegrityAnalyzer
+    from forensic_analyzer.analyzers.malware import MalwareAnalyzer
+    from forensic_analyzer.analyzers.memory import MemoryAnalyzer
+    from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+    from forensic_analyzer.analyzers.registry import RegistryAnalyzer
+    from forensic_analyzer.analyzers.stego import StegoAnalyzer
+    from forensic_analyzer.analyzers.windows_execution import WindowsExecutionAnalyzer
+
+    return AnalyzerRegistry().register_all(
+        IntegrityAnalyzer(),
+        PDFAnalyzer(), ImageAnalyzer(), GPSAnalyzer(), StegoAnalyzer(),
+        PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
+        MemoryAnalyzer(), DiskAnalyzer(), MalwareAnalyzer(), ELFAnalyzer(),
+        ChromiumAnalyzer(), WindowsExecutionAnalyzer(), IDSAnalyzer(),
+    )

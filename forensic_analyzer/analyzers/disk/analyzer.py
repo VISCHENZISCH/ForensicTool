@@ -1,11 +1,16 @@
-"""Analyzer disque - MFT NTFS, ADS, ext4 inodes, slack space."""
+"""Analyzer disque - partitions, systemes de fichiers, MFT NTFS, ADS, ext via The Sleuth Kit."""
 from __future__ import annotations
 
 import datetime
-import os
-import struct
 import mmap
+import os
+import shutil
+import struct
+import subprocess
 
+from forensic_analyzer.analyzers.disk import layout
+from forensic_analyzer.analyzers.linux import bodyfile as bf
+from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
@@ -174,185 +179,169 @@ def detect_ads(path: str) -> list[dict]:
     return ads_found
 
 
-def parse_ext4_inode(data: bytes, offset: int = 0, inode_size: int = 256) -> dict | None:
-    """Parse un inode ext4."""
-    if len(data) < offset + 128:
-        return None
+def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
+    """Heuristiques NTFS : records MFT, journaux, corbeille, LNK, Prefetch, VSS, ADS."""
+    # LNK, Prefetch, VSS carving (signatures)
+    lnk_count = data.find(b'\x4c\x00\x00\x00\x01\x14\x02\x00') != -1 # Simplification pour eviter scan complet lourd si mmap
+    if lnk_count:
+        meta["Raccourcis LNK"] = "Détectés"
+        
+    prefetch_count = data.find(b'SCCA') != -1 or data.find(b'MAM\x04') != -1
+    if prefetch_count:
+        meta["Fichiers Prefetch"] = "Détectés"
+        
+    vss_count = data.find(b'\x38\xe2\x76\x16\x96\x65\x5f\x41') != -1
+    if vss_count:
+        meta["Shadow Copies (VSS)"] = "DÉTECTÉ"
+
+    # Detection MFT (O(N) optimisé en C)
+    mft_records = []
+    usnjrnl_found = False
+    logfile_found = False
+    recycle_bin_items = 0
+    total_mft_slack = 0
+    
+    offset = 0
+    while True:
+        offset = data.find(b'FILE', offset)
+        if offset == -1 or offset > len(data) - 1024:
+            break
+            
+        record = parse_mft_record(data[offset:offset+1024], offset)
+        if record:
+            mft_records.append(record)
+            total_mft_slack += record.get("mft_slack_space", 0)
+            fname = record.get("filename", "")
+            if "$UsnJrnl" in fname: usnjrnl_found = True
+            if "$LogFile" in fname: logfile_found = True
+            if fname.startswith("$I") and len(fname) == 8: recycle_bin_items += 1
+            
+        offset += 1024
+
+    if mft_records:
+        meta["Records MFT trouves"] = str(len(mft_records))
+        meta["Slack Space (MFT)"] = f"{total_mft_slack:,} octets (potentiel data cachee)"
+        
+        if usnjrnl_found: meta["Journal $UsnJrnl"] = "PRÉSENT"
+        if logfile_found: meta["Journal $LogFile"] = "PRÉSENT"
+        if recycle_bin_items > 0: meta["Fichiers Corbeille ($I)"] = str(recycle_bin_items)
+        
+        deleted = [r for r in mft_records if not r.get("in_use")]
+        meta["Fichiers supprimes (MFT)"] = str(len(deleted))
+        extra["mft_records"] = mft_records[:200]
+        extra["deleted_files"] = [
+            {"filename": r.get("filename", "?"),
+             "timestamps": r.get("timestamps", {})}
+            for r in deleted[:50]
+        ]
+
+        for i, rec in enumerate(mft_records[:10]):
+            fname = rec.get("filename", "?")
+            status = "SUPPRIME" if not rec.get("in_use") else "actif"
+            meta[f"MFT #{i+1}"] = f"{fname} [{status}]"
+
+    # Detection ADS
+    ads = detect_ads(path)
+    if ads:
+        meta["ADS detectes"] = str(len(ads))
+        extra["ads"] = ads
+
+
+
+def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, label: str) -> None:
+    """Bodyfile TSK en memoire (fls) : fichiers systeme hors root, fichiers caches, entrees supprimees."""
+    fls = shutil.which("fls")
+    command = f"fls -r -m / -o {start_sector} '{path}'"
+    if not fls:
+        meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; a generer avec : {command}"
+        return
     try:
-        d = data[offset:]
-        mode = struct.unpack_from('<H', d, 0)[0]
-        uid = struct.unpack_from('<H', d, 2)[0]
-        size_lo = struct.unpack_from('<I', d, 4)[0]
-        atime = struct.unpack_from('<I', d, 8)[0]
-        ctime = struct.unpack_from('<I', d, 12)[0]
-        mtime = struct.unpack_from('<I', d, 16)[0]
-        dtime = struct.unpack_from('<I', d, 20)[0]
-        gid = struct.unpack_from('<H', d, 24)[0]
-        links = struct.unpack_from('<H', d, 26)[0]
-        blocks = struct.unpack_from('<I', d, 28)[0]
-        struct.unpack_from('<I', d, 32)[0]
+        proc = subprocess.run([fls, "-r", "-m", "/", "-o", str(start_sector), path],
+                              capture_output=True, text=True, errors="replace", timeout=600)
+    except subprocess.TimeoutExpired:
+        log.warning("fls trop long sur '%s'", path)
+        return
+    if proc.returncode != 0:
+        log.warning("fls a echoue (offset %s) : %s", start_sector, proc.stderr.strip()[:200])
+        return
 
-        # Determiner le type de fichier
-        file_type = {
-            0o100000: "fichier",
-            0o040000: "dossier",
-            0o120000: "lien symbolique",
-            0o020000: "device char",
-            0o060000: "device block",
-            0o010000: "pipe",
-            0o140000: "socket",
-        }.get(mode & 0o170000, "inconnu")
-
-        deleted = dtime > 0
-
-        return {
-            "offset": offset,
-            "mode": oct(mode),
-            "file_type": file_type,
-            "uid": uid,
-            "gid": gid,
-            "size": size_lo,
-            "links": links,
-            "blocks": blocks,
-            "atime": datetime.datetime.fromtimestamp(atime, tz=datetime.timezone.utc).isoformat() if atime else "N/A",
-            "ctime": datetime.datetime.fromtimestamp(ctime, tz=datetime.timezone.utc).isoformat() if ctime else "N/A",
-            "mtime": datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat() if mtime else "N/A",
-            "dtime": datetime.datetime.fromtimestamp(dtime, tz=datetime.timezone.utc).isoformat() if dtime else "N/A",
-            "deleted": deleted,
-        }
-    except (struct.error, IndexError):
-        return None
+    entries = bf.parse_bodyfile_lines(proc.stdout.splitlines())
+    meta[f"{label} : entrees (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
+    techniques: set[str] = set()
+    for title, found in (("Fichiers systeme hors root", bf.ownership_anomalies(entries)),
+                         ("Fichiers caches (systeme / temporaires)", bf.hidden_entries(entries))):
+        if found:
+            meta[f"[ALERTE] {label} : {title}"] = ", ".join(f"{e.path} (uid {e.uid})" for e in found[:15])
+            extra.setdefault("file_anomalies", {})[title] = [
+                {"path": e.path, "uid": e.uid, "mode": e.mode, "created": bf.utc(e.crtime),
+                 "modified": bf.utc(e.mtime)} for e in found]
+            if title.startswith("Fichiers caches"):
+                techniques.add("T1564.001")
+    if techniques:
+        meta["MITRE ATT&CK"] = mitre.summary(techniques)
+    meta[f"{label} : analyse complete"] = (
+        f"{command} > bodyfile.txt ; tsk_recover -a -o {start_sector} '{path}' ./root ; "
+        "puis --linux ./root --bodyfile bodyfile.txt")
 
 
 class DiskAnalyzer(BaseAnalyzer):
-    """Analyse forensique de disque - MFT NTFS, ADS, ext4 inodes."""
+    """Analyse forensique de disque - partitions, systemes de fichiers, MFT NTFS, ext via TSK."""
     name = "disk"
     supported_extensions = ('.raw', '.dd', '.img', '.001', '.E01', '.mft')
+
+    def can_handle(self, path: str) -> bool:
+        # .raw est ambigu (dump memoire ou image disque) : on exige une structure de disque
+        if path.lower().endswith(".raw"):
+            return layout.is_disk_image(path)
+        return super().can_handle(path)
 
     def analyze(self, path: str) -> FindingModel | None:
         try:
             file_size = os.path.getsize(path)
-            max_read = min(file_size, 200 * 1024 * 1024) # Scan max 200MB de raw
-
-            with open(path, "rb") as f:
-                try:
-                    data = mmap.mmap(f.fileno(), max_read, access=mmap.ACCESS_READ)
-                except ValueError:
-                    data = f.read(max_read)
-
             meta: dict = {
                 "Fichier": os.path.basename(path),
                 "Taille": f"{file_size:,} octets",
-                "Taille analysee": f"{max_read:,} octets",
             }
             extra: dict = {}
 
-            # Detection MBR/GPT
-            if len(data) >= 1024 and data[510:512] == b'\x55\xAA':
-                if b'EFI PART' in data[512:1024]:
-                    meta["Partition"] = "GPT (GUID Partition Table)"
-                else:
-                    meta["Partition"] = "MBR (Master Boot Record)"
+            structure = {} if path.lower().endswith((".mft", ".e01")) else layout.describe(path)
+            extra["layout"] = structure
+            filesystems = []
+            if structure.get("scheme"):
+                meta["Table de partitions"] = structure["scheme"]
+                for p in structure["partitions"]:
+                    fs = p["filesystem"] or "inconnu"
+                    filesystems.append(fs)
+                    meta[f"Partition @{p['start']}"] = (f"{p['type']} - {fs} - "
+                                                        f"{p['sectors'] * layout.SECTOR / 2**20:,.0f} Mio")
+            elif structure.get("bare_filesystem"):
+                filesystems.append(structure["bare_filesystem"])
+                meta["Systeme de fichiers"] = structure["bare_filesystem"] + " (sans table de partitions)"
 
-            # LNK, Prefetch, VSS carving (signatures)
-            lnk_count = data.find(b'\x4c\x00\x00\x00\x01\x14\x02\x00') != -1 # Simplification pour eviter scan complet lourd si mmap
-            if lnk_count:
-                meta["Raccourcis LNK"] = "Détectés"
-                
-            prefetch_count = data.find(b'SCCA') != -1 or data.find(b'MAM\x04') != -1
-            if prefetch_count:
-                meta["Fichiers Prefetch"] = "Détectés"
-                
-            vss_count = data.find(b'\x38\xe2\x76\x16\x96\x65\x5f\x41') != -1
-            if vss_count:
-                meta["Shadow Copies (VSS)"] = "DÉTECTÉ"
+            ext_parts = [p for p in structure.get("partitions", []) if p["filesystem"].startswith("ext")]
+            if structure.get("bare_filesystem", "").startswith("ext"):
+                ext_parts.append({"start": 0, "superblock": structure["superblock"]})
+            for p in ext_parts:
+                label = f"ext @{p['start']}"
+                sb = p.get("superblock", {})
+                if sb:
+                    meta[f"{label} : UUID"] = sb["uuid"]
+                    meta[f"{label} : derniere ecriture du superbloc"] = sb["last_written"]
+                    meta[f"{label} : dernier montage"] = f"{sb['last_mounted']} sur {sb['last_mount_path'] or '?'} ({sb['state']})"
+                _scan_ext_partition(path, p["start"], meta, extra, label)
 
-            # Detection MFT (O(N) optimisé en C)
-            mft_records = []
-            usnjrnl_found = False
-            logfile_found = False
-            recycle_bin_items = 0
-            total_mft_slack = 0
-            
-            offset = 0
-            while True:
-                offset = data.find(b'FILE', offset)
-                if offset == -1 or offset > len(data) - 1024:
-                    break
-                    
-                record = parse_mft_record(data[offset:offset+1024], offset)
-                if record:
-                    mft_records.append(record)
-                    total_mft_slack += record.get("mft_slack_space", 0)
-                    fname = record.get("filename", "")
-                    if "$UsnJrnl" in fname: usnjrnl_found = True
-                    if "$LogFile" in fname: logfile_found = True
-                    if fname.startswith("$I") and len(fname) == 8: recycle_bin_items += 1
-                    
-                offset += 1024
-
-            if mft_records:
-                meta["Records MFT trouves"] = str(len(mft_records))
-                meta["Slack Space (MFT)"] = f"{total_mft_slack:,} octets (potentiel data cachee)"
-                
-                if usnjrnl_found: meta["Journal $UsnJrnl"] = "PRÉSENT"
-                if logfile_found: meta["Journal $LogFile"] = "PRÉSENT"
-                if recycle_bin_items > 0: meta["Fichiers Corbeille ($I)"] = str(recycle_bin_items)
-                
-                deleted = [r for r in mft_records if not r.get("in_use")]
-                meta["Fichiers supprimes (MFT)"] = str(len(deleted))
-                extra["mft_records"] = mft_records[:200]
-                extra["deleted_files"] = [
-                    {"filename": r.get("filename", "?"),
-                     "timestamps": r.get("timestamps", {})}
-                    for r in deleted[:50]
-                ]
-
-                for i, rec in enumerate(mft_records[:10]):
-                    fname = rec.get("filename", "?")
-                    status = "SUPPRIME" if not rec.get("in_use") else "actif"
-                    meta[f"MFT #{i+1}"] = f"{fname} [{status}]"
-
-            # Detection ADS
-            ads = detect_ads(path)
-            if ads:
-                meta["ADS detectes"] = str(len(ads))
-                extra["ads"] = ads
-
-            # Detection ext4
-            ext4_inodes = []
-            # Chercher le superblock ext4 a l'offset 1024
-            if len(data) > 1080 and struct.unpack_from('<H', data, 1080)[0] == 0xEF53:
-                meta["Systeme de fichiers"] = "ext4 detecte"
-                # Scanner quelques inodes
-                inode_table_offset = 2048  # Approximation
-                for i in range(min(100, (len(data) - inode_table_offset) // 256)):
-                    inode = parse_ext4_inode(data, inode_table_offset + i * 256)
-                    if inode and inode.get("links", 0) > 0:
-                        ext4_inodes.append(inode)
-
-                deleted_inodes = [n for n in ext4_inodes if n.get("deleted")]
-                meta["Inodes ext4 trouves"] = str(len(ext4_inodes))
-                meta["Inodes supprimes (ext4)"] = str(len(deleted_inodes))
-                extra["ext4_inodes"] = ext4_inodes[:100]
-
-            # Detection NTFS/FAT/Ext4 et UUID
-            if data[:4] == b'\xEB\x52\x90N' or data[:8] == b'\xEB\x52\x90NTFS':
-                meta["Systeme de fichiers"] = "NTFS detecte"
-                if len(data) > 80:
-                    uuid = struct.unpack_from('<Q', data, 72)[0]
-                    meta["Volume Serial Number"] = f"{uuid:X}"
-            elif data[:2] == b'\xEB\x3C' or data[:2] == b'\xEB\x58':
-                meta["Systeme de fichiers"] = "FAT detecte"
-                if len(data) > 67:
+            # Heuristiques Windows seulement s'il y a du NTFS (ou si la structure est inconnue)
+            if "NTFS" in filesystems or not filesystems:
+                max_read = min(file_size, 200 * 1024 * 1024)  # Scan max 200MB de raw
+                meta["Taille analysee (NTFS)"] = f"{max_read:,} octets"
+                with open(path, "rb") as f:
                     try:
-                        serial = struct.unpack_from('<I', data, 39)[0]
-                        if serial > 0:
-                            meta["Volume Serial Number"] = f"{serial:X}"
-                    except Exception: pass
-
-            if isinstance(data, mmap.mmap):
-                data.close()
+                        data = mmap.mmap(f.fileno(), max_read, access=mmap.ACCESS_READ)
+                    except ValueError:
+                        data = f.read(max_read)
+                _scan_windows_artifacts(path, data, meta, extra)
+                if isinstance(data, mmap.mmap):
+                    data.close()
 
             return FindingModel(
                 type="disk",

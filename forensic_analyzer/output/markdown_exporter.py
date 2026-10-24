@@ -5,6 +5,9 @@ import datetime
 import os
 
 from forensic_analyzer.models.finding import ReportModel
+from forensic_analyzer.utils.logger import get_logger
+
+log = get_logger("markdown_exporter")
 
 
 # SVG Icons for report status and markers
@@ -198,6 +201,6 @@ class MarkdownExporter:
                 f.write("4. **Analyse de la persistance** pour nettoyer les clés de registre malveillantes créées lors de l'infection.\n")
                 
             return True
-        except Exception:
-            pass  # TODO: log.debug(exc)
+        except Exception as exc:
+            log.error("Export Markdown échoué : %s", exc)
             return False

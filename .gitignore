@@ -15,27 +15,39 @@ pip-wheel-metadata/
 .venv
 env/
 venv/
-*.txt
-# Ignored extensions and patterns
-.pcap
-.rules
-.binary
-.memory
-.sqlite
-.evtx
-.registry
-.linux
-.yar
-.image
-.pdf
-.disque
-.timel
-.bin
 
-# Tests and debug
+# Forensic evidence (ne jamais committer de preuves)
+*.pcap
+*.pcapng
+*.cap
+*.rules
+*.binary
+*.memory
+*.mem
+*.vmem
+*.dmp
+*.lime
+*.raw
+*.dd
+*.img
+*.E01
+*.001
+*.iso
+*.sqlite
+*.evtx
+*.registry
+*.linux
+*.yar
+*.image
+*.disque
+*.timel
+*.bin
+*.pf
+*.lnk
+*.DAT
+
+# Tests
 /test_samples/*
-
-test_debug.pcap
 .pytest_cache/
 .coverage
 htmlcov/
@@ -53,18 +65,14 @@ Thumbs.db
 *.pid
 *.sqlite3
 lab/*
-VERSION.md
-# Forensic evidence and generated reports
+
+# Rapports générés (export/, sortie pyvis lib/) et fichiers produits par les analyses
 export/
-agent.md
-ANONOPS.pdf
-INF1424_Programme_Complet_plus_cour_Modif.pdf
-RAPPORT.HTML
-rapport_*.html
-cookies_*.html
+lib/
 *.json
 *.csv
 *.html
+*.HTML
 *.pdf
 *.png
 *.jpg
@@ -73,6 +81,13 @@ cookies_*.html
 *.bmp
 *.tiff
 *.webp
+
+# Notes personnelles
+agent.md
+OUTILS.md
+VERSION.md
 VERSIONS.md
 INTEGRATION.md
-OUTILS.md
+
+# Fixtures de tests (versionnées malgré les règles ci-dessus)
+!tests/**

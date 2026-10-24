@@ -52,8 +52,8 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
                         except Exception:
                             pass
         except Exception:
-            pass  # TODO: log.debug(exc)
-            
+            pass
+
     # Sort and deduplicate timeline
     timeline.sort(key=lambda x: x["time"])
     

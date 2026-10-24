@@ -120,6 +120,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
 
         # Linux auth.log
         elif source == "linux_artifacts":
+            events.extend(finding.extra.get("timeline_events", []))
             auth = finding.extra.get("auth_log", {})
             for entry in auth.get("failed_details", []):
                 events.append({

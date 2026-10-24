@@ -11,18 +11,19 @@ import argparse
 from forensic_analyzer.analyzers.carving import CarvingAnalyzer
 from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
 from forensic_analyzer.analyzers.disk import DiskAnalyzer
+from forensic_analyzer.analyzers.elf import ELFAnalyzer
 from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
 from forensic_analyzer.analyzers.firefox import (
     FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
 from forensic_analyzer.analyzers.gps import GPSAnalyzer
 from forensic_analyzer.analyzers.image import ImageAnalyzer
+from forensic_analyzer.analyzers.integrity import IntegrityAnalyzer
 from forensic_analyzer.analyzers.ioc import IOCAnalyzer
 from forensic_analyzer.analyzers.linux import \
     LinuxArtifactsAnalyzer
 from forensic_analyzer.analyzers.memory import MemoryAnalyzer
 from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
 from forensic_analyzer.analyzers.pdf import PDFAnalyzer
-from forensic_analyzer.analyzers.ids import IDSAnalyzer
 from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
 from forensic_analyzer.analyzers.registry import RegistryAnalyzer
 from forensic_analyzer.analyzers.stego import StegoAnalyzer
@@ -31,8 +32,7 @@ from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
 from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
 from forensic_analyzer.analyzers.yara import YARAAnalyzer
-from forensic_analyzer.core.pipeline import AnalyzerRegistry
-from forensic_analyzer.core.scanner import auto_scan
+from forensic_analyzer.core.scanner import auto_scan, default_registry
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.output.csv_exporter import CSVExporter
 from forensic_analyzer.output.html_exporter import HTMLExporter
@@ -41,6 +41,7 @@ from forensic_analyzer.output.pdf_exporter import PDFExporter
 from forensic_analyzer.output.plain_renderer import PlainRenderer
 from forensic_analyzer.output.rich_renderer import RichRenderer
 from forensic_analyzer.utils.deps import HAS_RICH
+from forensic_analyzer.utils.network import set_online
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,23 +77,31 @@ Exemples :
     g2.add_argument("--carve",   metavar="FICHIER", help="File carving et polyglot detection")
     g2.add_argument("--pcap",    metavar="PCAP",    help="Analyse reseau PCAP/PCAPNG")
     g2.add_argument("--pe",      metavar="EXE",     help="Triage Malware (PE/Entropie)")
+    g2.add_argument("--elf",     metavar="BINAIRE", help="Analyse statique d'un binaire Linux (ELF)")
 
     # Analyse systeme
     g3 = p.add_argument_group("Analyse systeme")
     g3.add_argument("--mem",      metavar="DUMP",   help="Dump memoire RAM")
-    g3.add_argument("--mem-os",   choices=["windows", "linux"], default="windows")
+    g3.add_argument("--mem-os",   choices=["windows", "linux"], default=None,
+                    help="OS du dump (defaut : detection automatique)")
     g3.add_argument("--mem-plugins", metavar="LIST", help="Plugins Volatility3 (virgule)")
+    g3.add_argument("--mem-symbols", metavar="DOSSIER", help="Symboles ISF Volatility3 (requis pour Linux)")
     g3.add_argument("--disk",     metavar="IMAGE",  help="Image disque (MFT, ext4, ADS)")
     g3.add_argument("--evtx",     metavar="EVTX",   help="Windows Event Logs")
     g3.add_argument("--registry", metavar="HIVE",   help="Ruche registre Windows")
     g3.add_argument("--winexec",  metavar="PF/LNK", help="Artefacts Execution (Prefetch, LNK)")
-    g3.add_argument("--linux",    metavar="CHEMIN",  help="Artefacts Linux")
+    g3.add_argument("--linux",    metavar="CHEMIN",  help="Artefacts Linux (racine montee ou extraite)")
+    g3.add_argument("--bodyfile", metavar="FICHIER", help="Bodyfile TSK (fls -r -m /) de l'image, avec --linux")
+    g3.add_argument("--verify-hashes", metavar="MANIFESTE",
+                    help="Verifier les empreintes des preuves (format sha256sum) avant et apres l'analyse")
 
     # Threat Hunting
     g4 = p.add_argument_group("Threat Hunting")
     g4.add_argument("--yara", metavar="REGLES", help="Regles YARA (.yar ou dossier)")
     g4.add_argument("--ioc",  metavar="FICHIER", help="Extraction IOC automatique")
     g4.add_argument("--update", action="store_true", help="Mettre a jour l'application depuis le depot distant")
+    g4.add_argument("--online", action="store_true",
+                    help="Autoriser les services en ligne : MalwareBazaar, VirusTotal, geocodage OSM")
 
     # Export
     g5 = p.add_argument_group("Export")
@@ -115,18 +124,19 @@ def cli_dispatch():
         Updater().check_and_update()
         return
 
+    if args.online:
+        set_online(True)
+
     renderer = RichRenderer() if HAS_RICH else PlainRenderer()
 
-    registry = AnalyzerRegistry()
-    registry.register_all(
-        PDFAnalyzer(), ImageAnalyzer(), StegoAnalyzer(),
-        PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
-        MemoryAnalyzer(), DiskAnalyzer(), PEAnalyzer(),
-        ChromiumAnalyzer(), WindowsExecutionAnalyzer(),
-        IDSAnalyzer(),
-    )
+    registry = default_registry()
 
     findings = []
+
+    if args.verify_hashes:
+        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="initiale")
+        if res:
+            findings.append(res)
 
     if args.scan:
         report = auto_scan(args.scan, registry)
@@ -144,10 +154,10 @@ def cli_dispatch():
         (args.pcap,    PCAPAnalyzer),
         (args.evtx,    EVTXAnalyzer),
         (args.registry, RegistryAnalyzer),
-        (args.linux,   LinuxArtifactsAnalyzer),
         (args.disk,    DiskAnalyzer),
         (args.ioc,     IOCAnalyzer),
         (args.pe,      PEAnalyzer),
+        (args.elf,     ELFAnalyzer),
         (args.chromium, ChromiumAnalyzer),
         (args.winexec, WindowsExecutionAnalyzer),
     ]
@@ -158,9 +168,15 @@ def cli_dispatch():
             if res:
                 findings.append(res)
 
+    if args.linux:
+        res = LinuxArtifactsAnalyzer().analyze(args.linux, bodyfile=args.bodyfile)
+        if res:
+            findings.append(res)
+
     if args.mem:
         plugins = args.mem_plugins.split(",") if args.mem_plugins else None
-        res = MemoryAnalyzer().analyze(args.mem, plugins=plugins, os_type=args.mem_os)
+        res = MemoryAnalyzer().analyze(args.mem, plugins=plugins, os_type=args.mem_os,
+                                       symbols_dir=args.mem_symbols)
         if res:
             findings.append(res)
 
@@ -175,6 +191,11 @@ def cli_dispatch():
         else:
             from forensic_analyzer.output import ui
             ui.info("Specifiez une cible a scanner avec YARA via --scan ou autre.")
+
+    if args.verify_hashes:
+        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="finale")
+        if res:
+            findings.append(res)
 
     report = ReportModel.from_findings(findings)
 

@@ -6,6 +6,7 @@ from typing import Generic, TypeVar
 
 from forensic_analyzer.utils.deps import HAS_EXIFREAD, exifread
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.network import online_enabled
 
 log = get_logger("gps")
 
@@ -108,6 +109,9 @@ class GPSParser:
                 # S'il y a plus de 24h de décalage ou des dates différentes, on le signale.
                 meta["Alerte Timezone"] = "Vérifier le décalage (Heure locale vs Heure Satellite UTC)"
                 
+            if not online_enabled():
+                return Ok(meta)
+
             import requests
             try:
                 headers = {"User-Agent": "ForensicAnalyzer-DFIR/1.0"}
@@ -118,8 +122,8 @@ class GPSParser:
                     addr = data.get("display_name", "")
                     if addr:
                         meta["Adresse Approx. (OSM)"] = addr
-            except Exception:
-                pass  # TODO: log.debug(exc)
+            except Exception as exc:
+                log.debug("Géocodage inverse OSM échoué : %s", exc)
 
             return Ok(meta)
         except Exception as exc:

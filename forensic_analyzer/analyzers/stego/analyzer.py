@@ -164,14 +164,21 @@ def _extract_jpeg_comments(path: str) -> list[str]:
 
 def _check_stego_signatures(path: str) -> list[str]:
     """Vérifie la présence d'outils connus via signatures."""
-    found = []
+    signatures = (b"OpenStego", b"SilentEye", b"OutGuess")
+    overlap = max(len(s) for s in signatures) - 1
+    found: list[str] = []
     try:
         with open(path, "rb") as f:
-            data = f.read()
-            if b"OpenStego" in data: found.append("OpenStego")
-            if b"SilentEye" in data: found.append("SilentEye")
-            if b"OutGuess" in data: found.append("OutGuess")
-    except Exception: pass
+            tail = b""
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                window = tail + chunk
+                for sig in signatures:
+                    name = sig.decode()
+                    if name not in found and sig in window:
+                        found.append(name)
+                tail = window[-overlap:]
+    except OSError as exc:
+        log.debug("Lecture impossible pour les signatures stego '%s' : %s", path, exc)
     return found
 
 
@@ -270,8 +277,8 @@ class StegoAnalyzer(BaseAnalyzer):
                     try:
                         rgba = img.convert("RGBA")
                         results["alpha_analysis"] = _analyze_alpha_channel(rgba)
-                    except Exception:
-                        pass  # TODO: log.debug(exc)
+                    except Exception as exc:
+                        log.debug("Conversion RGBA échouée : %s", exc)
                         results["alpha_analysis"] = {"detail": "Conversion RGBA echouee"}
 
                 # 3. Multi-bit LSB (2 et 4 bits)
@@ -311,9 +318,13 @@ class StegoAnalyzer(BaseAnalyzer):
                             flat_meta["Outil Détecté"] = f"Steghide (Mot de passe: '{w}') (CRITIQUE)"
                             suspicion_score += 10
                             break
-                    except Exception:
-                        pass  # TODO: log.debug(exc)
-                        pass # Steghide non installé ou erreur
+                    except FileNotFoundError:
+                        log.debug("steghide non installé, test des mots de passe ignoré.")
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                    except Exception as exc:
+                        log.debug("steghide en erreur : %s", exc)
 
             # Verdict global
             if chi_lsb.get("detected"): suspicion_score += 3

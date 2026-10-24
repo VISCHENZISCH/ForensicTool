@@ -72,7 +72,6 @@ def _width() -> int:
     try:
         return min(shutil.get_terminal_size().columns, 80)
     except Exception:
-        pass  # TODO: log.debug(exc)
         return 80
 
 
@@ -269,7 +268,7 @@ MODULE_TAGS = {
     "disk": "DSK", "evtx": "EVT", "registry": "REG",
     "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
     "pe_analysis": "MAL", "malware_analysis": "MAL", "chromium_artifacts": "WEB", 
-    "prefetch": "PF", "lnk_shortcut": "LNK"
+    "prefetch": "PF", "lnk_shortcut": "LNK", "elf_analysis": "ELF", "evidence_integrity": "INT"
 }
 
 MODULE_NAMES = {
@@ -282,7 +281,8 @@ MODULE_NAMES = {
     "registry": "Registre Windows", "linux_artifacts": "Artefacts Linux",
     "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
     "pe_analysis": "Triage Malware (PE)", "malware_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
-    "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)"
+    "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)",
+    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Integrite des preuves"
 }
 
 MODULE_COLORS = {
@@ -293,7 +293,8 @@ MODULE_COLORS = {
     "disk": "\033[38;5;240m", "evtx": "\033[38;5;45m", "registry": "\033[38;5;99m",
     "linux_artifacts": "\033[38;5;214m", "yara": C.HR, "ioc": C.HR, "timeline": C.G,
     "pe_analysis": "\033[38;5;160m", "malware_analysis": "\033[38;5;160m", "chromium_artifacts": "\033[38;5;33m", 
-    "prefetch": "\033[38;5;184m", "lnk_shortcut": "\033[38;5;136m"
+    "prefetch": "\033[38;5;184m", "lnk_shortcut": "\033[38;5;136m",
+    "elf_analysis": "\033[38;5;160m", "evidence_integrity": C.G
 }
 
 def separator(label: str = "", dynamic_width: int = 0, custom_color: str = C.G) -> None:
@@ -484,8 +485,9 @@ def render_finding(finding) -> None:
             for e in events:
                 ts = e.get("timestamp", "?")
                 src = e.get("source", "")
-                detail = e.get("detail", "")[:50]
-                print(f"{MARGIN}    {C.D}{ts:<26}{C.RS} {C.G}{src:<6}{C.RS} {C.W}{detail}{C.RS}")
+                detail = str(e.get("description") or e.get("details") or e.get("detail", ""))[:60]
+                ts = ts.replace("+00:00", "Z")[:23]
+                print(f"{MARGIN}    {C.D}{ts:<23}{C.RS} {C.G}{src:<9}{C.RS} {C.W}{detail}{C.RS}")
 
     elif finding.type in ("carving", "stego"):
         for extra_key in ("embedded_files", "polyglots", "lsb_data", "matches"):
