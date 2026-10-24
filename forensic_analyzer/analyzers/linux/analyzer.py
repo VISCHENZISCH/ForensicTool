@@ -359,15 +359,19 @@ def find_suid_sgid(root_path: str = "/") -> list:
                     except Exception: pass
     return targets
 
-def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict) -> None:
+def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict,
+                                entries: list | None = None, file_hasher=None) -> None:
     """Persistance, integrite des paquets, anomalies de fichiers et journaux (enrichit meta/extra)."""
     techniques: set[str] = set()
     events: list[dict] = []
 
-    entries = bf.parse_bodyfile(bodyfile) if bodyfile else []
+    if entries is None:
+        entries = bf.parse_bodyfile(bodyfile) if bodyfile else []
     body = bf.index_by_path(entries) if entries else None
     if bodyfile:
         meta["Bodyfile"] = f"{len(entries)} entrees ({os.path.basename(bodyfile)})"
+    elif entries:
+        meta["Metadonnees"] = f"{len(entries)} entrees lues dans l'image disque"
 
     debian = packages.is_debian_root(root)
     owned = packages.owned_paths(root) if debian else None
@@ -397,7 +401,7 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
 
     # Integrite des paquets Debian
     if debian:
-        dpkg = packages.verify_dpkg(root, body)
+        dpkg = packages.verify_dpkg(root, body, hasher=file_hasher)
         meta["Integrite paquets (dpkg)"] = (f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
                                             f"{len(dpkg['modified'])} modifies, {len(dpkg['missing'])} absents")
         if dpkg["modified"]:
@@ -486,7 +490,8 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
     def can_handle(self, path: str) -> bool:
         return False  # Active uniquement via CLI
 
-    def analyze(self, path: str, bodyfile: str | None = None) -> FindingModel | None:
+    def analyze(self, path: str, bodyfile: str | None = None,
+                entries: list | None = None, file_hasher=None) -> FindingModel | None:
         """
         Analyse un chemin racine (/ ou un montage forensique).
         Le path peut etre :
@@ -494,7 +499,8 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
         - Un repertoire racine a scanner
 
         `bodyfile` (sortie de `fls -r -m /`) fournit les proprietaires, liens et
-        horodatages d'origine, perdus par une copie tsk_recover.
+        horodatages d'origine, perdus par une copie tsk_recover. `entries` et
+        `file_hasher` les fournissent directement depuis l'image (lecture pytsk3).
         """
         try:
             meta: dict = {"Chemin analyse": path}
@@ -591,7 +597,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 meta["Fichiers SUID/SGID"] = str(len(suid))
                 extra["suid_sgid"] = suid
                 
-                _analyze_incident_artifacts(path, bodyfile, meta, extra)
+                _analyze_incident_artifacts(path, bodyfile, meta, extra, entries, file_hasher)
 
             return FindingModel(
                 type="linux_artifacts",

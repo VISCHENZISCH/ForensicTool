@@ -6,6 +6,7 @@ import datetime
 import os
 
 from forensic_analyzer.core.base import BaseAnalyzer
+from forensic_analyzer.core.timeline import consolidate, parse_ts
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
@@ -47,6 +48,9 @@ def build_timeline(report: ReportModel) -> list[dict]:
     for finding in report.findings:
         source = finding.type
         file = os.path.basename(finding.file)
+
+        # Evenements deja normalises par l'analyzer (Linux, memoire, ...)
+        events.extend(finding.extra.get("timeline_events", []))
 
         # PDF timestamps
         if source == "pdf":
@@ -120,7 +124,6 @@ def build_timeline(report: ReportModel) -> list[dict]:
 
         # Linux auth.log
         elif source == "linux_artifacts":
-            events.extend(finding.extra.get("timeline_events", []))
             auth = finding.extra.get("auth_log", {})
             for entry in auth.get("failed_details", []):
                 events.append({
@@ -181,6 +184,15 @@ def build_timeline(report: ReportModel) -> list[dict]:
 
         # PCAP
         elif source == "pcap":
+            for step in finding.extra.get("timeline", []):
+                events.append({
+                    "timestamp": step.get("time", ""),
+                    "source": "pcap",
+                    "event_type": step.get("type", ""),
+                    "description": step.get("desc", ""),
+                    "file": file,
+                    "details": "",
+                })
             for cred in finding.extra.get("credentials", []):
                 events.append({
                     "timestamp": "",
@@ -191,8 +203,9 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "details": str(cred),
                 })
 
-    # Trier par timestamp
-    events.sort(key=lambda e: e.get("timestamp", ""))
+    # Trier chronologiquement (les evenements sans date en fin de liste)
+    far_future = parse_ts("9999-01-01T00:00:00")
+    events.sort(key=lambda e: parse_ts(e.get("timestamp", "")) or far_future)
     return events
 
 
@@ -237,9 +250,15 @@ class TimelineAnalyzer(BaseAnalyzer):
             meta["Premier evenement"] = events[0].get("timestamp", "?")
             meta["Dernier evenement"] = events[-1].get("timestamp", "?")
 
+        facts = consolidate(events)
+        if facts:
+            levels = {lvl: sum(f["confidence"] == lvl for f in facts) for lvl in ("élevée", "moyenne", "faible")}
+            meta["Faits consolides"] = (f"{len(facts)} (confiance elevee {levels['élevée']}, "
+                                        f"moyenne {levels['moyenne']}, faible {levels['faible']})")
+
         return FindingModel(
             type="timeline",
             file="multi-source",
             metadata=meta,
-            extra={"events": events[:2000], "source_stats": sources},
+            extra={"events": events[:2000], "facts": facts[:2000], "source_stats": sources},
         )

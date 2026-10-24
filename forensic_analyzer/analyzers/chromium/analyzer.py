@@ -14,6 +14,10 @@ class ChromiumAnalyzer(BaseAnalyzer):
     (Chrome, Edge, Brave, Vivaldi).
     Extrait l'historique de téléchargement, les logins et les web data.
     """
+    name = "chromium"
+
+    def can_handle(self, path: str) -> bool:
+        return self.supports(path)
 
     def supports(self, filepath: str) -> bool:
         if not os.path.isfile(filepath):

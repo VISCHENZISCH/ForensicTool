@@ -4,12 +4,14 @@ from __future__ import annotations
 import csv
 
 from forensic_analyzer.analyzers.timeline import build_timeline
+from forensic_analyzer.core.timeline import consolidate
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("csv_exporter")
 
-_FIELDNAMES = ["timestamp", "source", "event_type", "description", "file", "details"]
+_FIELDNAMES = ["timestamp", "source", "event_type", "description", "file", "details",
+               "confidence", "corroborating_sources"]
 
 
 class CSVExporter:
@@ -21,8 +23,13 @@ class CSVExporter:
         os.makedirs("export", exist_ok=True)
         target_path = os.path.join("export", filename)
         events = build_timeline(report)
+        # Confiance du fait consolide auquel appartient chaque evenement
+        for fact in consolidate(events):
+            for e in fact["events"]:
+                e["confidence"] = fact["confidence"]
+                e["corroborating_sources"] = "+".join(fact["sources"])
         with open(target_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=_FIELDNAMES)
+            writer = csv.DictWriter(f, fieldnames=_FIELDNAMES, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(events)
         log.info("Timeline CSV exportee -> %s (%d evenements)", target_path, len(events))

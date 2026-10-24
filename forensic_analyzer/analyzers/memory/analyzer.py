@@ -277,7 +277,25 @@ def analyze_linux_results(results: dict) -> tuple[dict, dict, set[str]]:
         techniques.add("T1059.004")
         extra["bash_commands"] = commands
 
+    # Evenements dates pour la chronologie consolidee
+    created = {r["PID"]: r.get("CREATION TIME", "") for r in pslist}
+    events = []
+    for p in suspicious_procs:
+        if created.get(p["pid"]):
+            events.append(_event(created[p["pid"]], "process_created",
+                                 f"Processus {p['comm']} (PID {p['pid']}, PPID {p['ppid']}) : {p['args']}"))
+    for c in commands:
+        if c.get("CommandTime"):
+            events.append(_event(c["CommandTime"], "bash_command",
+                                 f"Commande bash ({c.get('Process')} {c.get('PID')}) : {c.get('Command')}"))
+    extra["timeline_events"] = events
+
     return meta, extra, techniques
+
+
+def _event(ts: str, event_type: str, description: str) -> dict:
+    return {"timestamp": ts, "source": "memory", "event_type": event_type,
+            "description": description, "file": "", "details": ""}
 
 
 def _extract_strings_from_dump(dump_path: str, patterns: list[str] | None = None,

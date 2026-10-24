@@ -1,6 +1,10 @@
+"""Graphe interactif de la chaîne de compromission (artefacts ↔ indicateurs partagés)."""
+from __future__ import annotations
+
+from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 
-log = get_logger("pcap.graph")
+log = get_logger("graph")
 
 try:
     from pyvis.network import Network
@@ -8,52 +12,35 @@ try:
 except ImportError:
     HAS_PYVIS = False
 
-def generate_network_graph(output_path: str, pcap_summary: dict):
-    """Génère un graphe HTML interactif des communications réseau via PyVis."""
+_GROUP_COLORS = {
+    "ioc": "#ff4d4d", "disk": "#8c8c8c", "linux_artifacts": "#f5a623", "memory": "#6fa8ff",
+    "elf_analysis": "#d0021b", "malware_analysis": "#d0021b", "pcap": "#00c2a8", "evtx": "#4ac0ff",
+    "registry": "#9b6bff", "chromium_artifacts": "#2f80ed", "firefox_places": "#ff7a00",
+    "prefetch": "#e0c341", "lnk_shortcut": "#b8962e", "ids_alerts": "#ff2d55",
+}
+
+
+def render_correlation_graph(correlation: FindingModel, output_path: str) -> str | None:
+    """Écrit un HTML autonome (JS embarqué : pas de dossier lib/, pas de CDN)."""
     if not HAS_PYVIS:
-        log.warning("PyVis n'est pas installé. Ignorer la génération du graphe.")
+        log.warning("pyvis absent : graphe non généré (pip install pyvis).")
         return None
-        
-    try:
-        net = Network(height='750px', width='100%', bgcolor='#222222', font_color='white')
-        net.barnes_hut() # Algorithme de physique
-        
-        # Le noeud central (La victime / Les cibles)
-        # On va créer le graphe en utilisant les informations de la timeline et des identités
-        
-        added_nodes = set()
-        
-        def add_node(node_id, label, group, color):
-            if node_id not in added_nodes:
-                net.add_node(node_id, label=label, group=group, color=color, shape='dot' if group != 'victim' else 'diamond', size=20 if group != 'victim' else 35)
-                added_nodes.add(node_id)
-                
-        # On ajoute un noeud victime si on l'a (via Asset & Identity)
-        # Mais pour simplifier, on boucle sur timeline ou ipsource/dest
-        
-        if "timeline" in pcap_summary and pcap_summary["timeline"]:
-            for event in pcap_summary["timeline"]:
-                desc = event["desc"]
-                if "suspect:" in desc or "C2:" in desc or "Payload:" in desc:
-                    # Extraction grossière du domaine/IP
-                    parts = desc.split(':')
-                    if len(parts) > 1:
-                        target = parts[-1].strip()
-                        add_node("Victim", "Victim Host", "victim", "#00ffcc")
-                        
-                        color = "#ff3333" if "C2" in desc else "#ffaa00"
-                        group = "c2" if "C2" in desc else "malicious_domain"
-                        
-                        add_node(target, target, group, color)
-                        net.add_edge("Victim", target, title=event["type"], color=color)
-        
-        if len(added_nodes) < 2:
-            log.warning("Pas assez d'événements suspects pour tracer un graphe.")
-            return None
-            
-        net.save_graph(output_path)
-        log.info(f"Graphe réseau généré : {output_path}")
-        return output_path
-    except Exception as e:
-        log.error(f"Erreur lors de la création du graphe : {e}")
+    graph = correlation.extra.get("graph", {})
+    if not graph.get("edges"):
+        log.info("Aucun indicateur partagé entre sources : pas de graphe.")
         return None
+
+    net = Network(height="800px", width="100%", bgcolor="#14161a", font_color="#e8e8e8",
+                  directed=False, cdn_resources="in_line")
+    net.barnes_hut(gravity=-6000, spring_length=160)
+    for node in graph["nodes"]:
+        is_ioc = node["group"] == "ioc"
+        net.add_node(node["id"], label=node["label"], title=node["title"],
+                     color=_GROUP_COLORS.get(node["group"], "#bbbbbb"),
+                     shape="diamond" if is_ioc else "box", size=18 if is_ioc else 25)
+    for edge in graph["edges"]:
+        net.add_edge(edge["from"], edge["to"], title=edge["title"], color="#666666")
+
+    net.write_html(output_path, notebook=False)
+    log.info("Graphe de corrélation généré : %s", output_path)
+    return output_path

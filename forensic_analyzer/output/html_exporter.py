@@ -110,10 +110,17 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
         for ioc_type, items in ext["iocs"].items():
             for item in items:
                 extra_rows += render_row(ioc_type, item)
+    elif f.type == "timeline" and ext.get("facts"):
+        extra_rows += section_header("Chronologie consolidée")
+        for fact in ext["facts"]:
+            extra_rows += render_row(
+                fact["timestamp"],
+                f"[{fact['confidence']} · {'+'.join(fact['sources'])}] {fact['description'][:100]}",
+                is_danger=fact["confidence"] == "élevée")
     elif f.type == "timeline" and ext.get("events"):
         extra_rows += section_header("Chronologie")
         for e in ext["events"]:
-            extra_rows += render_row(e.get('timestamp', '?') or "N/A", f"[{e.get('source', '')}] {e.get('detail', '')[:80]}")
+            extra_rows += render_row(e.get('timestamp', '?') or "N/A", f"[{e.get('source', '')}] {str(e.get('description', ''))[:80]}")
     elif f.type in ("carving", "stego"):
         for extra_key in ("embedded_files", "polyglots", "lsb_data", "matches"):
             items = ext.get(extra_key)

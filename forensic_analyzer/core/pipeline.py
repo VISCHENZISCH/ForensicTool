@@ -91,7 +91,9 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
             except Exception as exc:
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
                 continue
-            if res is not None:
+            if isinstance(res, list):
+                results.extend(r for r in res if r is not None)
+            elif res is not None:
                 results.append(res)
         return results
 

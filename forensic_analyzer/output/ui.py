@@ -185,6 +185,8 @@ def export_menu() -> None:
     print(f"{MARGIN}    {C.G}[H]{C.RS}  {C.W}Export HTML (interactif){C.RS}")
     print(f"{MARGIN}    {C.G}[C]{C.RS}  {C.W}Export CSV Timeline{C.RS}")
     print(f"{MARGIN}    {C.G}[P]{C.RS}  {C.W}Export PDF{C.RS}")
+    print(f"{MARGIN}    {C.G}[G]{C.RS}  {C.W}Graphe de correlation (HTML){C.RS}")
+    print(f"{MARGIN}    {C.G}[S]{C.RS}  {C.W}Regles YARA / Suricata / Sigma + STIX 2.1{C.RS}")
     print(f"{MARGIN}    {C.D}[R]{C.RS}  {C.W}Retour{C.RS}")
     print()
 
@@ -268,7 +270,7 @@ MODULE_TAGS = {
     "disk": "DSK", "evtx": "EVT", "registry": "REG",
     "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
     "pe_analysis": "MAL", "malware_analysis": "MAL", "chromium_artifacts": "WEB", 
-    "prefetch": "PF", "lnk_shortcut": "LNK", "elf_analysis": "ELF", "evidence_integrity": "INT"
+    "prefetch": "PF", "lnk_shortcut": "LNK", "elf_analysis": "ELF", "evidence_integrity": "INT", "correlation": "COR"
 }
 
 MODULE_NAMES = {
@@ -282,7 +284,8 @@ MODULE_NAMES = {
     "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
     "pe_analysis": "Triage Malware (PE)", "malware_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
     "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)",
-    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Integrite des preuves"
+    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Integrite des preuves",
+    "correlation": "Correlation multi-sources"
 }
 
 MODULE_COLORS = {
@@ -294,7 +297,7 @@ MODULE_COLORS = {
     "linux_artifacts": "\033[38;5;214m", "yara": C.HR, "ioc": C.HR, "timeline": C.G,
     "pe_analysis": "\033[38;5;160m", "malware_analysis": "\033[38;5;160m", "chromium_artifacts": "\033[38;5;33m", 
     "prefetch": "\033[38;5;184m", "lnk_shortcut": "\033[38;5;136m",
-    "elf_analysis": "\033[38;5;160m", "evidence_integrity": C.G
+    "elf_analysis": "\033[38;5;160m", "evidence_integrity": C.G, "correlation": C.HR
 }
 
 def separator(label: str = "", dynamic_width: int = 0, custom_color: str = C.G) -> None:
@@ -476,6 +479,16 @@ def render_finding(finding) -> None:
             for ioc_type, items in iocs.items():
                 for item in (items if isinstance(items, list) else [items]):
                     print(f"{MARGIN}    {C.G}{ioc_type:<14}{C.RS} {C.W}{item}{C.RS}")
+
+    elif finding.type == "timeline" and extra.get("facts"):
+        print()
+        separator("Chronologie consolidee (confiance)")
+        marks = {"élevée": f"{C.G}ELEVEE ", "moyenne": f"{C.Y}MOYENNE", "faible": f"{C.D}FAIBLE "}
+        for fact in extra["facts"]:
+            ts = fact["timestamp"].replace("+00:00", "Z")[:23]
+            sources = "+".join(fact["sources"])[:24]
+            print(f"{MARGIN}    {C.D}{ts:<23}{C.RS} {marks.get(fact['confidence'], '')}{C.RS} "
+                  f"{C.G}{sources:<24}{C.RS} {C.W}{fact['description'][:60]}{C.RS}")
 
     elif finding.type == "timeline" and "events" in extra:
         events = extra["events"]

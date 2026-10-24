@@ -29,6 +29,7 @@ from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
 from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
 from forensic_analyzer.analyzers.yara import YARAAnalyzer
+from forensic_analyzer.core.correlation import correlate
 from forensic_analyzer.core.scanner import auto_scan, default_registry
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output import ui
@@ -62,7 +63,7 @@ _MENU_DISPATCH = {
 }
 
 
-def _run_analysis(analyzer, path: str, **kwargs) -> FindingModel | None:
+def _run_analysis(analyzer, path: str, **kwargs) -> list[FindingModel] | None:
     """Execute un analyzer et affiche le resultat."""
     ui.status("Analyse en cours...")
     try:
@@ -82,8 +83,10 @@ def _run_analysis(analyzer, path: str, **kwargs) -> FindingModel | None:
         return None
 
     ui.success("Analyse terminee avec succes.")
-    ui.render_finding(result)
-    return result
+    results = result if isinstance(result, list) else [result]
+    for res in results:
+        ui.render_finding(res)
+    return results
 
 
 def _handle_export(session_findings: list[FindingModel]) -> None:
@@ -92,7 +95,14 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         ui.warning("Aucun resultat en memoire a exporter.")
         return
 
-    report = ReportModel.from_findings(session_findings)
+    # Vue transverse ajoutee a chaque export : correlation puis chronologie consolidee
+    base = [f for f in session_findings if f.type not in ("correlation", "timeline")]
+    correlation = correlate(base)
+    enriched = base + ([correlation] if correlation else [])
+    timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(enriched))
+    if timeline.extra.get("events"):
+        enriched.append(timeline)
+    report = ReportModel.from_findings(enriched)
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -113,13 +123,7 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         if path:
             filename = os.path.basename(path)
             target_path = os.path.join("export", filename)
-            # Add timeline automatically to HTML if possible
-            timeline = TimelineAnalyzer().build_from_report(report)
-            if timeline:
-                augmented = ReportModel.from_findings(session_findings + [timeline])
-            else:
-                augmented = report
-            HTMLExporter().export(augmented, path)
+            HTMLExporter().export(report, path)
             ui.success(f"Rapport HTML interactif exporte dans : {target_path}")
 
     elif choice == "C":
@@ -129,6 +133,27 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
             target_path = os.path.join("export", filename)
             CSVExporter().export(report, path)
             ui.success(f"Timeline CSV exportee dans : {target_path}")
+
+    elif choice == "G":
+        path = ui.prompt_input("Entrez le chemin du graphe HTML de sortie (.html)")
+        if path and correlation:
+            from forensic_analyzer.output.graph_renderer import render_correlation_graph
+            os.makedirs("export", exist_ok=True)
+            target_path = os.path.join("export", os.path.basename(path))
+            if render_correlation_graph(correlation, target_path):
+                ui.success(f"Graphe de correlation exporte dans : {target_path}")
+            else:
+                ui.warning("Aucun indicateur partage entre sources : graphe non genere.")
+        elif path:
+            ui.warning("Aucun indicateur extrait : graphe non genere.")
+
+    elif choice == "S":
+        from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
+        outputs = DefenseRulesGenerator().generate(report, output_dir=os.path.join("export", "rules"))
+        if outputs:
+            ui.success(f"{len(outputs)} fichier(s) de regles et STIX exportes dans export/rules/")
+        else:
+            ui.warning("Aucun indicateur exploitable : pas de regle generee.")
 
     elif choice == "P":
         path = ui.prompt_input("Entrez le chemin du fichier PDF de sortie (.pdf)")
@@ -290,7 +315,7 @@ def interactive_loop() -> None:
             analyzer = YARAAnalyzer(rules_path)
             res = _run_analysis(analyzer, target_path)
             if res:
-                session_findings.append(res)
+                session_findings.extend(res)
             ui.wait_for_key()
             continue
 
@@ -302,7 +327,7 @@ def interactive_loop() -> None:
             analyzer = FirefoxCookiesAnalyzer()
             res = _run_analysis(analyzer, path)
             if res:
-                session_findings.append(res)
+                session_findings.extend(res)
             ui.wait_for_key()
             continue
 
@@ -321,7 +346,7 @@ def interactive_loop() -> None:
             analyzer = MemoryAnalyzer()
             res = _run_analysis(analyzer, path, plugins=plugins, os_type=os_type, symbols_dir=symbols)
             if res:
-                session_findings.append(res)
+                session_findings.extend(res)
             ui.wait_for_key()
             continue
 
@@ -337,6 +362,6 @@ def interactive_loop() -> None:
             kwargs["bodyfile"] = ui.prompt_input("Bodyfile TSK de l'image (optionnel, fls -r -m /)", required=False) or None
         res = _run_analysis(analyzer, path, **kwargs)
         if res:
-            session_findings.append(res)
+            session_findings.extend(res)
         ui.wait_for_key()
 

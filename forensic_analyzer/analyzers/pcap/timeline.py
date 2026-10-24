@@ -18,7 +18,7 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
     # Extraction packets
     for pkt in packets:
         try:
-            ts = datetime.datetime.fromtimestamp(float(pkt.time)).strftime('%H:%M:%S')
+            ts = datetime.datetime.fromtimestamp(float(pkt.time), datetime.timezone.utc).isoformat()
             
             # 1. DNS Suspect
             if pkt.haslayer(DNS) and pkt.haslayer(UDP) and pkt[UDP].dport == 53:

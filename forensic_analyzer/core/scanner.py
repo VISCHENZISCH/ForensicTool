@@ -58,6 +58,7 @@ def default_registry() -> AnalyzerRegistry:
     from forensic_analyzer.analyzers.disk import DiskAnalyzer
     from forensic_analyzer.analyzers.elf import ELFAnalyzer
     from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
+    from forensic_analyzer.analyzers.firefox import FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer
     from forensic_analyzer.analyzers.gps import GPSAnalyzer
     from forensic_analyzer.analyzers.ids import IDSAnalyzer
     from forensic_analyzer.analyzers.image import ImageAnalyzer
@@ -75,5 +76,6 @@ def default_registry() -> AnalyzerRegistry:
         PDFAnalyzer(), ImageAnalyzer(), GPSAnalyzer(), StegoAnalyzer(),
         PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
         MemoryAnalyzer(), DiskAnalyzer(), MalwareAnalyzer(), ELFAnalyzer(),
-        ChromiumAnalyzer(), WindowsExecutionAnalyzer(), IDSAnalyzer(),
+        ChromiumAnalyzer(), FirefoxHistoryAnalyzer(), FirefoxCookiesAnalyzer(),
+        WindowsExecutionAnalyzer(), IDSAnalyzer(),
     )

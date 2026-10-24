@@ -7,6 +7,7 @@ Couche CLI pour Forensic Analyzer.
 """
 
 import argparse
+import os
 
 from forensic_analyzer.analyzers.carving import CarvingAnalyzer
 from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
@@ -32,9 +33,11 @@ from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
 from forensic_analyzer.analyzers.windows_execution import \
     WindowsExecutionAnalyzer
 from forensic_analyzer.analyzers.yara import YARAAnalyzer
+from forensic_analyzer.core.correlation import correlate
 from forensic_analyzer.core.scanner import auto_scan, default_registry
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.output.csv_exporter import CSVExporter
+from forensic_analyzer.output.graph_renderer import render_correlation_graph
 from forensic_analyzer.output.html_exporter import HTMLExporter
 from forensic_analyzer.output.json_exporter import JSONExporter
 from forensic_analyzer.output.pdf_exporter import PDFExporter
@@ -109,7 +112,9 @@ Exemples :
     g5.add_argument("--export-html", metavar="HTML", help="Export HTML interactif")
     g5.add_argument("--export-csv",  metavar="CSV",  help="Export CSV timeline DFIR")
     g5.add_argument("--export-pdf",  metavar="PDF",  help="Export PDF")
-    g5.add_argument("--export-rules", action="store_true", help="Générer des règles YARA et Suricata à partir des IOCs trouvés")
+    g5.add_argument("--export-graph", metavar="HTML",
+                    help="Graphe interactif de la chaine de compromission (indicateurs partages)")
+    g5.add_argument("--export-rules", action="store_true", help="Regles YARA, Suricata, Sigma et bundle STIX 2.1 dans export/rules/")
 
     return p
 
@@ -165,7 +170,9 @@ def cli_dispatch():
     for arg_val, cls in simple_analyzers:
         if arg_val:
             res = cls().analyze(arg_val)
-            if res:
+            if isinstance(res, list):
+                findings.extend(res)
+            elif res:
                 findings.append(res)
 
     if args.linux:
@@ -197,13 +204,15 @@ def cli_dispatch():
         if res:
             findings.append(res)
 
+    # Vue transverse : indicateurs partages entre sources, puis chronologie consolidee
+    correlation = correlate(findings) if findings else None
+    if correlation:
+        findings.append(correlation)
     report = ReportModel.from_findings(findings)
-
-    if args.export_csv or args.export_html or args.export_pdf:
-        tl = TimelineAnalyzer().build_from_report(report)
-        if tl:
-            findings.append(tl)
-            report = ReportModel.from_findings(findings)
+    tl = TimelineAnalyzer().build_from_report(report) if findings else None
+    if tl and tl.extra.get("events"):
+        findings.append(tl)
+        report = ReportModel.from_findings(findings)
 
     renderer.render_report(report)
 
@@ -215,11 +224,13 @@ def cli_dispatch():
         CSVExporter().export(report, args.export_csv)
     if args.export_pdf and report.findings:
         PDFExporter().export(report, args.export_pdf)
+    if args.export_graph and correlation:
+        os.makedirs("export", exist_ok=True)
+        render_correlation_graph(correlation, os.path.join("export", os.path.basename(args.export_graph)))
         
     if getattr(args, 'export_rules', False) and report.findings:
         from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
-        # Générer dans le dossier courant ou un sous-dossier rules_export/
-        DefenseRulesGenerator().generate(report, output_dir="rules_export")
+        DefenseRulesGenerator().generate(report, output_dir=os.path.join("export", "rules"))
 
 def main():
     """Point d'entree : menu interactif par defaut, CLI si arguments."""

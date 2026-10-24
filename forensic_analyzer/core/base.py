@@ -39,9 +39,10 @@ class BaseAnalyzer(ABC):
         return path.lower().endswith(extensions)
 
     @abstractmethod
-    def analyze(self, path: str) -> FindingModel | None:
+    def analyze(self, path: str) -> FindingModel | list[FindingModel] | None:
         """
         Analyse le fichier et retourne un FindingModel, ou None si échec.
+        Un analyzer conteneur (image disque) peut retourner plusieurs FindingModel.
 
         Args:
             path: Chemin absolu vers le fichier à analyser.

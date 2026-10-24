@@ -27,25 +27,26 @@ Idéal pour ingérer directement un dump disque, un dossier réseau ou une colle
 ./run.sh --scan /chemin/vers/dossier_evidence --export-html rapport_forensic.html
 ```
 
-### Réponse à incident Linux (image disque + mémoire)
-Les métadonnées d'origine (propriétaires, liens symboliques, dates de création) sont perdues par une copie `tsk_recover` : on les fournit via un bodyfile TSK.
+### Réponse à incident complète en une commande
+Placez les preuves dans un dossier (image disque, dump mémoire, manifeste `.sha256`, dossier `symbols/` pour Volatility) :
 ```bash
-OFF=262144   # secteur de début de la partition Linux (mmls)
-fls -r -m / -o $OFF disk.raw > bodyfile.txt
-tsk_recover -a -o $OFF disk.raw ./extracted/root
-
-./run.sh --verify-hashes preuves.sha256 \
-         --linux ./extracted/root --bodyfile bodyfile.txt \
-         --mem memory.raw --mem-os linux --mem-symbols ./symbols \
-         --export-html rapport.html
+./run.sh --scan ./preuves --export-html rapport.html --export-csv timeline.csv \
+         --export-graph chaine.html --export-rules
 ```
-- `--verify-hashes` : contrôle des empreintes avant et après l'analyse.
-- `--linux` + `--bodyfile` : unités systemd suspectes, `ld.so.preload`, cron, clés SSH, intégrité des paquets (`dpkg -V` hors ligne), fichiers hors paquet, fichiers système hors root ou cachés, `audit.log`, `wtmp`/`lastlog`, journald, chronologie consolidée et correspondance MITRE ATT&CK.
-- `--mem-os linux --mem-symbols` : processus cachés (pslist/psscan), processus lancés depuis un répertoire caché, connexions distantes, appels système détournés, modules cachés, injections.
-- Les binaires ELF sont analysés automatiquement par `--scan`, ou directement avec `--elf`.
+- **Intégrité** : le manifeste d'empreintes est vérifié automatiquement (`--verify-hashes` le refait avant et après l'analyse).
+- **Image disque lue directement** (pytsk3, sans montage ni `tsk_recover`) : partitions GPT/MBR, systèmes de fichiers, métadonnées d'origine (propriétaires, liens, dates de création), puis triage des artefacts dans `export/extractions/` (jamais dans le dossier des preuves) :
+  - *Linux* : unités systemd suspectes, `ld.so.preload`, cron, clés SSH, intégrité des paquets (`dpkg -V` hors ligne, hachage dans l'image), fichiers hors paquet, hors root ou cachés, `audit.log`, `wtmp`/`lastlog`, journald, puis analyse des binaires suspects ;
+  - *Windows* : journaux EVTX, ruches du registre, Prefetch, LNK, historiques Chrome/Edge/Brave/Firefox.
+- **Mémoire** : OS détecté automatiquement (bannière du noyau), symboles ISF du dossier `symbols/` voisin ; processus cachés (pslist/psscan), processus lancés depuis un répertoire caché, connexions distantes, appels système détournés, modules cachés, injections.
+- **Binaires ELF et PE** : désassemblage (capstone) des appels sensibles — destination de `connect()` (IP et port), intervalle de `sleep()`, fichiers ouverts, commandes exécutées — et capacités [capa](https://github.com/mandiant/capa) si l'outil est installé.
+- **Corrélation** : indicateurs partagés entre sources (ex : un chemin vu sur le disque, dans un processus en mémoire et dans un binaire), graphe interactif de la chaîne de compromission (`--export-graph`).
+- **Chronologie consolidée** : événements concordants fusionnés, confiance *élevée* (≥ 2 sources), *moyenne* (1 source) ou *faible* (horodatage falsifiable).
+- **Détection et partage** (`--export-rules`, dans `export/rules/`) : règles YARA (par binaire suspect + empreintes), Suricata (IP/port, domaines, URL, JA3), Sigma (Linux et Windows) et bundle STIX 2.1 (indicateurs, malware, techniques ATT&CK).
+
+Analyses ciblées : `--disk`, `--mem` (`--mem-os`, `--mem-symbols`), `--elf`, `--pe`, `--linux RACINE --bodyfile FICHIER` pour une copie déjà extraite.
 
 ### Services en ligne (désactivés par défaut)
-Interroger un service tiers divulgue des éléments de l'enquête (hashes, coordonnées GPS). L'outil fonctionne donc hors-ligne par défaut. Pour activer MalwareBazaar, VirusTotal et le géocodage OpenStreetMap :
+Interroger un service tiers divulgue des éléments de l'enquête (hashes, coordonnées GPS). Le graphe de corrélation embarque son JavaScript et ne contacte aucun CDN. L'outil fonctionne donc hors-ligne par défaut. Pour activer MalwareBazaar, VirusTotal et le géocodage OpenStreetMap :
 ```bash
 export ABUSECH_AUTH_KEY=...   # MalwareBazaar
 export VT_API_KEY=...         # VirusTotal

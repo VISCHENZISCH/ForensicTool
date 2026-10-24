@@ -8,7 +8,7 @@ import shutil
 import struct
 import subprocess
 
-from forensic_analyzer.analyzers.disk import layout
+from forensic_analyzer.analyzers.disk import layout, tsk_image
 from forensic_analyzer.analyzers.linux import bodyfile as bf
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
@@ -248,25 +248,8 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
 
 
 
-def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, label: str) -> None:
-    """Bodyfile TSK en memoire (fls) : fichiers systeme hors root, fichiers caches, entrees supprimees."""
-    fls = shutil.which("fls")
-    command = f"fls -r -m / -o {start_sector} '{path}'"
-    if not fls:
-        meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; a generer avec : {command}"
-        return
-    try:
-        proc = subprocess.run([fls, "-r", "-m", "/", "-o", str(start_sector), path],
-                              capture_output=True, text=True, errors="replace", timeout=600)
-    except subprocess.TimeoutExpired:
-        log.warning("fls trop long sur '%s'", path)
-        return
-    if proc.returncode != 0:
-        log.warning("fls a echoue (offset %s) : %s", start_sector, proc.stderr.strip()[:200])
-        return
-
-    entries = bf.parse_bodyfile_lines(proc.stdout.splitlines())
-    meta[f"{label} : entrees (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
+def _report_file_anomalies(entries: list, meta: dict, extra: dict, label: str) -> set[str]:
+    """Fichiers systeme hors root et fichiers caches ; retourne les techniques ATT&CK associees."""
     techniques: set[str] = set()
     for title, found in (("Fichiers systeme hors root", bf.ownership_anomalies(entries)),
                          ("Fichiers caches (systeme / temporaires)", bf.hidden_entries(entries))):
@@ -277,17 +260,61 @@ def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, l
                  "modified": bf.utc(e.mtime)} for e in found]
             if title.startswith("Fichiers caches"):
                 techniques.add("T1564.001")
-    if techniques:
-        meta["MITRE ATT&CK"] = mitre.summary(techniques)
+    return techniques
+
+
+def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, label: str) -> set[str]:
+    """Repli sans pytsk3 : bodyfile TSK en memoire via la commande fls."""
+    fls = shutil.which("fls")
+    command = f"fls -r -m / -o {start_sector} '{path}'"
+    if not fls:
+        meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; a generer avec : {command}"
+        return set()
+    try:
+        proc = subprocess.run([fls, "-r", "-m", "/", "-o", str(start_sector), path],
+                              capture_output=True, text=True, errors="replace", timeout=600)
+    except subprocess.TimeoutExpired:
+        log.warning("fls trop long sur '%s'", path)
+        return set()
+    if proc.returncode != 0:
+        log.warning("fls a echoue (offset %s) : %s", start_sector, proc.stderr.strip()[:200])
+        return set()
+
+    entries = bf.parse_bodyfile_lines(proc.stdout.splitlines())
+    meta[f"{label} : entrees (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
     meta[f"{label} : analyse complete"] = (
-        f"{command} > bodyfile.txt ; tsk_recover -a -o {start_sector} '{path}' ./root ; "
+        f"installer pytsk3, ou : {command} > bodyfile.txt ; tsk_recover -a -o {start_sector} '{path}' ./root ; "
         "puis --linux ./root --bodyfile bodyfile.txt")
+    return _report_file_anomalies(entries, meta, extra, label)
+
+
+def _analyze_extracted(local_path: str, origin: str) -> list[FindingModel]:
+    """Passe un fichier extrait de l'image dans les analyzers du scan (hors disque/memoire)."""
+    from forensic_analyzer.core.scanner import default_registry
+
+    results = []
+    for analyzer in default_registry().get_all_for(local_path):
+        if analyzer.name in ("disk", "memory"):
+            continue
+        try:
+            res = analyzer.analyze(local_path)
+        except Exception as exc:
+            log.warning("Erreur %s sur '%s' : %s", analyzer.name, origin, exc)
+            continue
+        if res is not None:
+            res.metadata["Origine (image)"] = origin
+            results.append(res)
+    return results
 
 
 class DiskAnalyzer(BaseAnalyzer):
     """Analyse forensique de disque - partitions, systemes de fichiers, MFT NTFS, ext via TSK."""
     name = "disk"
     supported_extensions = ('.raw', '.dd', '.img', '.001', '.E01', '.mft')
+
+    def __init__(self, workdir: str | None = None) -> None:
+        # Dossier des artefacts extraits : jamais dans le dossier des preuves
+        self.workdir = workdir or os.path.join("export", "extractions")
 
     def can_handle(self, path: str) -> bool:
         # .raw est ambigu (dump memoire ou image disque) : on exige une structure de disque
@@ -328,10 +355,20 @@ class DiskAnalyzer(BaseAnalyzer):
                     meta[f"{label} : UUID"] = sb["uuid"]
                     meta[f"{label} : derniere ecriture du superbloc"] = sb["last_written"]
                     meta[f"{label} : dernier montage"] = f"{sb['last_mounted']} sur {sb['last_mount_path'] or '?'} ({sb['state']})"
-                _scan_ext_partition(path, p["start"], meta, extra, label)
 
-            # Heuristiques Windows seulement s'il y a du NTFS (ou si la structure est inconnue)
-            if "NTFS" in filesystems or not filesystems:
+            techniques: set[str] = set()
+            nested: list[FindingModel] = []
+            deep = tsk_image.HAS_PYTSK3 and not path.lower().endswith((".mft", ".e01"))
+            if deep:
+                nested = self._deep_analysis(path, meta, extra, techniques)
+            else:
+                for p in ext_parts:
+                    techniques |= _scan_ext_partition(path, p["start"], meta, extra, f"ext @{p['start']}")
+            if techniques:
+                meta["MITRE ATT&CK"] = mitre.summary(techniques)
+
+            # Heuristiques NTFS brutes : seulement sans lecture TSK du systeme de fichiers
+            if not deep and ("NTFS" in filesystems or not filesystems):
                 max_read = min(file_size, 200 * 1024 * 1024)  # Scan max 200MB de raw
                 meta["Taille analysee (NTFS)"] = f"{max_read:,} octets"
                 with open(path, "rb") as f:
@@ -343,12 +380,60 @@ class DiskAnalyzer(BaseAnalyzer):
                 if isinstance(data, mmap.mmap):
                     data.close()
 
-            return FindingModel(
+            finding = FindingModel(
                 type="disk",
                 file=os.path.abspath(path),
                 metadata=meta,
                 extra=extra,
             )
+            return [finding, *nested] if nested else finding
         except Exception as exc:
             log.error("Erreur disk '%s' : %s", os.path.basename(path), exc)
             return None
+
+    def _deep_analysis(self, path: str, meta: dict, extra: dict, techniques: set[str]) -> list[FindingModel]:
+        """Lecture pytsk3 : metadonnees, triage des artefacts, puis analyses Linux / Windows / binaires."""
+        from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
+        from forensic_analyzer.core.scanner import auto_scan, default_registry
+
+        evidence_dir = os.path.dirname(os.path.abspath(path))
+        workdir = os.path.abspath(os.path.join(self.workdir, os.path.basename(path)))
+        if workdir == evidence_dir or workdir.startswith(evidence_dir + os.sep):
+            log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulee (%s)", workdir)
+            return []
+
+        nested: list[FindingModel] = []
+        for fs in tsk_image.open_filesystems(path):
+            if fs.family == "other":
+                continue
+            label = f"{fs.family} @{fs.offset}"
+            entries = fs.walk()
+            meta[f"{label} : entrees"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
+            techniques |= _report_file_anomalies(entries, meta, extra, label)
+
+            # Fichiers suspects a extraire en plus du profil de triage
+            suspects = {e.path for e in bf.ownership_anomalies(entries) + bf.hidden_entries(entries)}
+            dest = os.path.join(workdir, f"{fs.family}_{fs.offset}")
+            extracted = fs.triage(entries, dest, extra_paths=suspects)
+            meta[f"{label} : artefacts extraits"] = f"{len(extracted)} fichiers dans {dest}"
+
+            if fs.family == "linux":
+                res = LinuxArtifactsAnalyzer().analyze(dest, entries=entries, file_hasher=fs.md5)
+                if res:
+                    res.metadata["Origine (image)"] = f"{os.path.basename(path)} {label}"
+                    nested.append(res)
+                    for unit in res.extra.get("systemd", {}).get("units", []):
+                        if unit["suspicious"] and unit["binary"]:
+                            suspects.add(unit["binary"])
+                            fs.extract(unit["binary"], dest)
+                for suspect in sorted(suspects):
+                    local = os.path.join(dest, suspect.lstrip("/"))
+                    if os.path.isfile(local):
+                        nested.extend(_analyze_extracted(local, f"{os.path.basename(path)}:{suspect}"))
+            else:
+                report = auto_scan(dest, default_registry())
+                for res in report.findings:
+                    rel = os.path.relpath(res.file, dest) if res.file.startswith(dest) else res.file
+                    res.metadata["Origine (image)"] = f"{os.path.basename(path)}:/{rel}"
+                nested.extend(report.findings)
+        return nested
