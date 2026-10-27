@@ -427,8 +427,8 @@ class DiskAnalyzer(BaseAnalyzer):
                             suspects.add(unit["binary"])
                             fs.extract(unit["binary"], dest)
                 for suspect in sorted(suspects):
-                    local = os.path.join(dest, suspect.lstrip("/"))
-                    if os.path.isfile(local):
+                    local = tsk_image.local_path(dest, suspect)
+                    if local and os.path.isfile(local):
                         nested.extend(_analyze_extracted(local, f"{os.path.basename(path)}:{suspect}"))
             else:
                 report = auto_scan(dest, default_registry())

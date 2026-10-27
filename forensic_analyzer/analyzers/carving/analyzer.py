@@ -292,6 +292,10 @@ class CarvingAnalyzer(BaseAnalyzer):
     name = "carving"
     supported_extensions = ('.dd', '.img', '.bin', '.vmem', '.iso', '.raw', '.dump')
 
+    def __init__(self, workdir: str | None = None) -> None:
+        # Dossier des fichiers extraits : jamais dans le dossier des preuves
+        self.workdir = workdir or os.path.join("export", "extractions")
+
     def can_handle(self, path: str) -> bool:
         ext = os.path.splitext(path)[1].lower()
         return ext in self.supported_extensions
@@ -317,8 +321,11 @@ class CarvingAnalyzer(BaseAnalyzer):
             # 3.5 Extraction automatique & Hashing
             import hashlib
             extracted_paths = []
-            if embedded:
-                out_dir = os.path.join(os.path.dirname(path), f"extracted_{os.path.basename(path)}")
+            evidence_dir = os.path.dirname(os.path.abspath(path))
+            out_dir = os.path.abspath(os.path.join(self.workdir, f"carved_{os.path.basename(path)}"))
+            if out_dir == evidence_dir or out_dir.startswith(evidence_dir + os.sep):
+                log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulee (%s)", out_dir)
+            elif embedded:
                 os.makedirs(out_dir, exist_ok=True)
                 for idx, emb in enumerate(embedded):
                     ext = emb["type"].lower()
@@ -362,7 +369,7 @@ class CarvingAnalyzer(BaseAnalyzer):
                 "Polyglots detectes": ", ".join(polyglots) if polyglots else "Aucun",
             }
             if extracted_paths:
-                meta["Fichiers extraits (DUMP)"] = f"Sauvegardés dans {os.path.basename(out_dir)}/"
+                meta["Fichiers extraits (DUMP)"] = f"Sauvegardés dans {out_dir}"
 
             # Ajouter les signatures les plus importantes
             for i, hit in enumerate(magic_hits[:20]):
