@@ -14,31 +14,35 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("finding")
 
 
-@lru_cache(maxsize=1024)
 def compute_hashes(filepath: str) -> dict[str, str]:
     """
     Calcule les hashes MD5 et SHA-256 d'un fichier.
-    Optimisation: Cache LRU pour éviter de relire le même fichier plusieurs fois.
+    Cache par (chemin, taille, mtime) : un fichier modifie en cours de session est rehache.
     """
+    try:
+        st = os.stat(filepath)
+    except OSError:
+        return {}
     if not os.path.isfile(filepath):
         return {}
-    
+    return dict(_hash_file(filepath, st.st_size, st.st_mtime_ns))
+
+
+@lru_cache(maxsize=1024)
+def _hash_file(filepath: str, _size: int, _mtime_ns: int) -> tuple[tuple[str, str], ...]:
     sha256 = hashlib.sha256()
     md5 = hashlib.md5()
-    
+
     try:
-        # Optimisation : Lecture par chunks de 64KB (au lieu de 4KB) pour réduire l'overhead I/O
+        # Lecture par chunks de 1 Mo : images disque et dumps de plusieurs Go
         with open(filepath, 'rb') as f:
-            for chunk in iter(lambda: f.read(65536), b""):
+            for chunk in iter(lambda: f.read(1 << 20), b""):
                 sha256.update(chunk)
                 md5.update(chunk)
-        return {
-            "MD5": md5.hexdigest(),
-            "SHA-256": sha256.hexdigest()
-        }
+        return (("MD5", md5.hexdigest()), ("SHA-256", sha256.hexdigest()))
     except OSError as exc:
         log.warning("Impossible de hasher '%s' : %s", filepath, exc)
-        return {}
+        return ()
 
 
 class FindingModel(BaseModel):

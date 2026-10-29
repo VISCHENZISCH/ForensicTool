@@ -1,8 +1,13 @@
 from collections import defaultdict
+
 try:
     from scapy.all import IP, TCP, Raw
 except ImportError:
     pass
+
+from forensic_analyzer.utils.logger import get_logger
+
+log = get_logger("pcap")
 
 def rebuild_tcp_streams(packets) -> dict[str, bytes]:
     streams: dict[str, list[tuple[int, bytes]]] = defaultdict(list)
@@ -125,7 +130,7 @@ def extract_http_exfiltration(streams: dict[str, bytes]) -> list[dict]:
                     params = url.split(b"?")[1]
                     if len(params) > 50: # URL parameters unusually long
                         exfil_data.append({"stream": stream_id, "method": "GET PARAM", "payload": urllib.parse.unquote(params.decode('utf-8', 'ignore'))})
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Flux %s ignore (exfiltration HTTP) : %s", stream_id, exc)
             
     return exfil_data

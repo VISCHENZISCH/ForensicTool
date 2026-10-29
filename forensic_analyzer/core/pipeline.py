@@ -1,7 +1,9 @@
 """AnalyzerRegistry et run_pipeline - orchestration centrale du pipeline."""
 from __future__ import annotations
 
+import concurrent.futures
 import os
+import threading
 
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel, ReportModel
@@ -70,10 +72,9 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
     Returns:
         ReportModel: Modèle consolidé avec tous les résultats.
     """
-    findings: list[FindingModel] = []
-    
-    import concurrent.futures
-    
+    # Plusieurs Volatility ou pytsk3 en parallele saturent la RAM
+    heavy_lock = threading.Lock()
+
     def process_path(path: str) -> list[FindingModel]:
         if not os.path.isfile(path):
             log.warning("Fichier introuvable, ignoré : %s", path)
@@ -87,7 +88,11 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
         for analyzer in registry.get_all_for(path):
             log.info("[%s] → %s", analyzer.name.upper(), fname)
             try:
-                res = analyzer.analyze(path)
+                if analyzer.heavy:
+                    with heavy_lock:
+                        res = analyzer.analyze(path)
+                else:
+                    res = analyzer.analyze(path)
             except Exception as exc:
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
                 continue

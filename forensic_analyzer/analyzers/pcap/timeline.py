@@ -1,5 +1,9 @@
 import datetime
 
+from forensic_analyzer.utils.logger import get_logger
+
+log = get_logger("pcap")
+
 try:
     from scapy.all import DNS, TCP, UDP, IP
 except ImportError:
@@ -12,8 +16,10 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
     suspect_dns = {s['domaine'] for s in suspect_domains}
     c2_ips = set()
     for beacon in c2_beacons.get('beacons', []):
-        ip = beacon['detail'].split('(')[0].split(' -> ')[-1].strip()
-        c2_ips.add(ip)
+        # "10.0.0.5 -> 185.220.101.42:443"
+        dst = beacon.get('connection', '').split(' -> ')[-1]
+        if dst:
+            c2_ips.add(dst.rsplit(':', 1)[0])
     
     # Extraction packets
     for pkt in packets:
@@ -31,7 +37,6 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
             # 2. HTTP Downloads / Beacons Start
             if pkt.haslayer(TCP) and pkt.haslayer(IP):
                 dst = pkt[IP].dst
-                pkt[TCP].dport
                 if dst in c2_ips:
                     # We only log the first packet per C2 to avoid spam
                     if not any(e["desc"].endswith(dst) for e in timeline if e["type"] == "C2 CONNECT"):
@@ -51,8 +56,8 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
                                     timeline.append({"time": ts, "type": "RECON (GEOIP)", "desc": "Requête de géolocalisation ou vérification de connectivité"})
                         except Exception:
                             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Paquet ignore dans la chronologie : %s", exc)
 
     # Sort and deduplicate timeline
     timeline.sort(key=lambda x: x["time"])

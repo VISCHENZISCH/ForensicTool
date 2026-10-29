@@ -54,23 +54,36 @@ class WindowsExecutionAnalyzer(BaseAnalyzer):
             if ext == ".pf":
                 artifact_type = "prefetch"
                 metadata["Format"] = "Windows Prefetch (.pf)"
-                metadata["Exécutable Source"] = fname.split('-')[0] + ".exe" if '-' in fname else fname
-                
+                metadata["Exécutable Source"] = fname.rsplit('-', 1)[0] if '-' in fname else fname
+                if data[:3] == b"MAM" and not HAS_SCCA:
+                    metadata["Avertissement"] = ("Prefetch compresse (Windows 10+) : contenu non decode, "
+                                                 "installer libscca-python (pyscca)")
+
                 if HAS_SCCA:
+                    scca_file = pyscca.file()
                     try:
-                        scca_file = pyscca.file()
                         scca_file.open(filepath)
+                        if scca_file.executable_filename:
+                            metadata["Exécutable Source"] = scca_file.executable_filename
                         metadata["Exécutions"] = str(scca_file.run_count)
-                        if scca_file.get_number_of_run_times() > 0:
-                            # Usually returns a datetime-like object or needs parsing
-                            metadata["Dernière Exécution"] = "Extraite (voir pyscca object)"
-                        filenames = []
-                        for i in range(scca_file.number_of_filenames):
-                            filenames.append(scca_file.get_filename(i))
-                        extra["chemins_touches"] = filenames
+                        # Jusqu'a 8 dates d'execution (Win8+), 0 = emplacement vide
+                        run_times = []
+                        for i in range(8):
+                            try:
+                                if scca_file.get_last_run_time_as_integer(i):
+                                    run_times.append(scca_file.get_last_run_time(i).isoformat())
+                            except Exception:  # index au-dela du format (XP/Vista : 1 seule date)
+                                break
+                        if run_times:
+                            metadata["Dernière Exécution"] = run_times[0]
+                            extra["executions"] = run_times
+                        extra["chemins_touches"] = list(scca_file.filenames)
                     except Exception as e:
-                        logger.debug(f"Erreur pyscca: {e}")
-                        
+                        logger.warning(f"Prefetch non decode par pyscca ({fname}) : {e}")
+                        metadata["Avertissement"] = f"Prefetch non decode (fichier corrompu ?) : {str(e).split('. ')[0]}"
+                    finally:
+                        scca_file.close()
+
                 if "chemins_touches" not in extra:
                     # Fallback heuristique
                     paths = re.findall(r'[A-Za-z]:\\[\w\\\.\-\ ]+\.\w+', text_content)

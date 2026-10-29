@@ -121,6 +121,7 @@ class EVTXAnalyzer(BaseAnalyzer):
             events = []
             security_events = []
             event_ids_counter: dict[int, int] = {}
+            unreadable = 0
 
             with evtx.Evtx(path) as log_file:
                 for record in log_file.records():
@@ -136,6 +137,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                                 security_events.append(parsed)
                     except Exception as exc:
                         log.debug("Enregistrement EVTX illisible : %s", exc)
+                        unreadable += 1
                         continue
 
             # Trier par timestamp
@@ -151,6 +153,10 @@ class EVTXAnalyzer(BaseAnalyzer):
                 "Evenements securite": str(len(security_events)),
                 "Event IDs uniques": str(len(event_ids_counter)),
             }
+            if unreadable:
+                meta["Enregistrements illisibles"] = str(unreadable)
+            if not events:
+                meta["Avertissement"] = "Aucun evenement lisible : fichier vide, corrompu ou chunks endommages"
 
             for eid, count in top_events[:10]:
                 desc = _SECURITY_EVENTS.get(eid, "")
@@ -162,8 +168,11 @@ class EVTXAnalyzer(BaseAnalyzer):
             # Export Timeline CSV & Anomalies
             import csv
             anomalies = []
-            csv_path = path + ".timeline.csv"
+            # Dans export/, jamais a cote de la preuve
+            csv_dir = os.path.join("export", "timelines")
+            csv_path = os.path.join(csv_dir, os.path.basename(path) + ".timeline.csv")
             try:
+                os.makedirs(csv_dir, exist_ok=True)
                 with open(csv_path, "w", encoding="utf-8", newline="") as f_csv:
                     writer = csv.writer(f_csv)
                     writer.writerow(["Timestamp", "EventID", "Description", "User", "Computer", "Details"])
@@ -213,7 +222,7 @@ class EVTXAnalyzer(BaseAnalyzer):
             if anomalies:
                 meta["Anomalies Comportementales"] = f"{len(anomalies)} détectées (ex: {anomalies[0]})"
                 
-            meta["Timeline Exportée"] = os.path.basename(csv_path)
+            meta["Timeline Exportée"] = csv_path
 
             return FindingModel(
                 type="evtx",

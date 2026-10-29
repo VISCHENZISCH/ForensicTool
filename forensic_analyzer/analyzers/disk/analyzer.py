@@ -310,6 +310,7 @@ def _analyze_extracted(local_path: str, origin: str) -> list[FindingModel]:
 class DiskAnalyzer(BaseAnalyzer):
     """Analyse forensique de disque - partitions, systemes de fichiers, MFT NTFS, ext via TSK."""
     name = "disk"
+    heavy = True
     supported_extensions = ('.raw', '.dd', '.img', '.001', '.E01', '.mft')
 
     def __init__(self, workdir: str | None = None) -> None:

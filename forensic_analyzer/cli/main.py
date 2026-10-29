@@ -188,13 +188,15 @@ def cli_dispatch():
             findings.append(res)
 
     if args.yara:
-        target = (args.scan or args.pdf or args.image or args.stego
-                  or args.pcap or args.disk or args.evtx
-                  or args.registry or args.linux or args.ioc)
-        if target:
-            res = YARAAnalyzer(args.yara).analyze(target)
-            if res:
-                findings.append(res)
+        targets = [t for t in (args.scan, args.pdf, args.image, args.stego, args.carve,
+                               args.pcap, args.disk, args.evtx, args.registry, args.linux,
+                               args.ioc, args.pe, args.elf, args.strings, args.mem) if t]
+        if targets:
+            yara = YARAAnalyzer(args.yara)
+            for target in dict.fromkeys(targets):
+                res = yara.analyze(target)
+                if res:
+                    findings.append(res)
         else:
             from forensic_analyzer.output import ui
             ui.info("Specifiez une cible a scanner avec YARA via --scan ou autre.")

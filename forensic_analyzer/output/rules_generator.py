@@ -38,6 +38,11 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", text).strip("_")[:60] or "artefact"
 
 
+def _suricata_content(text: str) -> str:
+    """Caracteres reserves d'un content Suricata en hexadecimal."""
+    return text.replace('"', "|22|").replace(";", "|3B|").replace("\\", "|5C|")
+
+
 def _yara_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -81,15 +86,22 @@ class DefenseRulesGenerator:
         """Une règle par binaire suspect : chaînes distinctives + en-tête du format, et ses empreintes."""
         rules = ['/*\n  Regles YARA generees par Forensic Analyzer\n*/\n\nimport "hash"\n']
         hashes = []
+        names: set[str] = set()
         for f in binaries:
             fmt, magic = _BINARY_TYPES[f.type]
             strings = _distinctive_strings(f)
             name = _slug(os.path.basename(f.metadata.get("Origine (image)", "").split(":")[-1] or f.file))
             sha256 = f.metadata.get("SHA-256", "")
             if sha256:
+                if sha256.lower() in hashes:
+                    continue  # meme binaire vu deux fois
                 hashes.append(sha256.lower())
             if not strings:
                 continue
+            base, n = name, 2
+            while name in names:
+                name, n = f"{base}_{n}", n + 1
+            names.add(name)
             modifiers = "ascii wide" if fmt == "PE" else "ascii"
             lines = [f'        $s{i} = "{_yara_escape(s)}" {modifiers}' for i, s in enumerate(strings)]
             needed = 1 if len(strings) == 1 else 2
@@ -126,9 +138,12 @@ class DefenseRulesGenerator:
                 rules.append(f'alert dns $HOME_NET any -> any any (msg:"FA - Resolution du domaine suspect {i.value}"; '
                              f'dns.query; content:"{i.value}"; nocase; endswith; classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "url":
+                # L'hote ancre la regle : un chemin court ("/x") seul alerterait sur tout le trafic HTTP
+                host = re.sub(r"^https?://", "", i.value, flags=re.I).split("/")[0].split(":")[0]
                 path = re.sub(r"^https?://[^/]+", "", i.value) or "/"
-                rules.append(f'alert http $HOME_NET any -> any any (msg:"FA - Requete vers URL suspecte"; '
-                             f'http.uri; content:"{path.replace(chr(34), "")[:200]}"; classtype:trojan-activity; sid:{sid}; rev:1;)')
+                uri = f' http.uri; content:"{_suricata_content(path[:200])}";' if path != "/" else ""
+                rules.append(f'alert http $HOME_NET any -> any any (msg:"FA - Requete vers URL suspecte {_suricata_content(host)}"; '
+                             f'http.host; content:"{_suricata_content(host)}"; nocase;{uri} classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "ja3":
                 rules.append(f'alert tls $HOME_NET any -> any any (msg:"FA - Empreinte JA3 suspecte"; '
                              f'ja3.hash; content:"{i.value}"; classtype:trojan-activity; sid:{sid}; rev:1;)')

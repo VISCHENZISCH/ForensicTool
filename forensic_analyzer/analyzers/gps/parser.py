@@ -73,23 +73,26 @@ class GPSParser:
                     alt = av.num / av.den
                     if hasattr(alt_r, 'values') and alt_r.values[0] == 1: alt = -alt
                     meta["Altitude (m)"] = round(alt, 2)
-                except Exception: pass
+                except Exception as exc:
+                    log.debug("Champ GPS Altitude illisible dans %s : %s", self.filepath, exc)
                 
             speed_t = tags.get("GPS GPSSpeed")
             if speed_t:
                 try:
                     val = speed_t.values[0]
                     meta["Vitesse (km/h)"] = round(val.num / val.den, 2)
-                except Exception: pass
+                except Exception as exc:
+                    log.debug("Champ GPS Vitesse illisible dans %s : %s", self.filepath, exc)
                 
             track_t = tags.get("GPS GPSTrack")
             if track_t:
                 try:
                     val = track_t.values[0]
                     meta["Direction (Degrés)"] = round(val.num / val.den, 2)
-                except Exception: pass
+                except Exception as exc:
+                    log.debug("Champ GPS Direction illisible dans %s : %s", self.filepath, exc)
                 
-            gps_date = tags.get("GPS GPSDateStamp")
+            gps_date = tags.get("GPS GPSDate") or tags.get("GPS GPSDateStamp")
             gps_time = tags.get("GPS GPSTimeStamp")
             gps_timestamp_str = ""
             if gps_date and gps_time:
@@ -100,7 +103,8 @@ class GPSParser:
                     s = int(gps_time.values[2].num / gps_time.values[2].den)
                     gps_timestamp_str = f"{date_str} {h:02d}:{m:02d}:{s:02d} UTC"
                     meta["Date/Heure GPS (UTC)"] = gps_timestamp_str
-                except Exception: pass
+                except Exception as exc:
+                    log.debug("Champ GPS Date/Heure GPS illisible dans %s : %s", self.filepath, exc)
                 
             exif_date = tags.get("EXIF DateTimeOriginal")
             if exif_date and gps_timestamp_str:

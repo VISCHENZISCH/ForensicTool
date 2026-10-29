@@ -99,16 +99,17 @@ class PCAPAnalyzer(BaseAnalyzer):
                 from forensic_analyzer.analyzers.malware.analyzer import MalwareAnalyzer
                 mw_analyzer = MalwareAnalyzer()
                 for idx, pe_data in enumerate(pe_files[:5]):  # limit to top 5 PEs to avoid taking forever
+                    fd, tmp_path = tempfile.mkstemp(suffix=".exe")
                     try:
-                        fd, tmp_path = tempfile.mkstemp(suffix=".exe")
                         with os.fdopen(fd, 'wb') as f:
                             f.write(pe_data)
                         mw_res = mw_analyzer.analyze(tmp_path)
                         if mw_res:
                             malware_hits.append(mw_res)
-                        os.remove(tmp_path)
                     except Exception as e:
                         log.debug(f"Auto-malware error: {e}")
+                    finally:
+                        os.remove(tmp_path)
 
             # Formatage des top IPs avec résolution DNS
             def format_ips(ip_counter):

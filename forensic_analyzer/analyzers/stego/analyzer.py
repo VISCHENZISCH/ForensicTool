@@ -159,7 +159,8 @@ def _extract_jpeg_comments(path: str) -> list[str]:
                 idx += 2 + length
             else:
                 idx += 1
-    except Exception: pass
+    except Exception as exc:
+        log.debug("Commentaires JPEG illisibles dans %s : %s", path, exc)
     return comments
 
 def _check_stego_signatures(path: str) -> list[str]:
@@ -261,6 +262,12 @@ class StegoAnalyzer(BaseAnalyzer):
                     suspicion_score += 3
                     
                 lsb_data = _extract_lsb(img, bits=1, channels="RGB")
+                # Message entrelace sur R, G et B : invisible canal par canal.
+                # 16 caracteres imprimables d'affilee n'arrivent pas par hasard (~1e-7 par position)
+                rgb_strs = [s for _, s in extract_strings_with_offsets(lsb_data, min_length=16)]
+                if rgb_strs:
+                    flat_meta["Strings LSB (RGB entrelace)"] = " | ".join(s[:80] for s in rgb_strs[:3])
+                    suspicion_score += 5
                 lsb_sample = lsb_data[:4096]
                 lsb_entropy = _byte_entropy(lsb_sample)
                 chi_lsb = _chi_square_test(lsb_sample)

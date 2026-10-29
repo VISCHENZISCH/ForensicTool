@@ -21,6 +21,8 @@ class BaseAnalyzer(ABC):
 
     name: str = "base"
     supported_extensions: tuple[str, ...] = ()
+    # Analyse gourmande en RAM (image disque, dump memoire) : une seule a la fois dans le pipeline
+    heavy: bool = False
 
     def can_handle(self, path: str) -> bool:
         """Retourne True si ce module peut traiter le fichier `path`."""

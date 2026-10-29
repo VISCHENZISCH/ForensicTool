@@ -59,7 +59,7 @@ _TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/")
 _SUSPICIOUS_PORTS = {4444, 4445, 1337, 31337, 6666, 6667, 8888, 9001}
 
 
-_LINUX_BANNER = re.compile(rb"Linux version (\d+\.\d+[\w.+-]*) \([^\x00\n]{1,200}")
+_LINUX_BANNER = re.compile(rb"Linux version (\d+\.\d+[\w.+-]*) \([\x20-\x7e]{1,200}")
 
 
 def detect_memory_os(path: str, chunk: int = 16 * 1024 * 1024) -> tuple[str, str]:
@@ -119,7 +119,10 @@ def _run_vol3_plugin(vol3_path: str, dump_path: str, plugin: str,
             return {
                 "success": False,
                 "plugin": plugin,
-                "error": result.stderr[:500] if result.stderr else "Code retour non-zero",
+                # La 1re ligne de stderr est la banniere "Volatility 3 Framework x.y"
+                "error": "\n".join(l for l in result.stderr.splitlines()
+                                   if not l.startswith("Volatility 3 Framework"))[:500]
+                         if result.stderr else "Code retour non-zero",
             }
 
         try:
@@ -342,6 +345,7 @@ def _extract_strings_from_dump(dump_path: str, patterns: list[str] | None = None
 class MemoryAnalyzer(BaseAnalyzer):
     """Analyse de dumps memoire via Volatility3."""
     name = "memory"
+    heavy = True
     supported_extensions = ('.raw', '.mem', '.dmp', '.vmem', '.lime')
 
     def can_handle(self, path: str) -> bool:

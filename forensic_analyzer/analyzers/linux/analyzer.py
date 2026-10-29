@@ -15,17 +15,17 @@ from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("linux_artifacts")
 
-# Patterns pour auth.log
+# Patterns pour auth.log : horodatage syslog classique ou RFC 3339 (rsyslog recent)
 _AUTH_FAILED = re.compile(
-    r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+\S+\s+sshd\[\d+\]:\s+'
+    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+'
     r'Failed password for (?:invalid user )?(\S+)\s+from\s+(\S+)',
 )
 _AUTH_SUCCESS = re.compile(
-    r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+\S+\s+sshd\[\d+\]:\s+'
+    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+'
     r'Accepted (?:password|publickey) for (\S+)\s+from\s+(\S+)',
 )
 _SUDO = re.compile(
-    r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+\S+\s+sudo:\s+(\S+)\s+:.*COMMAND=(.*)',
+    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sudo:\s+(\S+)\s+:.*COMMAND=(.*)',
 )
 
 # Commandes suspectes dans bash_history
@@ -114,16 +114,33 @@ def parse_bash_history(path: str) -> dict:
         return {"error": str(exc)}
 
 
+def _syslog_iso(ts: str, ref: datetime.datetime) -> str:
+    """
+    Horodatage syslog en ISO 8601. Le format classique n'a pas d'annee : on prend celle
+    de la derniere modification du journal, moins un si la date tombe apres (passage d'annee).
+    """
+    if ts[:4].isdigit():
+        return ts
+    try:
+        dt = datetime.datetime.strptime(f"{ref.year} {' '.join(ts.split())}", "%Y %b %d %H:%M:%S")
+    except ValueError:
+        return ts
+    if dt > ref + datetime.timedelta(days=1):
+        dt = dt.replace(year=ref.year - 1)
+    return dt.isoformat()
+
+
 def parse_auth_log(path: str) -> dict:
     """Parse un fichier auth.log pour extraire les evenements d'authentification."""
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+        ref = datetime.datetime.fromtimestamp(os.path.getmtime(path))
 
         failed = []
         for match in _AUTH_FAILED.finditer(content):
             failed.append({
-                "timestamp": match.group(1),
+                "timestamp": _syslog_iso(match.group(1), ref),
                 "user": match.group(2),
                 "source_ip": match.group(3),
             })
@@ -131,7 +148,7 @@ def parse_auth_log(path: str) -> dict:
         success = []
         for match in _AUTH_SUCCESS.finditer(content):
             success.append({
-                "timestamp": match.group(1),
+                "timestamp": _syslog_iso(match.group(1), ref),
                 "user": match.group(2),
                 "source_ip": match.group(3),
             })
@@ -139,7 +156,7 @@ def parse_auth_log(path: str) -> dict:
         sudo_cmds = []
         for match in _SUDO.finditer(content):
             sudo_cmds.append({
-                "timestamp": match.group(1),
+                "timestamp": _syslog_iso(match.group(1), ref),
                 "user": match.group(2),
                 "command": match.group(3)[:200],
             })
@@ -356,7 +373,8 @@ def find_suid_sgid(root_path: str = "/") -> list:
                         st = os.stat(fp)
                         if (st.st_mode & 0o4000) or (st.st_mode & 0o2000):
                             targets.append(fp)
-                    except Exception: pass
+                    except OSError as exc:
+                        log.debug("stat impossible sur %s : %s", fp, exc)
     return targets
 
 def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict,
