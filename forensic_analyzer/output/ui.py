@@ -1,12 +1,15 @@
 """
-ui.py - Systeme de design terminal pur ANSI pour Forensic Analyzer.
-Style hacker : double-lignes rouges, titres vert hacker et valeurs rouge hacker.
+ui.py - Système de design terminal pur ANSI pour Forensic Analyzer.
+Lignes et cadres sarcelle, titres cyan, valeurs claires ; rouge et orange réservés aux alertes.
 """
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import textwrap
+
+from forensic_analyzer.utils.terminal import neutralize, neutralize_data
 
 
 
@@ -20,7 +23,9 @@ class C:
     C_PARAM    = "\033[38;5;45m"   # Cyan/Vert pour Paramètres/Clés
     C_RESULT   = "\033[38;5;253m"  # Blanc/Gris clair pour Résultats
     C_DANGER   = "\033[38;5;196m"  # Rouge vif pour Alertes/Malwares
-    C_STRUCT   = "\033[38;5;239m"  # Gris sombre pour Structure
+    C_STRUCT   = "\033[38;5;30m"   # Sarcelle sombre : ponctuation (":", parenthèses)
+    C_LINE     = "\033[38;5;37m"   # Sarcelle : barres, cadres, prompt
+    C_WARN     = "\033[38;5;208m"  # Orange : sévérité intermédiaire
     
     # Matrix Colors (Pour la bannière historique)
     MG1 = "\033[38;5;22m"  # Très sombre
@@ -31,7 +36,7 @@ class C:
     MG6 = "\033[38;5;118m" # Vert-Jaune intense
 
     # Couleurs de base existantes (pour compatibilité)
-    R   = C_STRUCT
+    R   = C_LINE
     G   = "\033[38;5;46m"
     Y   = "\033[38;5;226m"
     B   = "\033[38;5;33m"
@@ -39,11 +44,12 @@ class C:
     M   = "\033[38;5;201m"
     P   = "\033[38;5;141m"
     W   = "\033[38;5;253m"
-    D   = "\033[38;5;244m"
+    D   = "\033[38;5;73m"
     HR  = C_DANGER
     HY  = Y
 
     BD  = "\033[1m"
+    STRIKE = "\033[2;9m"
     RS  = "\033[0m"
 
 
@@ -52,12 +58,12 @@ def c(color: str, text: str = "", bold: bool = False) -> str:
     return f"{C.BD if bold else ''}{color}{text}{C.RS if text else ''}"
 
 
-# Marge vide car deleguee au wrapper sys.stdout global
+# Marge vide car déléguée au wrapper sys.stdout global
 MARGIN = ""
 
 
 def _width() -> int:
-    """Largeur du terminal, capped a 80."""
+    """Largeur du terminal, plafonnée à 80."""
     try:
         return min(shutil.get_terminal_size().columns, 80)
     except Exception:
@@ -65,11 +71,11 @@ def _width() -> int:
 
 
 def clear_screen() -> None:
-    """Efface completement le terminal."""
+    """Efface complètement le terminal."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-# Banniere ASCII Art
+# Bannière ASCII Art
 
 BANNER = f"""
 {c(C.MG1, "0 1 ▓█████   ▒█████ 1 ██▀███  ▓█████ 0███▄    █   ██████  ██▓ ▄████▄ 1", bold=True)}
@@ -86,54 +92,49 @@ BANNER = f"""
 """
 
 def banner() -> None:
-    """Efface l'ecran et affiche le bandeau principal."""
+    """Efface l'écran et affiche le bandeau principal."""
     clear_screen()
     for line in BANNER.split("\n"):
         print(f"{MARGIN}{line}")
 
     print(f"{MARGIN}                      {c(C.HY, '© 2026 Félix TOVIGNAN')}")
     print(f"{MARGIN}         {c(C.G, 'https://github.com/VISCHENZISCH/ForensicTool.git')}")
-    print()
-
-    print(f"{MARGIN}  {c(C.W, 'usage Linux :', bold=True)} {c(C.D, './run.sh --help')}")
-    print(f"{MARGIN}  {c(C.W, 'usage Win   :', bold=True)} {c(C.D, '.\\\\run.ps1 --help')}")
-    print(f"{MARGIN}  {c(C.W, 'exemple     :', bold=True)} {c(C.D, '$')} {c(C.G, './run.sh')} {c(C.Y, '--scan ./evidence')} {c(C.VB, '--export-html rapport.html')}")
   
 
 
 
 # Menu principal
 
-def menu() -> None:
-    """Affiche le menu interactif complet avec double-lignes rouges."""
+def menu(unavailable: frozenset[str] = frozenset()) -> None:
+    """Affiche le menu ; les options dont le module n'a pas pu être chargé sont grisées."""
     w = _width()
 
     print()
 
     left = [
-        (f"{C.VB}{C.BD}Analyse Fichiers{C.RS}", None),
-        (f" {C.G}[01]{C.RS} {C.W}PDF - Metadonnees{C.RS}", None),
+        (f"{C.VB}{C.BD}Analyse de fichiers{C.RS}", None),
+        (f" {C.G}[01]{C.RS} {C.W}PDF - Métadonnées{C.RS}", None),
         (f" {C.G}[02]{C.RS} {C.W}Image / EXIF{C.RS}", None),
-        (f" {C.G}[03]{C.RS} {C.W}Coordonnees GPS{C.RS}", None),
+        (f" {C.G}[03]{C.RS} {C.W}Coordonnées GPS{C.RS}", None),
         (f" {C.G}[04]{C.RS} {C.W}Extraction Strings{C.RS}", None),
         (f" {C.G}[05]{C.RS} {C.W}Historique Firefox{C.RS}", None),
         (f" {C.G}[06]{C.RS} {C.W}Cookies Firefox{C.RS}", None),
         (f" {C.G}[07]{C.RS} {C.W}Artefacts Chromium{C.RS}", None),
         ("", None),
-        (f"{C.VB}{C.BD}Analyse Avancée{C.RS}", None),
-        (f" {C.G}[08]{C.RS} {C.W}Steganographie{C.RS}", None),
+        (f"{C.VB}{C.BD}Analyse avancée{C.RS}", None),
+        (f" {C.G}[08]{C.RS} {C.W}Stéganographie{C.RS}", None),
         (f" {C.G}[09]{C.RS} {C.W}File Carving{C.RS}", None),
         (f" {C.G}[10]{C.RS} {C.W}Analyse PCAP{C.RS}", None),
         (f" {C.G}[11]{C.RS} {C.W}Triage Malware (PE){C.RS}", None),
     ]
 
     right = [
-        (f"{C.VB}{C.BD}Analyse Système{C.RS}", None),
+        (f"{C.VB}{C.BD}Analyse système{C.RS}", None),
         (f" {C.G}[12]{C.RS} {C.W}Windows Event Logs{C.RS}", None),
         (f" {C.G}[13]{C.RS} {C.W}Registre Windows{C.RS}", None),
         (f" {C.G}[14]{C.RS} {C.W}Artefacts Linux{C.RS}", None),
-        (f" {C.G}[15]{C.RS} {C.W}Analyse Memoire{C.RS}", None),
-        (f" {C.G}[16]{C.RS} {C.W}Forensique Disque{C.RS}", None),
+        (f" {C.G}[15]{C.RS} {C.W}Analyse mémoire{C.RS}", None),
+        (f" {C.G}[16]{C.RS} {C.W}Forensique disque{C.RS}", None),
         (f" {C.G}[17]{C.RS} {C.W}Exécution Windows{C.RS}", None),
         ("", None),
         (f"{C.VB}{C.BD}Threat Hunting{C.RS}", None),
@@ -144,10 +145,16 @@ def menu() -> None:
         ("", None),
     ]
 
+    def option(text: str) -> str:
+        m = re.search(r"\[(\d\d)\]", text)
+        if m and str(int(m.group(1))) in unavailable:
+            return f" {C.STRIKE}[{m.group(1)}] {_strip_ansi(text).split('] ', 1)[1]}{C.RS} {C.HR}indisponible{C.RS}"
+        return text
+
     col_w = (w - 12) // 2
     for l_line, r_line in zip(left, right):
-        l_text = l_line[0]
-        r_text = r_line[0]
+        l_text = option(l_line[0])
+        r_text = option(r_line[0])
         l_visible = _strip_ansi(l_text)
         pad = col_w - len(l_visible)
         if pad < 0:
@@ -156,9 +163,9 @@ def menu() -> None:
 
     print()
     print(f"{MARGIN}   {C.VB}{C.BD}Outils{C.RS}")
-    print(f"{MARGIN}    {C.Y}[88]{C.RS} {C.W}Scan Automatique{C.RS}")
-    print(f"{MARGIN}    {C.Y}[99]{C.RS} {C.W}Exporter Rapport{C.RS}")
-    print(f"{MARGIN}    {C.R}[00]{C.RS} {C.W}Quitter{C.RS}")
+    print(f"{MARGIN}    {C.Y}[88]{C.RS} {C.W}Scan automatique{C.RS}")
+    print(f"{MARGIN}    {C.Y}[99]{C.RS} {C.W}Exporter le rapport{C.RS}")
+    print(f"{MARGIN}    {C.HR}[00]{C.RS} {C.W}Quitter{C.RS}")
     print()
 
 
@@ -168,10 +175,10 @@ def export_menu() -> None:
     print(f"{MARGIN}   {C.VB}{C.BD}Export{C.RS}")
     print(f"{MARGIN}    {C.G}[J]{C.RS}  {C.W}Export JSON{C.RS}")
     print(f"{MARGIN}    {C.G}[H]{C.RS}  {C.W}Export HTML (interactif){C.RS}")
-    print(f"{MARGIN}    {C.G}[C]{C.RS}  {C.W}Export CSV Timeline{C.RS}")
+    print(f"{MARGIN}    {C.G}[C]{C.RS}  {C.W}Export CSV de la timeline{C.RS}")
     print(f"{MARGIN}    {C.G}[P]{C.RS}  {C.W}Export PDF{C.RS}")
-    print(f"{MARGIN}    {C.G}[G]{C.RS}  {C.W}Graphe de correlation (HTML){C.RS}")
-    print(f"{MARGIN}    {C.G}[S]{C.RS}  {C.W}Regles YARA / Suricata / Sigma + STIX 2.1{C.RS}")
+    print(f"{MARGIN}    {C.G}[G]{C.RS}  {C.W}Graphe de corrélation (HTML){C.RS}")
+    print(f"{MARGIN}    {C.G}[S]{C.RS}  {C.W}Règles YARA / Suricata / Sigma + STIX 2.1{C.RS}")
     print(f"{MARGIN}    {C.D}[R]{C.RS}  {C.W}Retour{C.RS}")
     print()
 
@@ -209,7 +216,7 @@ def prompt_file(label: str) -> str | None:
         if os.path.exists(path):
             return os.path.abspath(path)
         error(f"Chemin introuvable : {path}")
-        info("Reessayez ou laissez vide pour annuler.")
+        info("Réessayez ou laissez vide pour annuler.")
 
 
 def prompt_input(label: str, required: bool = True) -> str | None:
@@ -227,26 +234,26 @@ def prompt_input(label: str, required: bool = True) -> str | None:
 # Messages
 
 def info(msg: str) -> None:
-    print(f"{MARGIN}{C.VB}[*]{C.RS} {C.W}{msg}{C.RS}")
+    print(f"{MARGIN}{C.VB}[*]{C.RS} {C.W}{neutralize(msg)}{C.RS}")
 
 
 def success(msg: str) -> None:
-    print(f"{MARGIN}{C.G}[+]{C.RS} {C.G}{msg}{C.RS}")
+    print(f"{MARGIN}{C.G}[+]{C.RS} {C.G}{neutralize(msg)}{C.RS}")
 
 
 def warning(msg: str) -> None:
-    print(f"{MARGIN}{C.HY}[!]{C.RS} {C.HY}{msg}{C.RS}")
+    print(f"{MARGIN}{C.HY}[!]{C.RS} {C.HY}{neutralize(msg)}{C.RS}")
 
 
 def error(msg: str) -> None:
-    print(f"{MARGIN}{C.HR}[-]{C.RS} {C.HR}{msg}{C.RS}")
+    print(f"{MARGIN}{C.HR}[-]{C.RS} {C.HR}{neutralize(msg)}{C.RS}")
 
 
 def status(msg: str) -> None:
-    print(f"{MARGIN}{C.D}[~]{C.RS} {C.D}{msg}{C.RS}")
+    print(f"{MARGIN}{C.D}[~]{C.RS} {C.D}{neutralize(msg)}{C.RS}")
 
 
-# Affichage des resultats
+# Affichage des résultats
 
 MODULE_TAGS = {
     "pdf": "PDF", "pdf_analysis": "PDF", "image": "IMG", "gps": "GPS", "strings": "STR",
@@ -259,22 +266,22 @@ MODULE_TAGS = {
 }
 
 MODULE_NAMES = {
-    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "image": "Analyse Image / EXIF",
-    "gps": "Coordonnees GPS", "strings": "Extraction Strings",
+    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "image": "Analyse d'image / EXIF",
+    "gps": "Coordonnées GPS", "strings": "Extraction Strings",
     "firefox_history": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
-    "stego": "Steganographie", "carving": "File Carving",
-    "pcap": "Analyse Reseau PCAP", "memory": "Analyse Memoire",
-    "disk": "Forensique Disque", "evtx": "Windows Event Logs",
+    "stego": "Stéganographie", "carving": "File Carving",
+    "pcap": "Analyse réseau PCAP", "memory": "Analyse mémoire",
+    "disk": "Forensique disque", "evtx": "Windows Event Logs",
     "registry": "Registre Windows", "linux_artifacts": "Artefacts Linux",
     "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
     "pe_analysis": "Triage Malware (PE)", "malware_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
-    "prefetch": "Execution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)",
-    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Integrite des preuves",
-    "correlation": "Correlation multi-sources"
+    "prefetch": "Exécution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)",
+    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Intégrité des preuves",
+    "correlation": "Corrélation multi-sources"
 }
 
 MODULE_COLORS = {
-    "pdf": C.R, "pdf_analysis": C.R, "image": C.Y, "gps": C.B, "strings": C.D,
+    "pdf": "\033[38;5;203m", "pdf_analysis": "\033[38;5;203m", "image": C.Y, "gps": C.B, "strings": C.D,
     "firefox_history": C.M, "firefox_cookies": C.P,
     "stego": "\033[38;5;198m", "carving": "\033[38;5;208m", 
     "pcap": C.VB, "memory": "\033[38;5;111m",
@@ -286,7 +293,7 @@ MODULE_COLORS = {
 }
 
 def separator(label: str = "", custom_color: str = C.G) -> None:
-    """Separateur double-ligne style hacker avec taille fixe de 85."""
+    """Séparateur double-ligne style hacker avec taille fixe de 85."""
     target_width = 85
     if label:
         text = f" {custom_color}{label}{C.RS} "
@@ -300,7 +307,7 @@ def separator(label: str = "", custom_color: str = C.G) -> None:
 
 
 def finding_header(finding_type: str, filename: str) -> None:
-    """Affiche l'entete d'un finding."""
+    """Affiche l'en-tête d'un finding."""
     tag = MODULE_TAGS.get(finding_type, "???")
     name = MODULE_NAMES.get(finding_type, finding_type)
     color = MODULE_COLORS.get(finding_type, C.G)
@@ -311,7 +318,7 @@ def finding_header(finding_type: str, filename: str) -> None:
 
 
 def kv(key: str, value, indent: int = 3) -> None:
-    """Affiche une paire cle-valeur en appliquant un retour a la ligne si besoin."""
+    """Affiche une paire cle-valeur en appliquant un retour à la ligne si besoin."""
     pad = " " * indent
     val_str = str(value)
 
@@ -324,24 +331,38 @@ def kv(key: str, value, indent: int = 3) -> None:
     if not lines:
         lines = [""]
 
-    import re
     def colorize(t):
         t = re.sub(r'\[([^\]]+)\]', f'[{C.C_DNS}\\1{C.C_RESULT}]', t)
         t = re.sub(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', f'{C.C_IP}\\1{C.C_RESULT}', t)
         t = re.sub(r'\((\d+)\)', f'{C.C_STRUCT}({C.C_USER}\\1{C.C_STRUCT}){C.C_RESULT}', t)
         return t
 
-    key_display = f"{C.C_PARAM}{key:<28}{C.RS}"
-    c_line0 = colorize(lines[0])
-    print(f"{MARGIN}{pad} {key_display} {C.C_STRUCT}:{C.RS} {C.C_RESULT}{c_line0}{C.RS}")
-    
+    severity = _severity(f"{key} {val_str}")
+    value_color = severity or C.C_RESULT
+    key_display = f"{severity or C.C_PARAM}{key:<28}{C.RS}"
+    print(f"{MARGIN}{pad} {key_display} {C.C_STRUCT}:{C.RS} {value_color}{colorize(lines[0]) if not severity else lines[0]}{C.RS}")
     for line in lines[1:]:
-        c_line = colorize(line)
-        print(f"{MARGIN}{' ' * offset}{C.C_RESULT}{c_line}{C.RS}")
+        print(f"{MARGIN}{' ' * offset}{value_color}{colorize(line) if not severity else line}{C.RS}")
+
+
+_CRITICAL = ("CRITIQUE", "Critique", "[ALERTE]", "DÉTECTÉ", "DÉTECTE", "STEGO CERTAINE", "MODIFIE", "ALTÉRÉ")
+_WARNING = ("Élevé", "Élevé", "Avertissement", "SUSPECT", "STEGO PROBABLE", "illisible")
+
+
+def _severity(text: str) -> str:
+    """Couleur d'une ligne selon sa gravité ("" si neutre)."""
+    if any(m in text for m in _CRITICAL):
+        return C.HR
+    if any(m in text for m in _WARNING):
+        return C.C_WARN
+    return ""
 
 
 def render_finding(finding) -> None:
     """Rendu complet d'un finding dans le terminal."""
+    finding = finding.model_copy(update={"file": neutralize(finding.file),
+                                         "metadata": neutralize_data(finding.metadata),
+                                         "extra": neutralize_data(finding.extra or {})})
     fname = os.path.basename(finding.file)
     finding_header(finding.type, fname)
 
@@ -353,7 +374,7 @@ def render_finding(finding) -> None:
     if finding.type == "strings" and "strings" in extra:
         strings = extra["strings"]
         print()
-        separator("Chaines extraites")
+        separator("Chaînes extraites")
         for i, s in enumerate(strings, 1):
             print(f"{MARGIN}    {C.D}{i:>4}.{C.RS} {C.W}{s}{C.RS}")
 
@@ -421,7 +442,7 @@ def render_finding(finding) -> None:
         creds = extra.get("credentials", [])
         if creds:
             print()
-            separator("Credentials detectes")
+            separator("Credentials détectés")
             for c_item in creds:
                 proto = c_item.get("protocol", "?")
                 data = c_item.get("data", c_item.get("user", str(c_item)))
@@ -430,8 +451,8 @@ def render_finding(finding) -> None:
         hosts = extra.get("host_identities", {})
         if hosts:
             print()
-            separator("Hotes / Identites")
-            # If hosts is a dict (IP -> details)
+            separator("Hôtes / Identités")
+            # If hosts is a dict (IP -> détails)
             if isinstance(hosts, dict):
                 for ip, h in list(hosts.items()):
                     macs = ", ".join(h.get("mac", []))
@@ -458,15 +479,15 @@ def render_finding(finding) -> None:
         iocs = extra["iocs"]
         if isinstance(iocs, dict):
             print()
-            separator("IOC detectes")
+            separator("IOC détectés")
             for ioc_type, items in iocs.items():
                 for item in (items if isinstance(items, list) else [items]):
                     print(f"{MARGIN}    {C.G}{ioc_type:<14}{C.RS} {C.W}{item}{C.RS}")
 
     elif finding.type == "timeline" and extra.get("facts"):
         print()
-        separator("Chronologie consolidee (confiance)")
-        marks = {"élevée": f"{C.G}ELEVEE ", "moyenne": f"{C.Y}MOYENNE", "faible": f"{C.D}FAIBLE "}
+        separator("Chronologie consolidée (confiance)")
+        marks = {"élevée": f"{C.G}ÉLEVÉE ", "moyenne": f"{C.Y}MOYENNE", "faible": f"{C.D}FAIBLE "}
         for fact in extra["facts"]:
             ts = fact["timestamp"].replace("+00:00", "Z")[:23]
             sources = "+".join(fact["sources"])[:24]
@@ -502,10 +523,10 @@ def render_finding(finding) -> None:
 
 
 def render_summary(report) -> None:
-    """Affiche le resume final de la session."""
+    """Affiche le résumé final de la session."""
     n = report.total
     if n == 0:
-        warning("Aucun resultat trouve.")
+        warning("Aucun résultat trouvé.")
         return
 
     type_counts: dict[str, int] = {}
@@ -522,8 +543,35 @@ def render_summary(report) -> None:
         print(f"{MARGIN}    {C.VB}[{tag}]{C.RS} {C.W}{C.BD}{count:<4}{C.RS} {C.G}{name}{C.RS}")
 
     print()
-    print(f"{MARGIN}{C.G}[+]{C.RS} {C.W}{n} resultat{'s' if n > 1 else ''}{C.RS}  {C.D}|{C.RS}  {C.D}{report.timestamp}{C.RS}")
+    print(f"{MARGIN}{C.G}[+]{C.RS} {C.W}{n} résultat{'s' if n > 1 else ''}{C.RS}  {C.D}|{C.RS}  {C.D}{report.timestamp}{C.RS}")
     print()
+
+
+
+# Écran de démarrage : chaque ligne correspond à une vérification effectuée
+
+def boot_section(title: str) -> None:
+    print()
+    print(f"{MARGIN}  {C.VB}{C.BD}{title}{C.RS}")
+
+
+def _fit(text: str, width: int) -> str:
+    """Tronque par le début : la fin d'un chemin est la partie utile."""
+    return text if len(text) <= width else "…" + text[-(width - 1):]
+
+
+def boot_item(ok: bool, name: str, detail: str, role: str) -> None:
+    mark = f"{C.G}✔{C.RS}" if ok else f"{C.C_WARN}✖{C.RS}"
+    detail_color = C.D if ok else C.C_WARN
+    print(f"{MARGIN}   {mark} {C.W}{name:<18}{C.RS} {detail_color}{_fit(detail, 26):<26}{C.RS} "
+          f"{C.C_PARAM}{role if len(role) <= 36 else role[:35] + '…'}{C.RS}")
+
+
+def boot_footer(ok: int, total: int, warnings: int, elapsed: float) -> None:
+    print()
+    state = f"{C.G}{C.BD}PRÊT{C.RS}" if not warnings else f"{C.C_WARN}{C.BD}PRÊT (mode dégradé){C.RS}"
+    print(f"{MARGIN}  {state}  {C.R}│{C.RS}  {C.W}{ok}/{total}{C.RS} {C.D}vérifications réussies{C.RS}  "
+          f"{C.R}│{C.RS}  {C.D}{elapsed:.2f} s{C.RS}")
 
 
 # Utilitaire interne
@@ -531,15 +579,14 @@ def render_summary(report) -> None:
 
 def _strip_ansi(text: str) -> str:
     """Supprime les codes ANSI pour calculer la longueur visible."""
-    import re
     return re.sub(r'\033\[[0-9;]*m', '', text)
 
 
 def wait_for_key() -> None:
-    """Attend que l'utilisateur appuie sur Entree."""
+    """Attend que l'utilisateur appuie sur Entrée."""
     try:
         print()
-        input(f"{MARGIN}{C.D}[Appuyez sur Entree pour continuer]{C.MG4}")
+        input(f"{MARGIN}{C.D}[Appuyez sur Entrée pour continuer]{C.MG4}")
     except (EOFError, KeyboardInterrupt):
         pass
     finally:

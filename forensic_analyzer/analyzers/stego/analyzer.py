@@ -1,4 +1,4 @@
-"""Analyzer steganographie - LSB, DCT, canal alpha, detection chi-square."""
+"""Analyzer stéganographie - LSB, DCT, canal alpha, détection chi-square."""
 from __future__ import annotations
 
 import math
@@ -13,9 +13,9 @@ log = get_logger("stego")
 
 
 def _chi_square_test(data: bytes) -> dict:
-    """Test du chi-carre sur les LSB pour detecter de la steganographie."""
+    """Test du chi-carre sur les LSB pour détecter de la stéganographie."""
     if len(data) < 256:
-        return {"detected": False, "score": 0.0, "detail": "Donnees insuffisantes"}
+        return {"detected": False, "score": 0.0, "detail": "Données insuffisantes"}
 
     observed = [0] * 256
     for b in data:
@@ -24,12 +24,12 @@ def _chi_square_test(data: bytes) -> dict:
     n = len(data)
     expected = n / 256.0
     if expected == 0:
-        return {"detected": False, "score": 0.0, "detail": "Donnees vides"}
+        return {"detected": False, "score": 0.0, "detail": "Données vides"}
 
     chi2 = sum((obs - expected) ** 2 / expected for obs in observed)
 
-    # Degres de liberte = 255
-    # Valeur critique a 5% pour 255 ddl ~ 293.2
+    # Degrés de liberté = 255
+    # Valeur critique à 5 % pour 255 ddl ~ 293.2
     critical = 293.2
     p_approx = max(0.0, 1.0 - (chi2 / (critical * 2)))
 
@@ -39,17 +39,25 @@ def _chi_square_test(data: bytes) -> dict:
         "score": round(chi2, 2),
         "critical_value": critical,
         "p_value_approx": round(p_approx, 4),
-        "detail": "Anomalie LSB detectee (distribution trop uniforme)" if detected
+        "detail": "Anomalie LSB détectée (distribution trop uniforme)" if detected
                   else "Distribution LSB normale"
     }
 
 
-# Valeur des `bits` bits de poids faible de chaque octet, en binaire sur `bits` caracteres
+# Valeur des `bits` bits de poids faible de chaque octet, en binaire sur `bits` caractères
 _LSB_TABLES = {bits: [format(v & ((1 << bits) - 1), f"0{bits}b") for v in range(256)] for bits in (1, 2, 4)}
 
 
+# Un message LSB commence au premier pixel : au-delà, une image piégée (bombe de décompression)
+# ferait construire des chaînes de plusieurs Go
+_MAX_LSB_PIXELS = 4_000_000
+
+
 def _extract_lsb(img, bits: int = 1, channels: str = "RGB") -> bytes:
-    """Extrait les bits de poids faible d'une image (canaux dans l'ordre demande, pixel par pixel)."""
+    """Extrait les bits de poids faible d'une image (canaux dans l'ordre demandé, pixel par pixel)."""
+    width, height = img.size
+    if width * height > _MAX_LSB_PIXELS:
+        img = img.crop((0, 0, width, max(1, _MAX_LSB_PIXELS // width)))
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
     raw = img.tobytes()
@@ -72,7 +80,7 @@ def _extract_lsb(img, bits: int = 1, channels: str = "RGB") -> bytes:
 
 
 def _analyze_alpha_channel(img) -> dict:
-    """Detecte un payload cache dans le canal alpha d'une image PNG."""
+    """Détecte un payload cache dans le canal alpha d'une image PNG."""
     if img.mode != "RGBA":
         return {"has_alpha": False, "detail": "Pas de canal alpha"}
 
@@ -95,7 +103,7 @@ def _analyze_alpha_channel(img) -> dict:
 
 
 def _analyze_dct_jpeg(path: str) -> dict:
-    """Analyse les coefficients DCT d'un JPEG pour detecter la stego."""
+    """Analyse les coefficients DCT d'un JPEG pour détecter la stego."""
     try:
         with open(path, "rb") as f:
             data = f.read()
@@ -107,7 +115,7 @@ def _analyze_dct_jpeg(path: str) -> dict:
         # Analyse de la distribution des octets dans les segments SOS
         sos_marker = data.find(b'\xFF\xDA')
         if sos_marker == -1:
-            return {"analyzed": False, "detail": "Pas de segment SOS trouve"}
+            return {"analyzed": False, "detail": "Pas de segment SOS trouvé"}
 
         sos_data = data[sos_marker + 2:]
         eoi = sos_data.find(b'\xFF\xD9')
@@ -173,7 +181,7 @@ def _check_stego_signatures(path: str) -> list[str]:
 
 
 def _byte_entropy(data: bytes) -> float:
-    """Calcule l'entropie de Shannon d'une sequence d'octets."""
+    """Calcule l'entropie de Shannon d'une séquence d'octets."""
     if not data:
         return 0.0
     freq = [0] * 256
@@ -189,7 +197,7 @@ def _byte_entropy(data: bytes) -> float:
 
 
 class StegoAnalyzer(BaseAnalyzer):
-    """Detecte et extrait la steganographie dans les images et audios."""
+    """Détecte et extrait la stéganographie dans les images et audios."""
     name = "stego"
     supported_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.wav')
 
@@ -209,7 +217,7 @@ class StegoAnalyzer(BaseAnalyzer):
                         width = w.getsampwidth()
                         frames = w.readframes(min(w.getnframes(), 1_000_000))
                         if frames:
-                            # LSB de l'octet de poids faible de chaque echantillon (PCM little-endian), 8 par octet
+                            # LSB de l'octet de poids faible de chaque échantillon (PCM little-endian), 8 par octet
                             bits = [b & 1 for b in frames[::width]]
                             lsb_audio = bytes(int("".join(map(str, bits[i:i + 8])), 2)
                                               for i in range(0, len(bits) - 7, 8))
@@ -259,7 +267,7 @@ class StegoAnalyzer(BaseAnalyzer):
                     
                 lsb_data = _extract_lsb(img, bits=1, channels="RGB")
                 # Message entrelace sur R, G et B : invisible canal par canal.
-                # 16 caracteres imprimables d'affilee n'arrivent pas par hasard (~1e-7 par position)
+                # 16 caractères imprimables d'affilée n'arrivent pas par hasard (~1e-7 par position)
                 rgb_strs = [s for _, s in extract_strings_with_offsets(lsb_data, min_length=16)]
                 if rgb_strs:
                     flat_meta["Strings LSB (RGB entrelace)"] = " | ".join(s[:80] for s in rgb_strs[:3])
@@ -282,7 +290,7 @@ class StegoAnalyzer(BaseAnalyzer):
                         results["alpha_analysis"] = _analyze_alpha_channel(rgba)
                     except Exception as exc:
                         log.debug("Conversion RGBA échouée : %s", exc)
-                        results["alpha_analysis"] = {"detail": "Conversion RGBA echouee"}
+                        results["alpha_analysis"] = {"detail": "Conversion RGBA échouée"}
 
                 # 3. Multi-bit LSB (2 et 4 bits)
                 for bits in (2, 4):
@@ -366,6 +374,6 @@ class StegoAnalyzer(BaseAnalyzer):
 
 
 def _safe_preview(data: bytes, max_len: int = 80) -> str:
-    """Renvoie un apercu ASCII safe des donnees extraites."""
+    """Renvoie un aperçu ASCII safe des données extraites."""
     printable = "".join(chr(b) if 32 <= b < 127 else "." for b in data[:max_len])
     return printable

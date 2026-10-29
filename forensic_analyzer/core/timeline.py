@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import re
+import unicodedata
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9_.@/-]*[a-z0-9]")
 # Mots trop génériques pour prouver que deux événements décrivent le même fait
@@ -18,7 +19,12 @@ _STOPWORDS = {
     "login", "logon", "authentification", "demarrage", "systemd", "pam_unix", "uid", "unit", "unite",
     "creation", "modification", "activation", "execution", "dev", "on", "to", "and", "et", "le", "la",
 }
-LOW_RELIABILITY = {"unit_modified"}  # mtime d'un fichier : falsifiable (timestomping)
+LOW_RELIABILITY = {"unit_modified"}
+
+
+def _fold(text: str) -> str:
+    """Minuscules sans accents : « Création » et « creation » donnent le même jeton."""
+    return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")  # mtime d'un fichier : falsifiable (timestomping)
 
 
 def parse_ts(ts: str) -> datetime.datetime | None:
@@ -33,11 +39,11 @@ def parse_ts(ts: str) -> datetime.datetime | None:
 
 
 def _tokens(event: dict) -> set[str]:
-    text = f"{event.get('description', '')} {event.get('details', '')}".lower()
+    text = _fold(f"{event.get('description', '')} {event.get('details', '')}")
     tokens = set()
     for tok in _TOKEN.findall(text):
         tok = re.sub(r"\.(service|timer|socket)$", "", tok).removeprefix("/dev/")
-        # Un chemin ou un nom compose partage aussi ses parties (/usr/.../sysupdate, systemd-sysupdate)
+        # Un chemin ou un nom composé partage aussi ses parties (/usr/.../sysupdate, systemd-sysupdate)
         variants = {tok, tok.rsplit("/", 1)[-1], *tok.rsplit("/", 1)[-1].split("-")}
         tokens.update(v for v in variants if v not in _STOPWORDS and not v.isdigit() and len(v) > 2)
     return tokens
@@ -56,7 +62,7 @@ def consolidate(events: list[dict], window: float = 2.0) -> list[dict]:
             timed.append((dt, _tokens(e), e))
     timed.sort(key=lambda t: t[0])
 
-    # Regroupement ancre sur le premier evenement de chaque fait (pas de fusion de proche en proche)
+    # Regroupement ancre sur le premier événement de chaque fait (pas de fusion de proche en proche)
     clusters: list[list[tuple]] = []
     for item in timed:
         dt, tokens, event = item

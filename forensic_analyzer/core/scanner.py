@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 
+from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
@@ -31,6 +32,39 @@ def collect_targets(path: str) -> list[str]:
 
     log.warning("Chemin introuvable : %s", path)
     return []
+
+
+def files_for(analyzer: BaseAnalyzer, path: str) -> list[str]:
+    """
+    Fichiers à donner à un analyzer choisi explicitement (menu, --pdf, --pe...).
+    Un dossier est parcouru récursivement et seuls les fichiers du type de l'analyzer sont gardes.
+    """
+    if analyzer.takes_directory or os.path.isfile(path):
+        return [os.path.abspath(path)]
+    files = collect_targets(path)
+    if analyzer.accepts_any_file:
+        return files
+    return [f for f in files if analyzer.can_handle(f)]
+
+
+class _SingleAnalyzer(AnalyzerRegistry):
+    """Registre d'un seul analyzer, applique aux fichiers déjà sélectionnés par files_for."""
+
+    def __init__(self, analyzer: BaseAnalyzer) -> None:
+        super().__init__()
+        self.register(analyzer)
+
+    def get_all_for(self, path: str) -> list[BaseAnalyzer]:
+        return self.analyzers
+
+
+def targeted_scan(analyzer: BaseAnalyzer, path: str, **analyze_kwargs) -> ReportModel:
+    """Dossier analyse par un seul module : même pipeline et mêmes logs que le scan automatique."""
+    targets = files_for(analyzer, path)
+    log.info("%d fichier(s) %s collecté(s) depuis '%s'", len(targets), analyzer.name.upper(), path)
+    if not targets:
+        return ReportModel(total=0, findings=[])
+    return run_pipeline(targets, _SingleAnalyzer(analyzer), **analyze_kwargs)
 
 
 def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:

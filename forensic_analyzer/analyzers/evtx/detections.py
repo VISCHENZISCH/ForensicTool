@@ -87,8 +87,8 @@ class EventDetector:
                     self.techniques.add("T1021.001")
             if ip and self.failures_by_source.get(ip, 0) >= 5:
                 self._alert(event, "success_after_failures",
-                            f"Connexion reussie de {_user(data)} depuis {ip} apres "
-                            f"{self.failures_by_source[ip]} echecs", "T1110", "critique")
+                            f"Connexion réussie de {_user(data)} depuis {ip} après "
+                            f"{self.failures_by_source[ip]} échecs", "T1110", "critique")
         elif eid == 4648:
             target = data.get("TargetServerName", "")
             if target and target.lower() not in ("localhost", "-"):
@@ -99,15 +99,15 @@ class EventDetector:
             name = data.get("ServiceName", "?")
             image = data.get("ImagePath") or data.get("ServiceFileName") or ""
             suspicious = bool(_SUSPICIOUS_SERVICE_PATH.search(image))
-            self._alert(event, "service_installed", f"Service installe : {name} -> {image}", "T1543.003",
+            self._alert(event, "service_installed", f"Service installé : {name} -> {image}", "T1543.003",
                         "critique" if suspicious else "moyenne")
         elif eid == 4698:
-            self._alert(event, "scheduled_task", f"Tache planifiee creee : {data.get('TaskName', '?')}",
+            self._alert(event, "scheduled_task", f"Tâche planifiée créée : {data.get('TaskName', '?')}",
                         "T1053.005", "moyenne")
         elif eid == 4720:
-            self._alert(event, "account_created", f"Compte cree : {_user(data)}", "T1136.001")
+            self._alert(event, "account_created", f"Compte créé : {_user(data)}", "T1136.001")
         elif eid in (4728, 4732, 4756) and data.get("TargetSid") in ADMIN_GROUPS:
-            self._alert(event, "admin_group", f"{data.get('MemberName') or data.get('MemberSid', '?')} ajoute au groupe "
+            self._alert(event, "admin_group", f"{data.get('MemberName') or data.get('MemberSid', '?')} ajouté au groupe "
                                               f"{data.get('TargetUserName', '?')}", "T1098", "critique")
         elif eid == 4104:
             self._command(event, data.get("ScriptBlockText", ""), "Script PowerShell")
@@ -126,7 +126,7 @@ class EventDetector:
                                 f"{data.get('Image')} -> {ip}:{data.get('DestinationPort', '?')}", "T1071")
         elif eid in (12, 13, 14) and _RUN_KEYS.search(data.get("TargetObject", "")):
             self._alert(event, "registry_persistence",
-                        f"Cle de demarrage modifiee : {data.get('TargetObject')} = {data.get('Details', '')}",
+                        f"Clé de démarrage modifiée : {data.get('TargetObject')} = {data.get('Details', '')}",
                         "T1547.001")
 
     def _command(self, event: dict, command: str, label: str) -> None:
@@ -141,11 +141,11 @@ class EventDetector:
             users = self.users_by_source[source]
             if len(users) >= SPRAY_USERS_THRESHOLD:
                 self._alert({"event_id": 4625}, "password_spraying",
-                            f"Pulverisation de mots de passe depuis {source} : {count} echecs sur {len(users)} comptes",
+                            f"Pulvérisation de mots de passe depuis {source} : {count} échecs sur {len(users)} comptes",
                             "T1110.003", "critique")
             elif count >= BRUTE_FORCE_THRESHOLD:
                 self._alert({"event_id": 4625}, "brute_force",
-                            f"Force brute depuis {source} : {count} echecs ({', '.join(sorted(users))[:120]})",
+                            f"Force brute depuis {source} : {count} échecs ({', '.join(sorted(users))[:120]})",
                             "T1110.001", "critique")
         if self.remote_logons:
             self.techniques.add("T1078")

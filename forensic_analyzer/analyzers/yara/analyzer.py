@@ -15,6 +15,7 @@ class YARAAnalyzer(BaseAnalyzer):
     """Scanne des fichiers avec des règles YARA."""
     name = "yara"
     supported_extensions = ()
+    takes_directory = True
 
     def __init__(self, rules_path: str | None = None) -> None:
         self._rules_path = rules_path

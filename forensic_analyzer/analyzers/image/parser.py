@@ -64,12 +64,12 @@ class ImageExifParser:
                     
                 # EXIF & Thumbnail
                 if exif_raw:
-                    # Detection Thumbnail (IFD 1 ou tag 513 JpegIFOffset)
+                    # Détection Thumbnail (IFD 1 ou tag 513 JpegIFOffset)
                     if 513 in exif_raw or 514 in exif_raw or exif_raw.get_ifd(0x014A):
                         data["Thumbnail Embedé"] = "OUI (Peut différer de l'image principale)"
                         
                     for tag_id, value in exif_raw.items():
-                        # Eviter de crasher sur les donnees binaires massives
+                        # Éviter de crasher sur les données binaires massives
                         if isinstance(value, bytes) and len(value) > 200:
                             continue
                         tag = PIL_TAGS.get(tag_id, str(tag_id))
@@ -80,7 +80,7 @@ class ImageExifParser:
                     
                 # Appended Data (Données après l'EOF de l'image)
                 # Très complexe via PIL, mais on peut vérifier si taille de fichier >> taille pixels brute
-                # Plus simple: lire la fin du fichier chercher des chaines en clair
+                # Plus simple: lire la fin du fichier chercher des chaînes en clair
                 try:
                     with open(self.filepath, "rb") as bf:
                         bf.seek(0, 2)

@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.sqlite_copy import connect_copy
 
 log = get_logger("firefox")
 
@@ -45,10 +45,6 @@ _COOKIES_SQL = """
     FROM moz_cookies
 """
 
-def _connect_ro(db_path: str) -> sqlite3.Connection:
-    """Ouvre la base en lecture seule pour éviter tout risque de corruption."""
-    return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-
 class FirefoxHistoryAnalyzer(BaseAnalyzer):
     """Extraction et Analyse de la base places.sqlite de Firefox."""
     name = "firefox_places"
@@ -59,7 +55,7 @@ class FirefoxHistoryAnalyzer(BaseAnalyzer):
 
     def analyze(self, path: str) -> FindingModel | None:
         try:
-            conn = _connect_ro(path)
+            conn = connect_copy(path)
             
             # 1. Historique & Visites
             try:
@@ -144,7 +140,7 @@ class FirefoxCookiesAnalyzer(BaseAnalyzer):
 
     def analyze(self, path: str) -> FindingModel | None:
         try:
-            conn = _connect_ro(path)
+            conn = connect_copy(path)
             try:
                 rows = conn.execute(_COOKIES_SQL).fetchall()
             except Exception as exc:

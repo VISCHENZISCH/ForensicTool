@@ -64,17 +64,17 @@ def extract_pe_from_streams(streams: dict[str, bytes]) -> list[bytes]:
                 break
             pe_pos = data.find(b'PE\0\0', pos, pos + 1024)
             if pe_pos != -1:
-                # On extrait tout jusqu'a la fin du stream ou un marqueur evident (simplifie)
+                # On extrait tout jusqu'à la fin du stream ou un marqueur évident (simplifié)
                 # En vrai carving, on lirait les headers PE, mais ici on dump le reste du stream
                 pe_data = data[pos:]
                 if len(pe_data) > 1024:
                     pe_files.append(pe_data)
-                break # 1 PE max par stream par simplicite
+                break # 1 PE max par stream par simplicité
             idx = pos + 2
     return pe_files
 
 def extract_payload_delivery(streams: dict[str, bytes]) -> list[dict]:
-    """Analyse heuristique pour detecter les telechargements de fichiers executables (Payload Delivery)."""
+    """Analyse heuristique pour détecter les téléchargements de fichiers exécutables (Payload Delivery)."""
     deliveries = []
     for stream_id, data in streams.items():
         if b"HTTP/1." in data and b"\r\n\r\n" in data:
@@ -99,21 +99,21 @@ def extract_payload_delivery(streams: dict[str, bytes]) -> list[dict]:
 
 
 def extract_http_exfiltration(streams: dict[str, bytes]) -> list[dict]:
-    """Parse le trafic HTTP POST/GET pour extraire les donnees exfiltrees (mots de passe, parametres C2)."""
+    """Parse le trafic HTTP POST/GET pour extraire les données exfiltrées (mots de passe, paramètres C2)."""
     import urllib.parse
     exfil_data = []
     
     for stream_id, data in streams.items():
         try:
-            # Recherche de requetes POST
+            # Recherche de requêtes POST
             if b"POST " in data:
                 parts = data.split(b"\r\n\r\n")
                 if len(parts) > 1:
                     headers = parts[0]
-                    body = parts[1].split(b"HTTP/1.")[0] # Prendre juste le body de la requete
+                    body = parts[1].split(b"HTTP/1.")[0] # Prendre juste le body de la requête
                     if len(body) > 0 and len(body) < 1000:
                         body_str = body.decode('utf-8', 'ignore').strip()
-                        # Si le corps ressemble a des donnees de formulaire (x-www-form-urlencoded)
+                        # Si le corps ressemble à des données de formulaire (x-www-form-urlencoded)
                         if b"application/x-www-form-urlencoded" in headers:
                             parsed = urllib.parse.parse_qs(body_str)
                             exfil_data.append({"stream": stream_id, "method": "POST", "payload": parsed})
@@ -122,7 +122,7 @@ def extract_http_exfiltration(streams: dict[str, bytes]) -> list[dict]:
                         else:
                             exfil_data.append({"stream": stream_id, "method": "POST RAW", "payload": body_str[:200]})
                             
-            # Recherche de parametres suspects dans les GET (Base64, longs hex)
+            # Recherche de paramètres suspects dans les GET (Base64, longs hex)
             if b"GET " in data:
                 first_line = data.split(b"\r\n")[0]
                 url = first_line.split(b" ")[1] if len(first_line.split(b" ")) > 1 else b""

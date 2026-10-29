@@ -8,43 +8,6 @@ Couche CLI pour Forensic Analyzer.
 import argparse
 import os
 
-from forensic_analyzer.analyzers.carving import CarvingAnalyzer
-from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
-from forensic_analyzer.analyzers.disk import DiskAnalyzer
-from forensic_analyzer.analyzers.elf import ELFAnalyzer
-from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
-from forensic_analyzer.analyzers.firefox import (
-    FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
-from forensic_analyzer.analyzers.gps import GPSAnalyzer
-from forensic_analyzer.analyzers.image import ImageAnalyzer
-from forensic_analyzer.analyzers.integrity import IntegrityAnalyzer
-from forensic_analyzer.analyzers.ioc import IOCAnalyzer
-from forensic_analyzer.analyzers.linux import \
-    LinuxArtifactsAnalyzer
-from forensic_analyzer.analyzers.memory import MemoryAnalyzer
-from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
-from forensic_analyzer.analyzers.pdf import PDFAnalyzer
-from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
-from forensic_analyzer.analyzers.registry import RegistryAnalyzer
-from forensic_analyzer.analyzers.stego import StegoAnalyzer
-from forensic_analyzer.analyzers.strings import StringsAnalyzer
-from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
-from forensic_analyzer.analyzers.windows_execution import \
-    WindowsExecutionAnalyzer
-from forensic_analyzer.analyzers.yara import YARAAnalyzer
-from forensic_analyzer.core.correlation import correlate
-from forensic_analyzer.core.scanner import auto_scan, default_registry
-from forensic_analyzer.models.finding import ReportModel
-from forensic_analyzer.output.csv_exporter import CSVExporter
-from forensic_analyzer.output.graph_renderer import render_correlation_graph
-from forensic_analyzer.output.html_exporter import HTMLExporter
-from forensic_analyzer.output.json_exporter import JSONExporter
-from forensic_analyzer.output.pdf_exporter import PDFExporter
-from forensic_analyzer.output.plain_renderer import PlainRenderer
-from forensic_analyzer.output.rich_renderer import RichRenderer
-from forensic_analyzer.utils.deps import HAS_RICH
-from forensic_analyzer.utils.network import set_online
-
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -52,10 +15,14 @@ def build_parser() -> argparse.ArgumentParser:
         description="Forensic Analyzer -- Suite forensique modulaire",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Chaque option d'analyse accepte un fichier ou un dossier : dans un dossier,
+seuls les fichiers du type demandé sont analysés (--pdf ./preuves -> les PDF).
+
 Exemples :
   python main.py                               # Menu interactif
   python main.py --scan ./evidence             # Scan automatique
   python main.py --pdf doc.pdf --export-html rapport.html
+  python main.py --pe ./preuves                # Tous les exécutables PE du dossier
   python main.py --pcap capture.pcap --export-json rapport.json
   python main.py --stego image.png
   python main.py --yara rules/ --scan ./samples
@@ -64,46 +31,46 @@ Exemples :
 
     # Analyses fichiers
     g1 = p.add_argument_group("Analyse de fichiers")
-    g1.add_argument("--scan",    metavar="CHEMIN",  help="Scan auto d'un fichier ou dossier")
-    g1.add_argument("--pdf",     metavar="FICHIER", help="Metadonnees PDF")
-    g1.add_argument("--image",   metavar="FICHIER", help="Metadonnees EXIF d'une image")
-    g1.add_argument("--gps",     metavar="FICHIER", help="Coordonnees GPS EXIF")
-    g1.add_argument("--strings", metavar="FICHIER", help="Chaines imprimables d'un binaire")
+    g1.add_argument("--scan",    metavar="CHEMIN",  help="Scan automatique d'un fichier ou d'un dossier")
+    g1.add_argument("--pdf",     metavar="FICHIER", help="Métadonnées PDF")
+    g1.add_argument("--image",   metavar="FICHIER", help="Métadonnées EXIF d'une image")
+    g1.add_argument("--gps",     metavar="FICHIER", help="Coordonnées GPS EXIF")
+    g1.add_argument("--strings", metavar="FICHIER", help="Chaînes imprimables d'un binaire")
     g1.add_argument("--fh",      metavar="SQLITE",  help="Historique Firefox (places.sqlite)")
     g1.add_argument("--fc",      metavar="SQLITE",  help="Cookies Firefox (cookies.sqlite)")
     g1.add_argument("--chromium", metavar="SQLITE", help="Artefacts Chromium (Chrome/Edge)")
 
-    # Analyse avancee
-    g2 = p.add_argument_group("Analyse avancee")
-    g2.add_argument("--stego",   metavar="IMAGE",   help="Steganographie (LSB, DCT, alpha)")
-    g2.add_argument("--carve",   metavar="FICHIER", help="File carving et polyglot detection")
-    g2.add_argument("--pcap",    metavar="PCAP",    help="Analyse reseau PCAP/PCAPNG")
+    # Analyse avancée
+    g2 = p.add_argument_group("Analyse avancée")
+    g2.add_argument("--stego",   metavar="IMAGE",   help="Stéganographie (LSB, DCT, alpha)")
+    g2.add_argument("--carve",   metavar="FICHIER", help="File carving et détection de polyglottes")
+    g2.add_argument("--pcap",    metavar="PCAP",    help="Analyse réseau PCAP/PCAPNG")
     g2.add_argument("--pe",      metavar="EXE",     help="Triage Malware (PE/Entropie)")
     g2.add_argument("--elf",     metavar="BINAIRE", help="Analyse statique d'un binaire Linux (ELF)")
 
-    # Analyse systeme
-    g3 = p.add_argument_group("Analyse systeme")
-    g3.add_argument("--mem",      metavar="DUMP",   help="Dump memoire RAM")
+    # Analyse système
+    g3 = p.add_argument_group("Analyse système")
+    g3.add_argument("--mem",      metavar="DUMP",   help="Dump mémoire RAM")
     g3.add_argument("--mem-os",   choices=["windows", "linux"], default=None,
-                    help="OS du dump (defaut : detection automatique)")
+                    help="OS du dump (défaut : détection automatique)")
     g3.add_argument("--mem-plugins", metavar="LIST", help="Plugins Volatility3 (virgule)")
     g3.add_argument("--mem-symbols", metavar="DOSSIER", help="Symboles ISF Volatility3 (requis pour Linux)")
     g3.add_argument("--disk",     metavar="IMAGE",  help="Image disque (MFT, ext4, ADS)")
     g3.add_argument("--evtx",     metavar="EVTX",   help="Windows Event Logs")
     g3.add_argument("--registry", metavar="HIVE",   help="Ruche registre Windows")
-    g3.add_argument("--winexec",  metavar="PF/LNK", help="Artefacts Execution (Prefetch, LNK)")
-    g3.add_argument("--linux",    metavar="CHEMIN",  help="Artefacts Linux (racine montee ou extraite)")
+    g3.add_argument("--winexec",  metavar="PF/LNK", help="Artefacts d'exécution (Prefetch, LNK)")
+    g3.add_argument("--linux",    metavar="CHEMIN",  help="Artefacts Linux (racine montée ou extraite)")
     g3.add_argument("--bodyfile", metavar="FICHIER", help="Bodyfile TSK (fls -r -m /) de l'image, avec --linux")
     g3.add_argument("--verify-hashes", metavar="MANIFESTE",
-                    help="Verifier les empreintes des preuves (format sha256sum) avant et apres l'analyse")
+                    help="Vérifier les empreintes des preuves (format sha256sum) avant et après l'analyse")
 
     # Threat Hunting
     g4 = p.add_argument_group("Threat Hunting")
-    g4.add_argument("--yara", metavar="REGLES", help="Regles YARA (.yar ou dossier)")
+    g4.add_argument("--yara", metavar="RÈGLES", help="Règles YARA (.yar ou dossier)")
     g4.add_argument("--ioc",  metavar="FICHIER", help="Extraction IOC automatique")
-    g4.add_argument("--update", action="store_true", help="Mettre a jour l'application depuis le depot distant")
+    g4.add_argument("--update", action="store_true", help="Mettre à jour l'application depuis le dépôt distant")
     g4.add_argument("--online", action="store_true",
-                    help="Autoriser les services en ligne : MalwareBazaar, VirusTotal, geocodage OSM")
+                    help="Autoriser les services en ligne : MalwareBazaar, VirusTotal, géocodage OSM")
 
     # Export
     g5 = p.add_argument_group("Export")
@@ -112,14 +79,52 @@ Exemples :
     g5.add_argument("--export-csv",  metavar="CSV",  help="Export CSV timeline DFIR")
     g5.add_argument("--export-pdf",  metavar="PDF",  help="Export PDF")
     g5.add_argument("--export-graph", metavar="HTML",
-                    help="Graphe interactif de la chaine de compromission (indicateurs partages)")
-    g5.add_argument("--export-rules", action="store_true", help="Regles YARA, Suricata, Sigma et bundle STIX 2.1 dans export/rules/")
+                    help="Graphe interactif de la chaîne de compromission (indicateurs partagés)")
+    g5.add_argument("--export-rules", action="store_true", help="Règles YARA, Suricata, Sigma et bundle STIX 2.1 dans export/rules/")
 
     return p
 
 
 def cli_dispatch():
     """Mode CLI avec argparse."""
+    # Imports ici : le menu interactif charge ses modules lui-même, à l'écran de démarrage
+    from forensic_analyzer.analyzers.carving import CarvingAnalyzer
+    from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
+    from forensic_analyzer.analyzers.disk import DiskAnalyzer
+    from forensic_analyzer.analyzers.elf import ELFAnalyzer
+    from forensic_analyzer.analyzers.evtx import EVTXAnalyzer
+    from forensic_analyzer.analyzers.firefox import (
+        FirefoxCookiesAnalyzer, FirefoxHistoryAnalyzer)
+    from forensic_analyzer.analyzers.gps import GPSAnalyzer
+    from forensic_analyzer.analyzers.image import ImageAnalyzer
+    from forensic_analyzer.analyzers.integrity import IntegrityAnalyzer
+    from forensic_analyzer.analyzers.ioc import IOCAnalyzer
+    from forensic_analyzer.analyzers.linux import \
+        LinuxArtifactsAnalyzer
+    from forensic_analyzer.analyzers.memory import MemoryAnalyzer
+    from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+    from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
+    from forensic_analyzer.analyzers.registry import RegistryAnalyzer
+    from forensic_analyzer.analyzers.stego import StegoAnalyzer
+    from forensic_analyzer.analyzers.strings import StringsAnalyzer
+    from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
+    from forensic_analyzer.analyzers.windows_execution import \
+        WindowsExecutionAnalyzer
+    from forensic_analyzer.analyzers.yara import YARAAnalyzer
+    from forensic_analyzer.core.correlation import correlate
+    from forensic_analyzer.core.scanner import auto_scan, default_registry, files_for
+    from forensic_analyzer.models.finding import ReportModel
+    from forensic_analyzer.output.csv_exporter import CSVExporter
+    from forensic_analyzer.output.graph_renderer import render_correlation_graph
+    from forensic_analyzer.output.html_exporter import HTMLExporter
+    from forensic_analyzer.output.json_exporter import JSONExporter
+    from forensic_analyzer.output.pdf_exporter import PDFExporter
+    from forensic_analyzer.output.plain_renderer import PlainRenderer
+    from forensic_analyzer.output.rich_renderer import RichRenderer
+    from forensic_analyzer.utils.deps import HAS_RICH
+    from forensic_analyzer.utils.network import set_online
+
     parser = build_parser()
     args = parser.parse_args()
 
@@ -166,13 +171,15 @@ def cli_dispatch():
         (args.winexec, WindowsExecutionAnalyzer),
     ]
 
+    def run(analyzer, path: str, **kwargs) -> None:
+        """Fichier, ou dossier filtre sur le type de l'analyzer (--pdf DOSSIER : seulement les PDF)."""
+        for f in files_for(analyzer, path):
+            res = analyzer.analyze(f, **kwargs)
+            findings.extend(r for r in (res if isinstance(res, list) else [res]) if r)
+
     for arg_val, cls in simple_analyzers:
         if arg_val:
-            res = cls().analyze(arg_val)
-            if isinstance(res, list):
-                findings.extend(res)
-            elif res:
-                findings.append(res)
+            run(cls(), arg_val)
 
     if args.linux:
         res = LinuxArtifactsAnalyzer().analyze(args.linux, bodyfile=args.bodyfile)
@@ -181,10 +188,7 @@ def cli_dispatch():
 
     if args.mem:
         plugins = args.mem_plugins.split(",") if args.mem_plugins else None
-        res = MemoryAnalyzer().analyze(args.mem, plugins=plugins, os_type=args.mem_os,
-                                       symbols_dir=args.mem_symbols)
-        if res:
-            findings.append(res)
+        run(MemoryAnalyzer(), args.mem, plugins=plugins, os_type=args.mem_os, symbols_dir=args.mem_symbols)
 
     if args.yara:
         targets = [t for t in (args.scan, args.pdf, args.image, args.stego, args.carve,
@@ -198,14 +202,14 @@ def cli_dispatch():
                     findings.append(res)
         else:
             from forensic_analyzer.output import ui
-            ui.info("Specifiez une cible a scanner avec YARA via --scan ou autre.")
+            ui.info("Indiquez une cible à scanner avec YARA (--scan ou une autre option d'analyse).")
 
     if args.verify_hashes:
         res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="finale")
         if res:
             findings.append(res)
 
-    # Vue transverse : indicateurs partages entre sources, puis chronologie consolidee
+    # Vue transverse : indicateurs partagés entre sources, puis chronologie consolidée
     correlation = correlate(findings) if findings else None
     if correlation:
         findings.append(correlation)
@@ -234,7 +238,7 @@ def cli_dispatch():
         DefenseRulesGenerator().generate(report, output_dir=os.path.join("export", "rules"))
 
 def main():
-    """Point d'entree : menu interactif par defaut, CLI si arguments."""
+    """Point d'entrée : menu interactif par défaut, CLI si arguments."""
     import sys
 
     from forensic_analyzer.utils.margin import MarginStdout

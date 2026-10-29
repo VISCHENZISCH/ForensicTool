@@ -5,6 +5,7 @@ from typing import Any
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.sqlite_copy import connect_copy
 
 logger = get_logger("forensic.chromium")
 
@@ -60,7 +61,7 @@ class ChromiumAnalyzer(BaseAnalyzer):
             elif "session" in fname or "tabs" in fname:
                 metadata["Type"] = "SNSS Session File"
                 metadata["Reconstruction Session"] = "Onglets/Historique de session (Format binaire propriétaire)"
-                # On peut juste lire les chaines ASCII
+                # On peut juste lire les chaînes ASCII
                 with open(filepath, "rb") as f:
                     content = f.read()
                     import re
@@ -70,13 +71,13 @@ class ChromiumAnalyzer(BaseAnalyzer):
                     extra["session_urls"] = urls
                     
             else:
-                conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
+                conn = connect_copy(filepath)
                 cursor = conn.cursor()
 
                 if fname == "history":
                     try:
                         cursor.execute("SELECT target_path, datetime((start_time/1000000)-11644473600, 'unixepoch'), total_bytes, danger_type FROM downloads LIMIT 500")
-                        downloads = [{"fichier": r[0], "date": r[1], "taille": r[2], "danger": r[3]} for r in cursor.fetchall()]
+                        downloads = [{"fichier": r[0], "date": r[1], "taille_octets": r[2], "danger_type": r[3]} for r in cursor.fetchall()]
                         metadata["Téléchargements"] = len(downloads)
                         extra["chromium_downloads"] = downloads
                     except Exception as exc:

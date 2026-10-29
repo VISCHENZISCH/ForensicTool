@@ -49,8 +49,6 @@ _CATEGORIES = {
 
 def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
     label = _TYPE_LABELS.get(f.type, f.type.upper())
-    html.escape(os.path.basename(f.file))
-    
     card_cls = "card card-inverse" if is_inverse else "card"
     row_cls = "table-row table-row-inverse" if is_inverse else "table-row"
     text_cls = "text-inverse" if is_inverse else "text-ink"
@@ -72,7 +70,7 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
         return f"<div class='{row_cls}'><div class='eyebrow {muted_cls} cell-key'>{html.escape(str(k))}</div><div class='body-sm {text_cls} cell-val mono' style='{danger_style}'>{html.escape(str(v))}</div></div>"
 
     if f.type == "strings" and "strings" in ext:
-        extra_rows += section_header("Chaines (Top 100)")
+        extra_rows += section_header("Chaînes (Top 100)")
         for i, s in enumerate(ext["strings"], 1):
             extra_rows += render_row(f"#{i}", s)
     elif f.type == "firefox_history" and "entries" in ext:
@@ -220,7 +218,6 @@ def build_interactive_html(report: ReportModel) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Forensic Analyzer Report</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {{
   --primary: #000000;
@@ -392,7 +389,7 @@ body {{
 
 
 class HTMLExporter:
-    """Genere un rapport HTML/PDF  utilisant le design system Figma."""
+    """Généré un rapport HTML/PDF  utilisant le design system Figma."""
 
     def export(self, report: ReportModel, output_path: str) -> None:
         filename = os.path.basename(output_path)

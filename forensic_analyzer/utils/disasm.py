@@ -210,7 +210,7 @@ def describe(result: dict | None, meta: dict, techniques: set[str], windows: boo
     for e in endpoints:
         e["ip"] = e["host"]
     if endpoints:
-        meta["[ALERTE] Destination reseau (desassemblage)"] = ", ".join(
+        meta["[ALERTE] Destination réseau (désassemblage)"] = ", ".join(
             f"{e['host'] or '?'}:{e['port'] or '?'}" for e in endpoints)
         if any(e["port"] and e["port"] not in _COMMON_PORTS for e in endpoints):
             techniques.add("T1571")
@@ -219,10 +219,10 @@ def describe(result: dict | None, meta: dict, techniques: set[str], windows: boo
     if summary["files"]:
         meta["Fichiers ouverts (constantes)"] = ", ".join(summary["files"][:10])
     if summary["commands"]:
-        meta["[ALERTE] Commandes executees"] = ", ".join(summary["commands"][:10])
+        meta["[ALERTE] Commandes exécutées"] = ", ".join(summary["commands"][:10])
         techniques.add("T1059.003" if windows else "T1059.004")
     if endpoints and summary["sleep_seconds"] and any(c["api"] == "connect" for c in result["calls"]):
-        meta["[ALERTE] Comportement"] = (f"Balise reseau probable : connexion vers "
+        meta["[ALERTE] Comportement"] = (f"Balise réseau probable : connexion vers "
                                          f"{endpoints[0]['host'] or '?'}:{endpoints[0]['port'] or '?'} "
                                          f"puis attente de {max(summary['sleep_seconds']):g} s")
     return result

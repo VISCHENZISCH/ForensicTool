@@ -3,6 +3,8 @@ import logging
 import re
 import sys
 
+from forensic_analyzer.utils.terminal import neutralize
+
 # Couleurs ANSI 256
 MG1 = "\033[38;5;28m"  # Vert sombre (Hacker)
 MG2 = "\033[38;5;34m"  # Vert moyen (Hacker)
@@ -46,7 +48,7 @@ class ColoredFormatter(logging.Formatter):
         # 3. Logger name (Sky Blue / Muted) — padé à 24 chars pour alignement
         logger_name = f"{COLOR_CYAN}{record.name:<24}{COLOR_RESET}"
 
-        msg = record.getMessage()
+        msg = neutralize(record.getMessage())
 
         # Coloration des tags comme [PDF]
         tag_match = TAG_RE.match(msg)

@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.spreadsheet import neutralize_formula
 
 log = get_logger("evtx")
 
@@ -16,29 +17,29 @@ try:
 except ImportError:
     HAS_EVTX = False
 
-# Event IDs d'interet forensique
+# Event IDs d'intérêt forensique
 _SECURITY_EVENTS = {
-    4624: "Logon reussi",
-    4625: "Logon echoue",
+    4624: "Logon réussi",
+    4625: "Logon échoué",
     4634: "Logoff",
     4648: "Logon avec credentials explicites",
-    4672: "Privileges speciaux assignes",
-    4688: "Nouveau processus cree",
-    4689: "Processus termine",
-    4697: "Service installe",
-    4698: "Tache planifiee creee",
-    4720: "Compte utilisateur cree",
-    4722: "Compte utilisateur active",
+    4672: "Privilèges spéciaux assignés",
+    4688: "Nouveau processus créé",
+    4689: "Processus terminé",
+    4697: "Service installé",
+    4698: "Tâche planifiée créée",
+    4720: "Compte utilisateur créé",
+    4722: "Compte utilisateur activé",
     4724: "Reset mot de passe",
-    4728: "Membre ajoute au groupe global",
-    4732: "Membre ajoute au groupe local",
-    4756: "Membre ajoute au groupe universel",
-    4768: "Kerberos TGT demande",
-    4769: "Kerberos service ticket demande",
-    4771: "Kerberos pre-authentication echouee",
+    4728: "Membre ajouté au groupe global",
+    4732: "Membre ajouté au groupe local",
+    4756: "Membre ajouté au groupe universel",
+    4768: "Kerberos TGT demandé",
+    4769: "Kerberos service ticket demandé",
+    4771: "Kerberos pre-authentication échouée",
     4776: "NTLM authentication",
-    7045: "Nouveau service installe",
-    1102: "Audit log efface",
+    7045: "Nouveau service installé",
+    1102: "Audit log effacé",
     4702: "Tâche planifiée modifiée",
     4104: "PowerShell Script Block",
 }
@@ -47,7 +48,7 @@ _NS = "{http://schemas.microsoft.com/win/2004/08/events/event}"
 
 
 def _parse_evtx_event(xml_str: str) -> dict | None:
-    """Parse un evenement EVTX depuis son XML."""
+    """Parse un événement EVTX depuis son XML."""
     try:
         root = ET.fromstring(xml_str)
         system = root.find(f"{_NS}System")
@@ -136,14 +137,14 @@ class EVTXAnalyzer(BaseAnalyzer):
 
             meta: dict = {
                 "Fichier": os.path.basename(path),
-                "Total evenements": str(len(events)),
-                "Evenements securite": str(len(security_events)),
+                "Total événements": str(len(events)),
+                "Événements sécurité": str(len(security_events)),
                 "Event IDs uniques": str(len(event_ids_counter)),
             }
             if unreadable:
                 meta["Enregistrements illisibles"] = str(unreadable)
             if not events:
-                meta["Avertissement"] = "Aucun evenement lisible : fichier vide, corrompu ou chunks endommages"
+                meta["Avertissement"] = "Aucun événement lisible : fichier vide, corrompu ou chunks endommagés"
 
             for eid, count in top_events[:10]:
                 desc = _SECURITY_EVENTS.get(eid, "")
@@ -154,7 +155,7 @@ class EVTXAnalyzer(BaseAnalyzer):
 
             import csv
             anomalies = []
-            # Dans export/, jamais a cote de la preuve
+            # Dans export/, jamais à côté de la preuve
             csv_dir = os.path.join("export", "timelines")
             csv_path = os.path.join(csv_dir, os.path.basename(path) + ".timeline.csv")
             try:
@@ -188,7 +189,8 @@ class EVTXAnalyzer(BaseAnalyzer):
                                             anomalies.append(f"Activité hors heures ({hour}h) par {user} (Event {eid})")
                             except Exception: pass
                             
-                        writer.writerow([ts, eid, e["description"], user, e.get("computer",""), details])
+                        writer.writerow([neutralize_formula(v) for v in
+                                         (ts, eid, e["description"], user, e.get("computer", ""), details)])
             except Exception as e:
                 log.warning(f"Impossible de créer la timeline CSV: {e}")
 
@@ -198,9 +200,9 @@ class EVTXAnalyzer(BaseAnalyzer):
             new_services = sum(1 for e in security_events if e["event_id"] in (4697, 7045))
 
             if failed_logons > 0:
-                meta["[ALERTE] Logons echoues"] = str(failed_logons)
+                meta["[ALERTE] Logons échoués"] = str(failed_logons)
             if audit_cleared > 0:
-                meta["[ALERTE] Audit log efface"] = str(audit_cleared)
+                meta["[ALERTE] Audit log effacé"] = str(audit_cleared)
             if new_services > 0:
                 meta["[ALERTE] Nouveaux services"] = str(new_services)
                 

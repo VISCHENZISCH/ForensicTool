@@ -117,7 +117,7 @@ class PCAPAnalyzer(BaseAnalyzer):
                 for ip, count in ip_counter.most_common(5):
                     domain_str = ""
                     if ip in dns_mappings and dns_mappings[ip]:
-                        # On prend le premier domaine resolu
+                        # On prend le premier domaine résolu
                         domain_str = f" [{dns_mappings[ip][0]}]"
                     result.append(f"{ip}{domain_str}({count})")
                 return ", ".join(result)
@@ -129,10 +129,10 @@ class PCAPAnalyzer(BaseAnalyzer):
                 "IPs source (top 5)": format_ips(src_ips),
                 "IPs dest (top 5)": format_ips(dst_ips),
                 "Hôtes / Identités": str(len(host_identities)),
-                "Credentials trouvees": str(len(credentials)),
-                "C2 Beacons detectes": str(len(c2_result["beacons"])),
+                "Credentials trouvées": str(len(credentials)),
+                "C2 Beacons détectés": str(len(c2_result["beacons"])),
                 "DNS Exfiltration": "OUI" if dns_exfil["detected"] else "NON",
-                "DNS Total requetes": str(dns_exfil.get("total_queries", 0)),
+                "DNS Total requêtes": str(dns_exfil.get("total_queries", 0)),
                 "Fichiers dans flux": str(len(extracted_files)),
             }
 

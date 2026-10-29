@@ -1,4 +1,4 @@
-"""Analyzer file carving - magic bytes, fichiers embarques, polyglot detection."""
+"""Analyzer file carving - magic bytes, fichiers embarqués, détection de polyglottes."""
 from __future__ import annotations
 
 import os
@@ -35,14 +35,14 @@ SIGNATURES: list[tuple[int, bytes, str, str]] = [
     (0, b'%PDF',                   "pdf",  "PDF Document"),
     (0, b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1', "doc", "OLE2 (DOC/XLS/PPT)"),
     (0, b'PK\x03\x04\x14\x00\x06\x00', "docx", "DOCX/XLSX/PPTX (OOXML)"),
-    # Executables
+    # Exécutables
     (0, b'\x7FELF',               "elf",  "ELF Executable"),
     (0, b'MZ',                     "exe",  "PE/DOS Executable"),
     (0, b'\xFE\xED\xFA\xCE',     "macho", "Mach-O 32-bit"),
     (0, b'\xFE\xED\xFA\xCF',     "macho", "Mach-O 64-bit"),
     (0, b'\xCF\xFA\xED\xFE',     "macho", "Mach-O 64-bit (reverse)"),
     (0, b'\xCA\xFE\xBA\xBE',     "class", "Java Class / Mach-O Fat"),
-    # Multimedia
+    # Multimédia
     (0, b'\x00\x00\x00\x1CftypM', "mp4",  "MP4 Video (ftyp)"),
     (0, b'\x00\x00\x00\x18ftyp', "mp4",   "MP4 Video (ftyp)"),
     (0, b'\x00\x00\x00\x20ftyp', "mp4",   "MP4 Video (ftyp)"),
@@ -52,7 +52,7 @@ SIGNATURES: list[tuple[int, bytes, str, str]] = [
     (0, b'fLaC',                   "flac", "FLAC Audio"),
     (0, b'ID3',                    "mp3",  "MP3 Audio (ID3)"),
     (0, b'\xFF\xFB',              "mp3",  "MP3 Audio (sync)"),
-    # Bases de donnees
+    # Bases de données
     (0, b'SQLite format 3\x00',   "sqlite","SQLite Database"),
     # Crypto / certs
     (0, b'-----BEGIN',             "pem",  "PEM Certificate/Key"),
@@ -79,7 +79,7 @@ _TERMINATORS = {
 
 
 def scan_magic_bytes(data: bytes, offset_base: int = 0) -> list[dict]:
-    """Scanne les magic bytes dans un buffer de donnees."""
+    """Scanne les magic bytes dans un buffer de données."""
     found = []
     data_len = len(data)
 
@@ -99,7 +99,7 @@ def scan_magic_bytes(data: bytes, offset_base: int = 0) -> list[dict]:
                     "description": desc,
                 })
             search_start = pos + 1
-            # Limiter pour eviter les boucles infinies sur de gros fichiers
+            # Limiter pour éviter les boucles infinies sur de gros fichiers
             if len(found) > 500:
                 break
         if len(found) > 500:
@@ -110,7 +110,7 @@ def scan_magic_bytes(data: bytes, offset_base: int = 0) -> list[dict]:
 
 
 def detect_embedded_files(data: bytes) -> list[dict]:
-    """Detecte les fichiers embarques dans un fichier hote."""
+    """Détecte les fichiers embarqués dans un fichier hôte."""
     embedded = []
 
     # Chercher ZIP dans un fichier
@@ -118,7 +118,7 @@ def detect_embedded_files(data: bytes) -> list[dict]:
     idx = 0
     while True:
         pos = data.find(zip_magic, idx)
-        if pos == -1 or pos == 0:  # On ignore l'offset 0 (c'est le fichier lui-meme)
+        if pos == -1 or pos == 0:  # On ignore l'offset 0 (c'est le fichier lui-même)
             break
         # Essayer de trouver la fin du ZIP
         end_central = data.find(b'PK\x05\x06', pos + 4)
@@ -130,11 +130,11 @@ def detect_embedded_files(data: bytes) -> list[dict]:
                 "offset": pos,
                 "offset_hex": hex(pos),
                 "estimated_size": zip_size,
-                "detail": f"Archive ZIP embarquee a l'offset {hex(pos)}",
+                "detail": f"Archive ZIP embarquée à l'offset {hex(pos)}",
             })
         idx = pos + 4
 
-    # Chercher PNG embarque
+    # Chercher PNG embarqué
     png_magic = b'\x89PNG\r\n\x1A\n'
     idx = 0
     while True:
@@ -149,11 +149,11 @@ def detect_embedded_files(data: bytes) -> list[dict]:
                 "offset": pos,
                 "offset_hex": hex(pos),
                 "estimated_size": png_size,
-                "detail": f"Image PNG embarquee a l'offset {hex(pos)}",
+                "detail": f"Image PNG embarquée à l'offset {hex(pos)}",
             })
         idx = pos + 8
 
-    # Chercher ELF embarque
+    # Chercher ELF embarqué
     elf_magic = b'\x7FELF'
     idx = 0
     while True:
@@ -169,7 +169,7 @@ def detect_embedded_files(data: bytes) -> list[dict]:
         })
         idx = pos + 4
 
-    # Chercher PDF embarque
+    # Chercher PDF embarqué
     pdf_magic = b'%PDF'
     idx = 0
     while True:
@@ -183,11 +183,11 @@ def detect_embedded_files(data: bytes) -> list[dict]:
             "offset": pos,
             "offset_hex": hex(pos),
             "estimated_size": pdf_size,
-            "detail": f"Document PDF embarque a l'offset {hex(pos)}",
+            "detail": f"Document PDF embarqué à l'offset {hex(pos)}",
         })
         idx = pos + 4
         
-    # Chercher JPEG embarque / fragmente
+    # Chercher JPEG embarqué / fragmenté
     jpg_magic = b'\xFF\xD8\xFF'
     idx = 0
     while True:
@@ -226,7 +226,7 @@ def detect_embedded_files(data: bytes) -> list[dict]:
 
 
 def detect_polyglot(data: bytes, path: str) -> list[str]:
-    """Detecte si un fichier est un polyglot (valide dans plusieurs formats)."""
+    """Détecte si un fichier est un polyglot (valide dans plusieurs formats)."""
     os.path.splitext(path)[1].lower()
     polyglots = []
 
@@ -238,7 +238,7 @@ def detect_polyglot(data: bytes, path: str) -> list[str]:
     if data[:4] == b'%PDF' and b'PK\x03\x04' in data:
         polyglots.append("PDF+ZIP polyglot")
 
-    # PNG + ZIP (apres IEND)
+    # PNG + ZIP (après IEND)
     if data[:8] == b'\x89PNG\r\n\x1A\n':
         iend_pos = data.find(b'IEND')
         if iend_pos != -1 and data.find(b'PK\x03\x04', iend_pos) != -1:
@@ -256,7 +256,7 @@ def detect_polyglot(data: bytes, path: str) -> list[str]:
 
 
 def _try_repair_zip(data: bytes, zip_start: int) -> dict:
-    """Tente de verifier/reparer un ZIP corrompu."""
+    """Tente de vérifier/réparer un ZIP corrompu."""
     zip_data = data[zip_start:]
     result = {
         "valid_local_headers": 0,
@@ -285,7 +285,7 @@ def _try_repair_zip(data: bytes, zip_start: int) -> dict:
 
 
 class CarvingAnalyzer(BaseAnalyzer):
-    """File carving - detecte et extrait les fichiers embarques via magic bytes."""
+    """File carving - détecte et extrait les fichiers embarqués via magic bytes."""
     name = "carving"
     supported_extensions = ('.dd', '.img', '.bin', '.vmem', '.iso', '.raw', '.dump')
 
@@ -300,7 +300,7 @@ class CarvingAnalyzer(BaseAnalyzer):
     def analyze(self, path: str) -> FindingModel | None:
         try:
             file_size = os.path.getsize(path)
-            # Limiter la lecture a 100 Mo
+            # Limiter la lecture à 100 Mo
             max_read = min(file_size, 100 * 1024 * 1024)
 
             with open(path, "rb") as f:
@@ -317,7 +317,7 @@ class CarvingAnalyzer(BaseAnalyzer):
             evidence_dir = os.path.dirname(os.path.abspath(path))
             out_dir = os.path.abspath(os.path.join(self.workdir, f"carved_{os.path.basename(path)}"))
             if out_dir == evidence_dir or out_dir.startswith(evidence_dir + os.sep):
-                log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulee (%s)", out_dir)
+                log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulée (%s)", out_dir)
             elif embedded:
                 os.makedirs(out_dir, exist_ok=True)
                 for idx, emb in enumerate(embedded):
@@ -353,10 +353,10 @@ class CarvingAnalyzer(BaseAnalyzer):
 
             meta: dict = {
                 "Taille fichier": f"{file_size:,} octets",
-                "Taille analysee": f"{max_read:,} octets",
-                "Signatures trouvees": str(len(magic_hits)),
-                "Fichiers embarques": str(len(embedded)),
-                "Polyglots detectes": ", ".join(polyglots) if polyglots else "Aucun",
+                "Taille analysée": f"{max_read:,} octets",
+                "Signatures trouvées": str(len(magic_hits)),
+                "Fichiers embarqués": str(len(embedded)),
+                "Polyglots détectés": ", ".join(polyglots) if polyglots else "Aucun",
             }
             if extracted_paths:
                 meta["Fichiers extraits (DUMP)"] = f"Sauvegardés dans {out_dir}"

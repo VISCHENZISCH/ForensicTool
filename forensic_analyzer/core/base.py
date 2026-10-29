@@ -21,8 +21,12 @@ class BaseAnalyzer(ABC):
 
     name: str = "base"
     supported_extensions: tuple[str, ...] = ()
-    # Analyse gourmande en RAM (image disque, dump memoire) : une seule a la fois dans le pipeline
+    # Analyse gourmande en RAM (image disque, dump mémoire) : une seule à la fois dans le pipeline
     heavy: bool = False
+    # Analyse ciblée sur un dossier : chaque fichier du dossier (Strings, IOC)...
+    accepts_any_file: bool = False
+    # ...ou le dossier lui-même, qui a un sens propre (racine Linux, cible YARA)
+    takes_directory: bool = False
 
     def can_handle(self, path: str) -> bool:
         """Retourne True si ce module peut traiter le fichier `path`."""

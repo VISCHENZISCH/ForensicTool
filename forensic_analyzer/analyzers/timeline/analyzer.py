@@ -1,4 +1,4 @@
-"""Analyzer Timeline - correlation multi-sources et export DFIR."""
+"""Analyzer Timeline - corrélation multi-sources et export DFIR."""
 from __future__ import annotations
 
 import datetime
@@ -12,10 +12,13 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("timeline")
 
 
-def _normalize_timestamp(ts: str) -> str:
-    """Tente de normaliser un timestamp en ISO 8601."""
+def _normalize_timestamp(ts) -> str:
+    """Tente de normaliser un timestamp en ISO 8601 (chaîne, ou datetime fourni par LnkParse3)."""
+    if isinstance(ts, datetime.datetime):
+        return ts.isoformat()
     if not ts or ts == "N/A":
         return ""
+    ts = str(ts)
     if "T" in ts:
         return ts
     for fmt in (
@@ -37,8 +40,8 @@ def _normalize_timestamp(ts: str) -> str:
 
 def build_timeline(report: ReportModel) -> list[dict]:
     """
-    Construit une timeline unifiee a partir de tous les findings du rapport.
-    Correle les timestamps de toutes les sources.
+    Construit une timeline unifiée à partir de tous les findings du rapport.
+    Corrélé les timestamps de toutes les sources.
     """
     events: list[dict] = []
 
@@ -46,7 +49,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
         source = finding.type
         file = os.path.basename(finding.file)
 
-        # Evenements deja normalises par l'analyzer (Linux, memoire, ...)
+        # Événements déjà normalises par l'analyzer (Linux, mémoire, ...)
         events.extend(finding.extra.get("timeline_events", []))
 
         # PDF timestamps
@@ -127,7 +130,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "timestamp": _normalize_timestamp(entry.get("timestamp", "")),
                     "source": "auth.log",
                     "event_type": "login_failed",
-                    "description": f"Echec SSH: {entry.get('user', '?')} depuis {entry.get('source_ip', '?')}",
+                    "description": f"Échec SSH: {entry.get('user', '?')} depuis {entry.get('source_ip', '?')}",
                     "file": file,
                     "details": str(entry),
                 })
@@ -155,7 +158,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
                         "details": url.get("titre", ""),
                     })
             for dl in finding.extra.get("chromium_downloads", []):
-                ts = dl.get("debut", "")
+                ts = dl.get("date", "")
                 if ts:
                     events.append({
                         "timestamp": _normalize_timestamp(ts),
@@ -166,9 +169,9 @@ def build_timeline(report: ReportModel) -> list[dict]:
                         "details": f"URL: {dl.get('url', '?')}",
                     })
 
-        # Windows Execution
+        # Windows Exécution
         elif source in ("prefetch", "lnk_shortcut"):
-            ts = finding.metadata.get("Dernière Exécution", "") or finding.metadata.get("Creation", "")
+            ts = finding.metadata.get("Dernière Exécution", "") or finding.metadata.get("Date Création (LNK)", "")
             if ts:
                 events.append({
                     "timestamp": _normalize_timestamp(ts),
@@ -200,14 +203,14 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "details": str(cred),
                 })
 
-    # Trier chronologiquement (les evenements sans date en fin de liste)
+    # Trier chronologiquement (les événements sans date en fin de liste)
     far_future = parse_ts("9999-01-01T00:00:00")
     events.sort(key=lambda e: parse_ts(e.get("timestamp", "")) or far_future)
     return events
 
 
 class TimelineAnalyzer(BaseAnalyzer):
-    """Construit une timeline forensique unifiee multi-sources."""
+    """Construit une timeline forensique unifiée multi-sources."""
     name = "timeline"
     supported_extensions = ()
 
@@ -227,19 +230,19 @@ class TimelineAnalyzer(BaseAnalyzer):
             sources[src] = sources.get(src, 0) + 1
 
         meta: dict = {
-            "Total evenements": str(len(events)),
+            "Total événements": str(len(events)),
         }
         for src, count in sorted(sources.items(), key=lambda x: -x[1]):
             meta[f"Source: {src}"] = str(count)
 
         if events:
-            meta["Premier evenement"] = events[0].get("timestamp", "?")
-            meta["Dernier evenement"] = events[-1].get("timestamp", "?")
+            meta["Premier événement"] = events[0].get("timestamp", "?")
+            meta["Dernier événement"] = events[-1].get("timestamp", "?")
 
         facts = consolidate(events)
         if facts:
             levels = {lvl: sum(f["confidence"] == lvl for f in facts) for lvl in ("élevée", "moyenne", "faible")}
-            meta["Faits consolides"] = (f"{len(facts)} (confiance elevee {levels['élevée']}, "
+            meta["Faits consolides"] = (f"{len(facts)} (confiance élevée {levels['élevée']}, "
                                         f"moyenne {levels['moyenne']}, faible {levels['faible']})")
 
         return FindingModel(

@@ -45,7 +45,7 @@ def categorize_strings(strings_with_offsets: list[tuple[int, str]]) -> dict[str,
     
     url_pat = re.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+')
     ip_pat = re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b')
-    email_pat = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+    email_pat = re.compile(r'[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,253}\.[a-zA-Z]{2,24}')  # borne : pas de ReDoS
     path_win_pat = re.compile(r'[a-zA-Z]:\\[^:\*\?"<>\|]+')
     path_lin_pat = re.compile(r'(?:/[a-zA-Z0-9_.-]+)+')
     reg_pat = re.compile(r'(?i)(?:HKLM|HKCU|HKCR|HKU|HKCC|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\[a-zA-Z0-9_.\\]+')

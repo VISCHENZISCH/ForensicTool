@@ -1,4 +1,4 @@
-"""Renderer terminal principal utilisant le systeme de design pur ANSI style TheFatRat."""
+"""Renderer terminal principal utilisant le système de design pur ANSI style TheFatRat."""
 from __future__ import annotations
 
 from forensic_analyzer.models.finding import FindingModel, ReportModel

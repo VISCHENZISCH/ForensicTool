@@ -64,7 +64,7 @@ def test_linux_memory_correlations():
     assert len(extra["exited_tasks"]) == 1
     assert extra["suspicious_processes"][0]["pid"] == 315
     assert extra["remote_sockets"][0]["dst"] == "203.0.113.50:4444"
-    assert meta["Appels systeme"] == "1/2 handlers vers le noyau"
+    assert meta["Appels système"] == "1/2 handlers vers le noyau"
     assert {"T1014", "T1564.001", "T1571"} <= techniques
 
 

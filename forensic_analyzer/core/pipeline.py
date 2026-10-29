@@ -53,7 +53,7 @@ class AnalyzerRegistry:
         return f"AnalyzerRegistry([{', '.join(a.name for a in self._analyzers)}])"
 
 
-def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
+def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs) -> ReportModel:
     """
     Exécute le pipeline d'analyse sur une liste de fichiers.
     Optimisé pour le parallélisme via ThreadPoolExecutor.
@@ -65,7 +65,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
     Returns:
         ReportModel: Modèle consolidé avec tous les résultats.
     """
-    # Plusieurs Volatility ou pytsk3 en parallele saturent la RAM
+    # Plusieurs Volatility ou pytsk3 en parallèle saturent la RAM
     heavy_lock = threading.Lock()
 
     def process_path(path: str) -> list[FindingModel]:
@@ -83,9 +83,9 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry) -> ReportModel:
             try:
                 if analyzer.heavy:
                     with heavy_lock:
-                        res = analyzer.analyze(path)
+                        res = analyzer.analyze(path, **analyze_kwargs)
                 else:
-                    res = analyzer.analyze(path)
+                    res = analyzer.analyze(path, **analyze_kwargs)
             except Exception as exc:
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
                 continue

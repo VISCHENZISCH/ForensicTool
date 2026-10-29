@@ -100,7 +100,7 @@ class ELFAnalyzer(BaseAnalyzer):
 
         capa = run_capa(path)
         if capa:
-            meta["capa"] = ", ".join(capa["capabilities"][:15]) or "aucune capacite"
+            meta["capa"] = ", ".join(capa["capabilities"][:15]) or "aucune capacité"
             techniques.update(capa["attack"])
 
         yara_hits = scan_yara(path)

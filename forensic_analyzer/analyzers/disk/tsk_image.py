@@ -141,11 +141,11 @@ class ImageFS:
         with open(dest, "wb") as out:
             for block in self._chunks(f, MAX_EXTRACT):
                 out.write(block)
-        # Dates d'origine : l'annee des journaux syslog (sans annee) s'en deduit
+        # Dates d'origine : l'année des journaux syslog (sans année) s'en déduit
         try:
             os.utime(dest, (f.info.meta.atime, f.info.meta.mtime))
         except (OSError, OverflowError) as exc:
-            log.debug("Dates d'origine non appliquees a %s : %s", dest, exc)
+            log.debug("Dates d'origine non appliquées à %s : %s", dest, exc)
         return dest
 
     def triage(self, entries: list[BodyEntry], dest_root: str, extra_paths: set[str] = frozenset()) -> list[str]:

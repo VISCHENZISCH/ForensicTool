@@ -140,7 +140,7 @@ def test_consolidation_confidence_levels():
     facts = consolidate([
         _ev("2026-10-21T08:54:37.812+00:00", "journald", "Started systemd-sysupdate.service - System Update Helper."),
         _ev("2026-10-21T08:54:37.824+00:00", "audit.log", "SERVICE_START systemd-sysupdate"),
-        _ev("2026-10-21T08:55:00+00:00", "bodyfile", "Modification de l'unite /etc/x.service", "unit_modified"),
+        _ev("2026-10-21T08:55:00+00:00", "bodyfile", "Modification de l'unité /etc/x.service", "unit_modified"),
         _ev("2026-10-21T09:00:00+00:00", "journald", "System is powering down."),
     ])
     assert [(f["confidence"], f["sources"]) for f in facts] == [

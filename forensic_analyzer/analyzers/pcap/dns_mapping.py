@@ -58,7 +58,7 @@ def extract_dns_mappings(packets) -> dict[str, list[str]]:
                 rr = dns.an[i]
                 # Type 1 = A (IPv4), Type 28 = AAAA (IPv6)
                 if rr.type in (1, 28) and hasattr(rr, 'rdata') and hasattr(rr, 'rrname'):
-                    # Selon la version de scapy, rdata peut etre bytes ou str
+                    # Selon la version de scapy, rdata peut être bytes ou str
                     ip = rr.rdata
                     if isinstance(ip, bytes):
                         ip = ip.decode('utf-8', 'ignore')

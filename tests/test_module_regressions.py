@@ -1,8 +1,10 @@
-"""Non-regression des bugs trouves en faisant tourner chaque module sur des preuves synthetiques."""
+"""Non-regression des bugs trouves en faisant tourner chaque module sur des preuves synthétiques."""
 from __future__ import annotations
 
 import datetime
+import json
 import os
+import re
 
 import pytest
 
@@ -90,7 +92,7 @@ def test_prefetch_name_keeps_single_extension(tmp_path):
 
 def test_syslog_year_comes_from_log_mtime(tmp_path):
     ref = datetime.datetime(2026, 1, 5, 12, 0)
-    assert _syslog_iso("Sep 21 09:59:01", ref) == "2025-09-21T09:59:01"  # passage d'annee
+    assert _syslog_iso("Sep 21 09:59:01", ref) == "2025-09-21T09:59:01"  # passage d'année
     assert _syslog_iso("Jan  3 08:00:00", ref) == "2026-01-03T08:00:00"
     assert _syslog_iso("2026-01-03T08:00:00+01:00", ref) == "2026-01-03T08:00:00+01:00"
 
@@ -114,7 +116,7 @@ def test_browser_history_is_not_an_ioc():
 
 def test_generated_yara_compiles_with_duplicate_binary(tmp_path):
     yara = pytest.importorskip("yara")
-    binary = {"type": "elf_analysis", "metadata": {"SHA-256": "a" * 64, "[ALERTE] Reseau": "connect()"},
+    binary = {"type": "elf_analysis", "metadata": {"SHA-256": "a" * 64, "[ALERTE] Réseau": "connect()"},
               "extra": {"iocs": {"ips": ["185.220.101.42"], "paths": ["/tmp/.x/kworkerd"]}}}
     report = ReportModel.from_findings([
         FindingModel(file="/evidence/kworkerd", **binary),
@@ -186,7 +188,7 @@ def test_pdf_scoring_flags_malicious_documents(tmp_path):
                                            b"2 0 obj<</S/J#61vaScript/J#53 3 0 R>>endobj\n"
                                            + _flate(3, b"var s=unescape('%u9090%u9090%u9090');eval(s);"))
     s, meta = score(obfuscated)
-    assert s >= 90 and "Noms obfusques" in meta and "Shellcode" in meta
+    assert s >= 90 and "Noms obfusqués" in meta and "Shellcode" in meta
 
     launch = _pdf(tmp_path, "launch.pdf", b"1 0 obj<</Type/Catalog/OpenAction<</S/Launch/F(cmd.exe)>>>>endobj")
     assert score(launch)[0] >= 40
@@ -241,3 +243,163 @@ def test_stego_finds_message_in_wav_lsb(tmp_path):
     meta = StegoAnalyzer().analyze(str(path)).metadata
     assert "flag{audio_lsb_message}" in meta["Message LSB (audio)"]
     assert meta["Verdict"] == "STEGO PROBABLE"
+
+
+def test_folder_keeps_only_files_of_the_chosen_type(tmp_path):
+    from forensic_analyzer.analyzers.ioc import IOCAnalyzer
+    from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+    from forensic_analyzer.core.scanner import files_for
+
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    (tmp_path / "sub" / "renamed.bin").write_bytes(b"%PDF-1.7\n%%EOF\n")   # PDF reconnu par sa signature
+    (tmp_path / "notes.txt").write_text("185.220.101.42")
+    (tmp_path / "fake.pdf").write_bytes(b"MZ\x90\x00" + b"\x00" * 60)      # exécutable déguisé en PDF
+
+    assert sorted(os.path.basename(f) for f in files_for(PDFAnalyzer(), str(tmp_path))) == ["a.pdf", "renamed.bin"]
+    assert files_for(PDFAnalyzer(), str(tmp_path / "a.pdf")) == [str(tmp_path / "a.pdf")]
+    assert len(files_for(IOCAnalyzer(), str(tmp_path))) == 4               # tout fichier
+    assert files_for(LinuxArtifactsAnalyzer(), str(tmp_path)) == [str(tmp_path)]  # la racine elle-même
+
+
+def test_lnk_and_chromium_downloads_reach_the_timeline():
+    from forensic_analyzer.analyzers.timeline.analyzer import build_timeline
+
+    # LnkParse3 fournit un datetime, pas une chaîne
+    lnk = FindingModel(type="lnk_shortcut", file="evil.lnk",
+                       metadata={"Date Création (LNK)": datetime.datetime(2026, 9, 21, 10, 0)})
+    chrome = FindingModel(type="chromium_artifacts", file="History", extra={"chromium_downloads": [
+        {"fichier": "C:\\\\Users\\\\bob\\\\mimikatz.zip", "date": "2026-09-21 10:05:00", "taille_octets": 1, "danger_type": 1}]})
+    sources = {e["file"] for e in build_timeline(ReportModel.from_findings([lnk, chrome]))}
+    assert {"evil.lnk", "History"} <= sources
+
+
+def test_timeline_tokens_ignore_accents():
+    from forensic_analyzer.core.timeline import _tokens
+
+    assert _tokens({"description": "Création de l'unité /etc/x.service"}) == \
+        _tokens({"description": "Creation de l'unite /etc/x.service"})
+
+
+# Audit de sécurité : preuves malveillantes
+
+
+def test_graph_tooltips_cannot_inject_html(tmp_path):
+    pytest.importorskip("pyvis")
+    from forensic_analyzer.core.correlation import correlate
+    from forensic_analyzer.output.graph_renderer import render_correlation_graph
+
+    evil = "http://185.220.101.42/x?href=<img/src=x/onerror=alert(1)>"
+    findings = [FindingModel(type="elf_analysis", file="/e/implant", extra={"iocs": {"urls": [evil]}}),
+                FindingModel(type="ioc", file="/e/notes.txt", extra={"iocs": {"urls": [evil]}})]
+    out = render_correlation_graph(correlate(findings), str(tmp_path / "g.html"))
+    page = open(out).read()
+    # Seules les infobulles passent par innerHTML (libellés et identifiants : dessin sur canevas)
+    nodes = json.loads(re.search(r"nodes = new vis\.DataSet\((.*?)\);", page, re.S).group(1))
+    assert "popup.innerHTML" in page   # mode HTML bien déclenché par "href"
+    assert all("<" not in n["title"] for n in nodes)
+
+
+def test_terminal_output_neutralizes_escape_sequences(capsys):
+    from forensic_analyzer.output import ui
+
+    evil = "a\x1b[1A\x1b[2K\x1b]52;c;cHduZWQ=\x07b"
+    ui.render_finding(FindingModel(type="pdf_analysis", file="/e/" + evil, metadata={"Author": evil},
+                                   extra={"strings": [evil]}))
+    ui.error(evil)
+    out = capsys.readouterr().out
+    assert "\x1b[1A" not in out and "\x1b]52" not in out and "\x07" not in out
+    assert "\\x1b]52" in out
+
+
+def test_csv_exports_cannot_carry_formulas(tmp_path, monkeypatch):
+    import csv
+    from forensic_analyzer.output.csv_exporter import CSVExporter
+
+    monkeypatch.chdir(tmp_path)
+    linux = FindingModel(type="linux_artifacts", file="/e/root", extra={"timeline_events": [
+        {"timestamp": "2026-09-21T10:00:00", "source": "bash_history", "event_type": "command",
+         "description": "=HYPERLINK(\"http://evil\",\"x\")", "details": "+cmd|' /C calc'!A0"}]})
+    CSVExporter().export(ReportModel.from_findings([linux]), "t.csv")
+    rows = list(csv.DictReader(open(tmp_path / "export" / "t.csv")))
+    assert rows[0]["description"].startswith("'=") and rows[0]["details"].startswith("'+")
+
+
+def test_browser_databases_never_touch_evidence(tmp_path):
+    import hashlib
+    import sqlite3
+    from forensic_analyzer.analyzers.firefox import FirefoxHistoryAnalyzer
+
+    src = tmp_path / "src"
+    src.mkdir()
+    conn = sqlite3.connect(src / "places.sqlite")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA wal_autocheckpoint=0")
+    conn.executescript("""
+        CREATE TABLE moz_places(id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INT);
+        CREATE TABLE moz_historyvisits(id INTEGER PRIMARY KEY, place_id INT, visit_date INT, visit_type INT);
+        INSERT INTO moz_places VALUES (1, 'http://only-in-wal.example', 't', 1);
+        INSERT INTO moz_historyvisits VALUES (1, 1, 1790000000000000, 1);""")
+    conn.commit()
+    evidence = tmp_path / "profil?mode=rwc#x"   # nom de dossier qui détournait l'URI SQLite
+    evidence.mkdir()
+    for name in ("places.sqlite", "places.sqlite-wal"):
+        (evidence / name).write_bytes((src / name).read_bytes())
+    conn.close()
+
+    def state():
+        return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in tmp_path.iterdir() if p.is_file()} | \
+               {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in evidence.iterdir()}
+    before = state()
+    finding = FirefoxHistoryAnalyzer().analyze(str(evidence / "places.sqlite"))
+    assert [e["url"] for e in finding.extra["history"]] == ["http://only-in-wal.example"]
+    assert state() == before
+
+
+def test_manifest_found_in_evidence_stays_in_its_folder(tmp_path):
+    from forensic_analyzer.core.integrity import verify_manifest
+
+    secret = tmp_path / "secret.key"
+    secret.write_text("cle privee")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    (evidence / "disk.img").write_bytes(b"img")
+    manifest = evidence / "manifest.sha256"
+    manifest.write_text(f"{'0' * 64}  disk.img\n{'0' * 64}  ../secret.key\n{'0' * 64}  {secret}\n")
+
+    confined = {r["file"]: r["status"] for r in verify_manifest(str(manifest), confined=True)["results"]}
+    assert confined["../secret.key"] == confined[str(secret)] == "HORS PÉRIMÈTRE"
+    assert confined["disk.img"] == "DIFFÉRENT"
+    trusted = verify_manifest(str(manifest))["results"]
+    assert all(r["status"] != "HORS PÉRIMÈTRE" for r in trusted)
+
+
+def test_ioc_regexes_stay_linear_on_hostile_strings():
+    import time
+    from forensic_analyzer.analyzers.ioc.analyzer import extract_iocs
+    from forensic_analyzer.utils.strings_extractor import categorize_strings
+
+    hostile = ["http://" + "a." * 50000, "a" * 50000 + "@" + "a" * 50000]
+    start = time.perf_counter()
+    for s in hostile:
+        extract_iocs(s)
+        categorize_strings([(0, s)])
+    assert time.perf_counter() - start < 5
+    assert extract_iocs("ecrire a admin@evil-corp.com")["emails"] == ["admin@evil-corp.com"]
+
+
+def test_updater_runs_git_in_the_tool_repository(monkeypatch, tmp_path):
+    import subprocess
+    from forensic_analyzer.core import updater
+
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    class Done:
+        returncode, stdout, stderr = 1, "", ""
+
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: calls.append(kw.get("cwd")) or Done())
+    monkeypatch.setattr(updater.os.path, "isdir", lambda p: True)
+    updater.Updater().check_and_update()
+    assert calls and all(c == updater._REPO for c in calls)

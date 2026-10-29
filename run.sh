@@ -37,6 +37,10 @@ VENV_DIR="venv"
 
 # 1. Vérification et création de l'environnement virtuel
 if [ ! -d "$VENV_DIR" ]; then
+    if [ "$1" != "--install" ]; then
+        echo "[!] Environnement absent : lancez d'abord ./run.sh --install" >&2
+        exit 1
+    fi
     echo "[*] Création de l'environnement virtuel Python..."
     python3 -m venv "$VENV_DIR"
 fi
@@ -83,16 +87,9 @@ if [ "$1" == "--install" ]; then
 
     echo -e "\n\033[38;5;220m[+] Installation complète terminée ! Vous pouvez maintenant lancer la plateforme avec ./run.sh\033[0m"
     exit 0
-else
-    # Vérification au lancement
-    python3 -m pip install --disable-pip-version-check --upgrade pip -q
-    
-    while read requirement; do
-        if [[ -n "$requirement" ]] && [[ "$requirement" != \#* ]]; then
-            python3 -m pip install --disable-pip-version-check "$requirement" -q || true
-        fi
-    done < requirements.txt
 fi
+# Pas d'installation au lancement : aucun accès réseau hors --install (poste d'analyse isolé,
+# pas de pip récupéré en ligne à chaque exécution). L'écran de démarrage signale les manques.
 
 # 4. Lancement de l'application avec les arguments fournis
 python3 main.py "$@"

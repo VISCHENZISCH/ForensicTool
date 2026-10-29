@@ -21,6 +21,7 @@ class StringsAnalyzer(BaseAnalyzer):
     """
     name = "strings"
     supported_extensions = ()   # Géré manuellement via CLI, pas en auto-scan
+    accepts_any_file = True
 
     def can_handle(self, path: str) -> bool:
         return False  # Désactivé en auto-scan

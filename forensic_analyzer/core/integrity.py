@@ -18,14 +18,17 @@ def _digest(path: str, algo: str) -> str:
     return h.hexdigest()
 
 
-def verify_manifest(manifest: str) -> dict:
+def verify_manifest(manifest: str, confined: bool = False) -> dict:
     """
     Vérifie chaque ligne « empreinte  fichier » du manifeste.
 
     Les chemins relatifs sont résolus depuis le dossier du manifeste ; l'algorithme
-    est déduit de la longueur de l'empreinte.
+    est déduit de la longueur de l'empreinte. `confined` : manifeste trouvé parmi les
+    preuves (donc non fiable), limité aux fichiers de son dossier ; sinon il pourrait faire
+    hacher n'importe quel fichier de l'analyste (~/.ssh/id_rsa...) et en révéler l'empreinte.
     """
     base = os.path.dirname(os.path.abspath(manifest))
+    real_base = os.path.realpath(base)
     results = []
     with open(manifest, errors="replace") as f:
         for line in f:
@@ -35,6 +38,10 @@ def verify_manifest(manifest: str) -> dict:
             expected, name = m.group(1).lower(), m.group(2)
             algo = _ALGOS[len(expected)]
             path = name if os.path.isabs(name) else os.path.join(base, name)
+            if confined and not os.path.realpath(path).startswith(real_base + os.sep):
+                results.append({"file": name, "algo": algo, "expected": expected, "actual": "",
+                                "status": "HORS PÉRIMÈTRE"})
+                continue
             if not os.path.isfile(path):
                 results.append({"file": name, "algo": algo, "expected": expected, "actual": "", "status": "ABSENT"})
                 continue

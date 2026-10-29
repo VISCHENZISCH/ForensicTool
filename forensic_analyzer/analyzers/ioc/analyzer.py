@@ -11,7 +11,8 @@ from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("ioc")
 
-# Patterns IOC
+# Patterns IOC. Repetitions bornees (limites DNS / RFC 5321) : un quantificateur ouvert
+# rend la recherche quadratique sur une longue chaine piegee ("a.a.a...", "aaa@aaa...").
 _IPV4 = re.compile(
     r'\b(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}'
     r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\b'
@@ -26,13 +27,13 @@ _URL = re.compile(
     re.IGNORECASE,
 )
 _DOMAIN = re.compile(
-    r'\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.){1,}'
+    r'\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.){1,8}'
     r'(?:com|net|org|io|info|biz|co|me|xyz|top|tk|ml|ga|cf|gq|'
     r'ru|cn|de|uk|fr|br|in|au|jp|onion|bit|exit)\b',
     re.IGNORECASE,
 )
 _EMAIL = re.compile(
-    r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+    r'\b[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,253}\.[a-zA-Z]{2,24}\b'
 )
 _MD5 = re.compile(r'\b[a-fA-F0-9]{32}\b')
 _SHA1 = re.compile(r'\b[a-fA-F0-9]{40}\b')
@@ -40,7 +41,7 @@ _SHA256 = re.compile(r'\b[a-fA-F0-9]{64}\b')
 _BITCOIN = re.compile(r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b')
 _CVE = re.compile(r'\bCVE-\d{4}-\d{4,}\b', re.IGNORECASE)
 
-# IPs privees a exclure
+# IPs privées à exclure
 _PRIVATE_RANGES = (
     '10.', '172.16.', '172.17.', '172.18.', '172.19.',
     '172.20.', '172.21.', '172.22.', '172.23.', '172.24.',
@@ -51,7 +52,7 @@ _PRIVATE_RANGES = (
 
 
 def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
-    """Extrait tous les IOCs d'un texte ou de donnees binaires."""
+    """Extrait tous les IOCs d'un texte ou de données binaires."""
     if isinstance(data, bytes):
         text = data.decode('utf-8', 'replace')
     else:
@@ -103,14 +104,14 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
         if h not in result["sha256"]:
             result["sha256"].append(h)
 
-    # SHA1 (exclure ceux deja matche comme SHA256)
+    # SHA1 (exclure ceux déjà retenus comme SHA256)
     sha256_set = set(result["sha256"])
     for match in _SHA1.finditer(text):
         h = match.group().lower()
         if h not in result["sha1"] and not any(h in s for s in sha256_set):
             result["sha1"].append(h)
 
-    # MD5 (exclure ceux deja matche comme SHA1/SHA256)
+    # MD5 (exclure ceux déjà retenus comme SHA1/SHA256)
     sha1_set = set(result["sha1"])
     for match in _MD5.finditer(text):
         h = match.group().lower()
@@ -158,6 +159,7 @@ class IOCAnalyzer(BaseAnalyzer):
     """Extraction d'indicateurs de compromission (IOC) depuis des fichiers."""
     name = "ioc"
     supported_extensions = ()
+    accepts_any_file = True
 
     def can_handle(self, path: str) -> bool:
         return False  # Active uniquement via CLI --ioc

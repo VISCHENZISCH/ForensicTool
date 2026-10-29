@@ -56,7 +56,7 @@ class WindowsExecutionAnalyzer(BaseAnalyzer):
                 metadata["Format"] = "Windows Prefetch (.pf)"
                 metadata["Exécutable Source"] = fname.rsplit('-', 1)[0] if '-' in fname else fname
                 if data[:3] == b"MAM" and not HAS_SCCA:
-                    metadata["Avertissement"] = ("Prefetch compresse (Windows 10+) : contenu non decode, "
+                    metadata["Avertissement"] = ("Prefetch compressé (Windows 10+) : contenu non décodé, "
                                                  "installer libscca-python (pyscca)")
 
                 if HAS_SCCA:
@@ -66,7 +66,7 @@ class WindowsExecutionAnalyzer(BaseAnalyzer):
                         if scca_file.executable_filename:
                             metadata["Exécutable Source"] = scca_file.executable_filename
                         metadata["Exécutions"] = str(scca_file.run_count)
-                        # Jusqu'a 8 dates d'execution (Win8+), 0 = emplacement vide
+                        # Jusqu'a 8 dates d'exécution (Win8+), 0 = emplacement vide
                         run_times = []
                         for i in range(8):
                             try:
@@ -79,8 +79,9 @@ class WindowsExecutionAnalyzer(BaseAnalyzer):
                             extra["executions"] = run_times
                         extra["chemins_touches"] = list(scca_file.filenames)
                     except Exception as e:
-                        logger.warning(f"Prefetch non decode par pyscca ({fname}) : {e}")
-                        metadata["Avertissement"] = f"Prefetch non decode (fichier corrompu ?) : {str(e).split('. ')[0]}"
+                        reason = str(e).split('. ')[0]  # libscca empile toute la pile d'appels
+                        logger.warning(f"Prefetch non décodé par pyscca ({fname}) : {reason}")
+                        metadata["Avertissement"] = f"Prefetch non décodé (fichier corrompu ?) : {reason}"
                     finally:
                         scca_file.close()
 

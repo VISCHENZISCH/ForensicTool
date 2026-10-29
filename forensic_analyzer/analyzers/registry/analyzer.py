@@ -63,7 +63,7 @@ _FORENSIC_KEYS = {
 
 
 def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
-    """Parcourt recursivement une cle de registre."""
+    """Parcourt récursivement une clé de registre."""
     results = []
     try:
         try:
@@ -119,7 +119,7 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
 
 
 def _detect_persistence(entries: list[dict]) -> list[dict]:
-    """Detecte les mecanismes de persistance dans le registre."""
+    """Détecte les mécanismes de persistance dans le registre."""
     persistence = []
     run_paths = {"run", "runonce", "runservicesonce", "runservices"}
 
@@ -154,7 +154,7 @@ class RegistryAnalyzer(BaseAnalyzer):
     supported_extensions = ('.dat', '.DAT')
 
     def can_handle(self, path: str) -> bool:
-        # Verifier le nom du fichier (SAM, SYSTEM, NTUSER.DAT, SOFTWARE, AMCACHE)
+        # Vérifier le nom du fichier (SAM, SYSTEM, NTUSER.DAT, SOFTWARE, AMCACHE)
         basename = os.path.basename(path).upper()
         return basename in ("SAM", "SYSTEM", "NTUSER.DAT", "SOFTWARE", "SECURITY", "AMCACHE.HVE")
 
@@ -176,7 +176,7 @@ class RegistryAnalyzer(BaseAnalyzer):
 
             target_keys = _FORENSIC_KEYS.get(basename, [])
             if not target_keys:
-                # Fallback : scanner les cles connues de tous les types
+                # Fallback : scanner les clés connues de tous les types
                 for keys in _FORENSIC_KEYS.values():
                     target_keys.extend(keys)
 
@@ -185,15 +185,15 @@ class RegistryAnalyzer(BaseAnalyzer):
                     key = reg.open(key_path)
                     entries = _walk_key(key, max_depth=2)
                     all_entries.extend(entries)
-                    meta[f"Cle: {key_path}"] = f"{len(entries)} valeurs"
+                    meta[f"Clé: {key_path}"] = f"{len(entries)} valeurs"
                 except Exception as exc:
                     log.debug("Clé %s absente ou illisible : %s", key_path, exc)
                     continue
 
-            # Detection de persistance
+            # Détection de persistance
             persistence = _detect_persistence(all_entries)
             if persistence:
-                meta["Mecanismes de persistance"] = str(len(persistence))
+                meta["Mécanismes de persistance"] = str(len(persistence))
                 for i, p in enumerate(persistence[:5]):
                     meta[f"Persistance #{i+1}"] = f"[{p['type']}] {p['name']}: {p['value'][:80]}"
 
@@ -203,7 +203,7 @@ class RegistryAnalyzer(BaseAnalyzer):
                 for i, s in enumerate(suspects[:3]):
                     meta[f"Suspect #{i+1}"] = f"{s['name']} -> {s['value'][:50]} (Mis à jour: {s['timestamp']})"
 
-            meta["Total valeurs analysees"] = str(len(all_entries))
+            meta["Total valeurs analysées"] = str(len(all_entries))
 
             return FindingModel(
                 type="registry",

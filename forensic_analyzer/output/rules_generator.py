@@ -39,7 +39,7 @@ def _slug(text: str) -> str:
 
 
 def _suricata_content(text: str) -> str:
-    """Caracteres reserves d'un content Suricata en hexadecimal."""
+    """Caractères réservés d'un content Suricata en hexadécimal."""
     return text.replace('"', "|22|").replace(";", "|3B|").replace("\\", "|5C|")
 
 
@@ -55,7 +55,7 @@ class DefenseRulesGenerator:
         all_iocs = ioc_mod.collect(findings)
         malicious = [f for f in findings if f.type in _BINARY_TYPES and _is_suspicious_binary(f)]
         if not all_iocs and not malicious:
-            logger.info("Aucun indicateur exploitable : pas de regle generee.")
+            logger.info("Aucun indicateur exploitable : pas de règle générée.")
             return {}
 
         os.makedirs(output_dir, exist_ok=True)
@@ -68,7 +68,7 @@ class DefenseRulesGenerator:
         }
         for name, content in self.sigma(all_iocs, findings).items():
             outputs[f"sigma/{name}"] = self._write(os.path.join(output_dir, "sigma"), name, content)
-        logger.info("Regles de detection et bundle STIX exportes dans %s", output_dir)
+        logger.info("Règles de détection et bundle STIX exportés dans %s", output_dir)
         return {k: v for k, v in outputs.items() if v}
 
     @staticmethod
@@ -94,7 +94,7 @@ class DefenseRulesGenerator:
             sha256 = f.metadata.get("SHA-256", "")
             if sha256:
                 if sha256.lower() in hashes:
-                    continue  # meme binaire vu deux fois
+                    continue  # même binaire vu deux fois
                 hashes.append(sha256.lower())
             if not strings:
                 continue
@@ -135,14 +135,14 @@ class DefenseRulesGenerator:
                 rules.append(f'alert ip $HOME_NET any -> {i.value} any (msg:"FA - Trafic vers IP suspecte {i.value}"; '
                              f'classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "domain":
-                rules.append(f'alert dns $HOME_NET any -> any any (msg:"FA - Resolution du domaine suspect {i.value}"; '
+                rules.append(f'alert dns $HOME_NET any -> any any (msg:"FA - Résolution du domaine suspect {i.value}"; '
                              f'dns.query; content:"{i.value}"; nocase; endswith; classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "url":
-                # L'hote ancre la regle : un chemin court ("/x") seul alerterait sur tout le trafic HTTP
+                # L'hôte ancre la règle : un chemin court ("/x") seul alerterait sur tout le trafic HTTP
                 host = re.sub(r"^https?://", "", i.value, flags=re.I).split("/")[0].split(":")[0]
                 path = re.sub(r"^https?://[^/]+", "", i.value) or "/"
                 uri = f' http.uri; content:"{_suricata_content(path[:200])}";' if path != "/" else ""
-                rules.append(f'alert http $HOME_NET any -> any any (msg:"FA - Requete vers URL suspecte {_suricata_content(host)}"; '
+                rules.append(f'alert http $HOME_NET any -> any any (msg:"FA - Requête vers URL suspecte {_suricata_content(host)}"; '
                              f'http.host; content:"{_suricata_content(host)}"; nocase;{uri} classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "ja3":
                 rules.append(f'alert tls $HOME_NET any -> any any (msg:"FA - Empreinte JA3 suspecte"; '
@@ -167,23 +167,23 @@ class DefenseRulesGenerator:
 
         if hidden_bins:
             rules["linux_process_hidden_path.yml"] = _sigma(
-                "Execution d'un binaire suspect identifie par Forensic Analyzer",
+                "Exécution d'un binaire suspect identifié par Forensic Analyzer",
                 {"product": "linux", "category": "process_creation"},
                 {"selection": {"Image": hidden_bins}}, "selection", tags, "high")
         if linux_paths:
             rules["linux_file_event_iocs.yml"] = _sigma(
-                "Creation d'un fichier d'implant ou de persistance connu",
+                "Création d'un fichier d'implant ou de persistance connu",
                 {"product": "linux", "category": "file_event"},
                 {"selection": {"TargetFilename": linux_paths}}, "selection", tags, "high")
         if units:
             rules["linux_auditd_service_start.yml"] = _sigma(
-                "Demarrage d'une unite systemd malveillante",
+                "Démarrage d'une unité systemd malveillante",
                 {"product": "linux", "service": "auditd"},
                 {"selection": {"type": "SERVICE_START", "unit": [u.removesuffix(".service") for u in units]}},
                 "selection", tags, "critical")
         if windows_paths:
             rules["windows_process_iocs.yml"] = _sigma(
-                "Execution ou creation d'un fichier suspect (Windows)",
+                "Exécution ou création d'un fichier suspect (Windows)",
                 {"product": "windows", "category": "process_creation"},
                 {"selection_image": {"Image|endswith": [ntname(p) for p in windows_paths]},
                  "selection_cmd": {"CommandLine|contains": windows_paths}},
@@ -196,7 +196,7 @@ class DefenseRulesGenerator:
         commands = sorted({c for f in findings for c in f.extra.get("disassembly", {}).get("summary", {}).get("commands", [])})
         if commands:
             rules["windows_command_from_implant.yml"] = _sigma(
-                "Commande codee en dur dans un binaire suspect",
+                "Commande codée en dur dans un binaire suspect",
                 {"product": "windows", "category": "process_creation"},
                 {"selection": {"CommandLine|contains": commands}}, "selection", win_tags, "high")
         return rules
@@ -238,7 +238,7 @@ class DefenseRulesGenerator:
                 continue
             value = os.path.basename(i.value) if i.kind == "path" else i.value
             ind = sdo("indicator", name=f"{i.kind} : {i.value}"[:250],
-                      description="Observe dans : " + ", ".join(sorted(i.sources)),
+                      description="Observé dans : " + ", ".join(sorted(i.sources)),
                       pattern=patterns[i.kind].format(value.replace("\\", "\\\\").replace("'", "\\'")),
                       pattern_type="stix", valid_from=now, indicator_types=["malicious-activity"])
             if i.kind in ("sha256", "md5"):
@@ -295,7 +295,7 @@ def _sigma(title: str, logsource: dict, detection: dict, condition: str, tags: l
         return "'" + str(v).replace("'", "''") + "'"
 
     lines = [f"title: {title}", f"id: {uuid.uuid4()}", "status: experimental",
-             "description: Regle generee automatiquement par Forensic Analyzer a partir des indicateurs de l'enquete",
+             "description: Règle générée automatiquement par Forensic Analyzer à partir des indicateurs de l'enquête",
              "author: Forensic Analyzer", f"date: {datetime.date.today():%Y-%m-%d}"]
     if tags:
         lines.append("tags:")
@@ -312,6 +312,6 @@ def _sigma(title: str, logsource: dict, detection: dict, condition: str, tags: l
             else:
                 lines.append(f"        {field}: {scalar(value)}")
     lines.append(f"    condition: {condition}")
-    lines.append("falsepositives:\n    - Inconnus (indicateurs propres a l'incident)")
+    lines.append("falsepositives:\n    - Inconnus (indicateurs propres à l'incident)")
     lines.append(f"level: {level}")
     return "\n".join(lines) + "\n"

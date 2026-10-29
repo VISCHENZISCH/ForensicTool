@@ -1,6 +1,8 @@
 """Graphe interactif de la chaîne de compromission (artefacts ↔ indicateurs partagés)."""
 from __future__ import annotations
 
+import html
+
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 
@@ -35,11 +37,13 @@ def render_correlation_graph(correlation: FindingModel, output_path: str) -> str
     net.barnes_hut(gravity=-6000, spring_length=160)
     for node in graph["nodes"]:
         is_ioc = node["group"] == "ioc"
-        net.add_node(node["id"], label=node["label"], title=node["title"],
+        # pyvis affiche les infobulles via innerHTML des qu'une contient "href" : les indicateurs
+        # viennent des preuves, une URL piegee executerait du JavaScript chez l'analyste
+        net.add_node(node["id"], label=node["label"], title=html.escape(node["title"]),
                      color=_GROUP_COLORS.get(node["group"], "#bbbbbb"),
                      shape="diamond" if is_ioc else "box", size=18 if is_ioc else 25)
     for edge in graph["edges"]:
-        net.add_edge(edge["from"], edge["to"], title=edge["title"], color="#666666")
+        net.add_edge(edge["from"], edge["to"], title=html.escape(edge["title"]), color="#666666")
 
     net.write_html(output_path, notebook=False)
     log.info("Graphe de corrélation généré : %s", output_path)

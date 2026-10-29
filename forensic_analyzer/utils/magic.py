@@ -17,7 +17,7 @@ def get_file_magic_extension(filepath: str) -> str:
         if header.startswith(b'MZ'):
             return '.exe'
             
-        # ELF Executable (Linux)
+        # ELF Exécutable (Linux)
         if header.startswith(b'\x7FELF'):
             return '.elf'
             

@@ -20,6 +20,10 @@ $VenvDir = "venv"
 
 # 1. Vérification et création de l'environnement virtuel
 if (-not (Test-Path $VenvDir)) {
+    if (-not $IsInstall) {
+        Write-Host "[!] Environnement absent : lancez d'abord .\run.ps1 --install" -ForegroundColor Red
+        exit 1
+    }
     Write-Host "[*] Création de l'environnement virtuel Python..." -ForegroundColor Cyan
     python -m venv $VenvDir
 }
@@ -34,11 +38,8 @@ if ($IsInstall) {
     pip install -r requirements.txt
     Write-Host "[+] Installation complète réussie ! Vous pouvez maintenant lancer la plateforme avec .\run.ps1" -ForegroundColor Yellow
     exit 0
-} else {
-    # Vérification furtive au lancement
-    python -m pip install --disable-pip-version-check --upgrade pip -q 2>$null
-    pip install --disable-pip-version-check -r requirements.txt -q 2>$null
 }
+# Pas d'installation au lancement : aucun accès réseau hors --install.
 
 # 4. Nettoyage des arguments et lancement de l'application
 $scriptArgs = $args | Where-Object { $_ -ne "--install" }

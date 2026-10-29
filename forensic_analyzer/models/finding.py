@@ -17,7 +17,7 @@ log = get_logger("finding")
 def compute_hashes(filepath: str) -> dict[str, str]:
     """
     Calcule les hashes MD5 et SHA-256 d'un fichier.
-    Cache par (chemin, taille, mtime) : un fichier modifie en cours de session est rehache.
+    Cache par (chemin, taille, mtime) : un fichier modifié en cours de session est rehaché.
     """
     try:
         st = os.stat(filepath)

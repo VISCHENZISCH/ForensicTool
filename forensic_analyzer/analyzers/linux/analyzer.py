@@ -69,7 +69,7 @@ _SUSPICIOUS_CMDS = [
 
 
 def parse_bash_history(path: str) -> dict:
-    """Parse un fichier bash_history et detecte les commandes suspectes."""
+    """Parse un fichier bash_history et détecte les commandes suspectes."""
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -116,8 +116,8 @@ def parse_bash_history(path: str) -> dict:
 
 def _syslog_iso(ts: str, ref: datetime.datetime) -> str:
     """
-    Horodatage syslog en ISO 8601. Le format classique n'a pas d'annee : on prend celle
-    de la derniere modification du journal, moins un si la date tombe apres (passage d'annee).
+    Horodatage syslog en ISO 8601. Le format classique n'a pas d'année : on prend celle
+    de la dernière modification du journal, moins un si la date tombe après (passage d'année).
     """
     if ts[:4].isdigit():
         return ts
@@ -131,7 +131,7 @@ def _syslog_iso(ts: str, ref: datetime.datetime) -> str:
 
 
 def parse_auth_log(path: str) -> dict:
-    """Parse un fichier auth.log pour extraire les evenements d'authentification."""
+    """Parse un fichier auth.log pour extraire les événements d'authentification."""
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
@@ -161,7 +161,7 @@ def parse_auth_log(path: str) -> dict:
                 "command": match.group(3)[:200],
             })
 
-        # Brute force detection : > 10 fails depuis la meme IP
+        # Brute force détection : > 10 fails depuis la même IP
         from collections import Counter
         ip_fails = Counter(f["source_ip"] for f in failed)
         brute_force_ips = {ip: count for ip, count in ip_fails.items() if count > 10}
@@ -180,7 +180,7 @@ def parse_auth_log(path: str) -> dict:
 
 
 def parse_crontabs(root_path: str = "/") -> list[dict]:
-    """Collecte tous les crontabs du systeme."""
+    """Collecte tous les crontabs du système."""
     crons = []
     cron_paths = [
         os.path.join(root_path, "etc/crontab"),
@@ -217,7 +217,7 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
 
 
 def parse_ssh_artifacts(root_path: str = "/") -> dict:
-    """Analyse les artefacts SSH (cles, known_hosts, authorized_keys)."""
+    """Analyse les artefacts SSH (clés, known_hosts, authorized_keys)."""
     results: dict = {"keys": [], "known_hosts": [], "authorized_keys": []}
 
     home_base = os.path.join(root_path, "home")
@@ -257,7 +257,7 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
                         results["authorized_keys"].append(info)
                     elif fname.startswith("id_") or fname.endswith(".pub"):
                         info["type"] = "public" if fname.endswith(".pub") else "private"
-                        # Verifier si la cle privee est protegee par passphrase
+                        # Vérifier si la clé privée est protégée par passphrase
                         if info["type"] == "private":
                             with open(fpath, "r", errors="replace") as f:
                                 content = f.read()
@@ -376,7 +376,7 @@ def find_suid_sgid(root_path: str = "/") -> list:
 
 def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict,
                                 entries: list | None = None, file_hasher=None) -> None:
-    """Persistance, integrite des paquets, anomalies de fichiers et journaux (enrichit meta/extra)."""
+    """Persistance, intégrité des paquets, anomalies de fichiers et journaux (enrichit meta/extra)."""
     techniques: set[str] = set()
     events: list[dict] = []
 
@@ -384,9 +384,9 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
         entries = bf.parse_bodyfile(bodyfile) if bodyfile else []
     body = bf.index_by_path(entries) if entries else None
     if bodyfile:
-        meta["Bodyfile"] = f"{len(entries)} entrees ({os.path.basename(bodyfile)})"
+        meta["Bodyfile"] = f"{len(entries)} entrées ({os.path.basename(bodyfile)})"
     elif entries:
-        meta["Metadonnees"] = f"{len(entries)} entrees lues dans l'image disque"
+        meta["Métadonnées"] = f"{len(entries)} entrées lues dans l'image disque"
 
     debian = packages.is_debian_root(root)
     owned = packages.owned_paths(root) if debian else None
@@ -394,14 +394,14 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     # Persistance systemd
     systemd = persistence.analyze_systemd(root, body, owned)
     suspicious = [u for u in systemd["units"] if u["suspicious"]]
-    meta["Unites systemd locales"] = str(len(systemd["units"]))
+    meta["Unités systemd locales"] = str(len(systemd["units"]))
     for u in suspicious:
-        meta[f"[ALERTE] Unite suspecte {u['unit']}"] = f"score {u['score']} : " + " ; ".join(u["reasons"])
+        meta[f"[ALERTE] Unité suspecte {u['unit']}"] = f"score {u['score']} : " + " ; ".join(u["reasons"])
         techniques.update(u["mitre"])
         if u["created"]:
-            events.append(_event(u["created"], "bodyfile", "unit_created", f"Creation de l'unite {u['unit']}"))
+            events.append(_event(u["created"], "bodyfile", "unit_created", f"Création de l'unité {u['unit']}"))
         if u["modified"] and u["modified"] != u["created"]:
-            events.append(_event(u["modified"], "bodyfile", "unit_modified", f"Modification de l'unite {u['unit']}"))
+            events.append(_event(u["modified"], "bodyfile", "unit_modified", f"Modification de l'unité {u['unit']}"))
         for link in u["enabled_by"]:
             if link["created"]:
                 events.append(_event(link["created"], "bodyfile", "unit_enabled", f"Activation : {link['link']}"))
@@ -414,27 +414,27 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
             techniques.add(item["mitre"])
     extra["other_persistence"] = other
 
-    # Integrite des paquets Debian
+    # Intégrité des paquets Debian
     if debian:
         dpkg = packages.verify_dpkg(root, body, hasher=file_hasher)
-        meta["Integrite paquets (dpkg)"] = (f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
-                                            f"{len(dpkg['modified'])} modifies, {len(dpkg['missing'])} absents")
+        meta["Intégrité paquets (dpkg)"] = (f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
+                                            f"{len(dpkg['modified'])} modifiés, {len(dpkg['missing'])} absents")
         if dpkg["modified"]:
-            meta["[ALERTE] Fichiers de paquets modifies"] = ", ".join(m["path"] for m in dpkg["modified"][:15])
+            meta["[ALERTE] Fichiers de paquets modifiés"] = ", ".join(m["path"] for m in dpkg["modified"][:15])
         extra["dpkg"] = dpkg
 
-    # Anomalies de fichiers (necessitent le bodyfile)
+    # Anomalies de fichiers (nécessitent le bodyfile)
     if entries:
         anomalies = {
-            "Fichiers systeme hors root": bf.ownership_anomalies(entries),
-            "Fichiers caches (systeme / temporaires)": bf.hidden_entries(entries),
+            "Fichiers système hors root": bf.ownership_anomalies(entries),
+            "Fichiers cachés (système / temporaires)": bf.hidden_entries(entries),
         }
         if debian:
             anomalies["Fichiers hors paquet"] = packages.files_outside_packages(root, entries, bf.PACKAGE_PREFIXES)
         for label, found in anomalies.items():
             if found:
                 meta[f"[ALERTE] {label}"] = ", ".join(f"{e.path} (uid {e.uid})" for e in found[:15])
-        if anomalies["Fichiers caches (systeme / temporaires)"]:
+        if anomalies["Fichiers cachés (système / temporaires)"]:
             techniques.add("T1564.001")
         extra["file_anomalies"] = {k: [_entry_dict(e) for e in v] for k, v in anomalies.items()}
 
@@ -443,7 +443,7 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     audit_path = os.path.join(log_dir, "audit/audit.log")
     if os.path.isfile(audit_path):
         audit = logs.parse_audit_log(audit_path)
-        meta["audit.log"] = (f"{len(audit['auth'])} authentifications, {len(audit['auth_failures'])} echecs, "
+        meta["audit.log"] = (f"{len(audit['auth'])} authentifications, {len(audit['auth_failures'])} échecs, "
                              f"{audit['execve_events']} EXECVE")
         units = {os.path.basename(u["unit"]).rsplit(".", 1)[0] for u in suspicious}
         for a in audit["auth"]:
@@ -453,17 +453,17 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
             if svc.get("unit") in units:
                 events.append(_event(svc["time"], "audit.log", svc["type"].lower(), f"{svc['type']} {svc['unit']}"))
         if not audit["execve_events"]:
-            meta["Limite audit"] = "Aucun EXECVE journalise : les commandes executees ne sont pas tracees"
+            meta["Limite audit"] = "Aucun EXECVE journalisé : les commandes exécutées ne sont pas tracées"
         extra["audit"] = audit
 
     wtmp_path = os.path.join(log_dir, "wtmp")
     if os.path.isfile(wtmp_path):
         wtmp = logs.parse_wtmp(wtmp_path)
-        meta["wtmp"] = (f"{sum(r['type'] == 'BOOT' for r in wtmp)} demarrages, "
+        meta["wtmp"] = (f"{sum(r['type'] == 'BOOT' for r in wtmp)} démarrages, "
                         f"{sum(r['type'] == 'USER' for r in wtmp)} sessions")
         for r in wtmp:
             if r["type"] in ("BOOT", "USER"):
-                desc = "Demarrage" if r["type"] == "BOOT" else f"Session {r['user']} sur {r['line']}"
+                desc = "Démarrage" if r["type"] == "BOOT" else f"Session {r['user']} sur {r['line']}"
                 events.append(_event(r["time"], "wtmp", r["type"].lower(), desc + (f" depuis {r['host']}" if r["host"] and r["type"] == "USER" else "")))
         extra["wtmp"] = wtmp
     lastlog_path = os.path.join(log_dir, "lastlog")
@@ -474,7 +474,7 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     for jdir in logs.find_journal_dirs(root):
         journal = logs.parse_journal(jdir, unit_names)
         if journal:
-            meta["journald"] = f"{len(journal['boots'])} demarrages, {len(journal['events'])} evenements retenus"
+            meta["journald"] = f"{len(journal['boots'])} démarrages, {len(journal['events'])} événements retenus"
             for e in journal["events"]:
                 events.append(_event(e["time"], "journald", e["source"], e["message"]))
             extra["journal"] = journal
@@ -501,6 +501,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
     """Analyse des artefacts forensiques Linux."""
     name = "linux_artifacts"
     supported_extensions = ()
+    takes_directory = True
 
     def can_handle(self, path: str) -> bool:
         return False  # Active uniquement via CLI
@@ -509,11 +510,11 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 entries: list | None = None, file_hasher=None) -> FindingModel | None:
         """
         Analyse un chemin racine (/ ou un montage forensique).
-        Le path peut etre :
-        - Un fichier specifique (bash_history, auth.log)
-        - Un repertoire racine a scanner
+        Le path peut être :
+        - Un fichier spécifique (bash_history, auth.log)
+        - Un répertoire racine à scanner
 
-        `bodyfile` (sortie de `fls -r -m /`) fournit les proprietaires, liens et
+        `bodyfile` (sortie de `fls -r -m /`) fournit les propriétaires, liens et
         horodatages d'origine, perdus par une copie tsk_recover. `entries` et
         `file_hasher` les fournissent directement depuis l'image (lecture pytsk3).
         """
@@ -536,8 +537,8 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 elif "auth.log" in basename or "secure" in basename:
                     result = parse_auth_log(path)
                     meta["Type"] = "auth.log"
-                    meta["Logons echoues"] = str(result.get("failed_logins", 0))
-                    meta["Logons reussis"] = str(result.get("successful_logins", 0))
+                    meta["Logons échoués"] = str(result.get("failed_logins", 0))
+                    meta["Logons réussis"] = str(result.get("successful_logins", 0))
                     meta["Commandes sudo"] = str(result.get("sudo_commands", 0))
                     bf = result.get("brute_force_ips", {})
                     if bf:
@@ -547,11 +548,11 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     extra["auth_log"] = result
 
                 else:
-                    meta["Type"] = "fichier generique"
+                    meta["Type"] = "fichier générique"
                     meta["Taille"] = f"{os.path.getsize(path):,} octets"
 
             elif os.path.isdir(path):
-                meta["Type"] = "Scan complet repertoire racine"
+                meta["Type"] = "Scan complet répertoire racine"
 
                 history_files = glob.glob(os.path.join(path, "home/*/.bash_history"))
                 history_files += glob.glob(os.path.join(path, "root/.bash_history"))
@@ -571,22 +572,22 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 for ap in auth_paths:
                     if os.path.isfile(ap):
                         auth_result = parse_auth_log(ap)
-                        meta["auth.log - Echecs"] = str(auth_result.get("failed_logins", 0))
-                        meta["auth.log - Succes"] = str(auth_result.get("successful_logins", 0))
+                        meta["auth.log - Échecs"] = str(auth_result.get("failed_logins", 0))
+                        meta["auth.log - Succès"] = str(auth_result.get("successful_logins", 0))
                         extra["auth_log"] = auth_result
                         break
 
                 crons = parse_crontabs(path)
-                meta["Entrees cron"] = str(len(crons))
+                meta["Entrées cron"] = str(len(crons))
                 extra["crontabs"] = crons
 
                 ssh = parse_ssh_artifacts(path)
-                meta["Cles SSH"] = str(len(ssh["keys"]))
+                meta["Clés SSH"] = str(len(ssh["keys"]))
                 meta["Known hosts"] = str(len(ssh["known_hosts"]))
                 meta["Authorized keys"] = str(len(ssh["authorized_keys"]))
                 extra["ssh"] = ssh
 
-                # /proc (si systeme live)
+                # /proc (si système live)
                 proc_dir = os.path.join(path, "proc")
                 if os.path.isdir(proc_dir):
                     procs = parse_proc_maps(path)

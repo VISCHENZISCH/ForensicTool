@@ -52,7 +52,7 @@ class PDFParser:
                 
             return Ok(data)
         except Exception as exc:
-            return Err(f"Echec du parsing PyPDF: {exc}")
+            return Err(f"Échec du parsing PyPDF: {exc}")
 
     def _fallback_parse(self) -> Result[dict[str, str], str]:
         """Méthode de secours utilisant les expressions régulières."""
@@ -74,4 +74,4 @@ class PDFParser:
             metadata["Chiffrement"] = "Inconnu (pypdf manquant)"
             return Ok(metadata)
         except Exception as exc:
-            return Err(f"Echec du fallback regex: {exc}")
+            return Err(f"Échec du fallback regex: {exc}")

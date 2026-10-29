@@ -1,4 +1,4 @@
-"""Analyzer disque - partitions, systemes de fichiers, MFT NTFS, ADS, ext via The Sleuth Kit."""
+"""Analyzer disque - partitions, systèmes de fichiers, MFT NTFS, ADS, ext via The Sleuth Kit."""
 from __future__ import annotations
 
 import datetime
@@ -23,7 +23,7 @@ def _windows_filetime_to_dt(filetime: int) -> str:
     if filetime <= 0:
         return "N/A"
     try:
-        epoch_diff = 116444736000000000  # Difference 1601-1970 en 100ns
+        epoch_diff = 116444736000000000  # Différence 1601-1970 en 100ns
         timestamp = (filetime - epoch_diff) / 10_000_000
         return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc).isoformat()
     except (OSError, ValueError, OverflowError):
@@ -50,7 +50,7 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
             "record_offset": offset,
         }
         
-        # Slack space (Espace vide a la fin de l'enregistrement MFT)
+        # Slack space (Espace vide à la fin de l'enregistrement MFT)
         record["mft_slack_space"] = max(0, record["allocated_size"] - record["used_size"])
 
         flags_val = record["flags"]
@@ -77,7 +77,7 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
             # $STANDARD_INFORMATION (0x10)
             if attr_type == 0x10 and attr_len >= 72:
                 resident = data[attr_offset + 8]
-                if resident == 0:  # Resident
+                if resident == 0:  # Résident
                     content_offset = struct.unpack_from('<H', data, attr_offset + 20)[0]
                     si_start = attr_offset + content_offset
                     if si_start + 32 <= len(data):
@@ -140,7 +140,7 @@ _MFT_ATTR_NAMES = {
 
 
 def detect_ads(path: str) -> list[dict]:
-    """Detecte les Alternate Data Streams NTFS via parsing de dump."""
+    """Détecte les Alternate Data Streams NTFS via parsing de dump."""
     ads_found = []
     try:
         if os.path.isfile(path):
@@ -165,14 +165,14 @@ def detect_ads(path: str) -> list[dict]:
                             "filename": record.get("filename", "?"),
                             "record_offset": offset,
                             "data_streams": len(data_attrs),
-                            "detail": f"ADS detecte : {len(data_attrs)} flux $DATA",
+                            "detail": f"ADS détecté : {len(data_attrs)} flux $DATA",
                         })
                 offset += 1024
                 
             if isinstance(data, mmap.mmap):
                 data.close()
     except Exception as exc:
-        log.warning("Erreur detection ADS : %s", exc)
+        log.warning("Erreur de détection ADS : %s", exc)
     return ads_found
 
 
@@ -215,15 +215,15 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
         offset += 1024
 
     if mft_records:
-        meta["Records MFT trouves"] = str(len(mft_records))
-        meta["Slack Space (MFT)"] = f"{total_mft_slack:,} octets (potentiel data cachee)"
+        meta["Records MFT trouvés"] = str(len(mft_records))
+        meta["Slack Space (MFT)"] = f"{total_mft_slack:,} octets (potentiel data cachée)"
         
         if usnjrnl_found: meta["Journal $UsnJrnl"] = "PRÉSENT"
         if logfile_found: meta["Journal $LogFile"] = "PRÉSENT"
         if recycle_bin_items > 0: meta["Fichiers Corbeille ($I)"] = str(recycle_bin_items)
         
         deleted = [r for r in mft_records if not r.get("in_use")]
-        meta["Fichiers supprimes (MFT)"] = str(len(deleted))
+        meta["Fichiers supprimés (MFT)"] = str(len(deleted))
         extra["mft_records"] = mft_records[:200]
         extra["deleted_files"] = [
             {"filename": r.get("filename", "?"),
@@ -238,32 +238,32 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
 
     ads = detect_ads(path)
     if ads:
-        meta["ADS detectes"] = str(len(ads))
+        meta["ADS détectés"] = str(len(ads))
         extra["ads"] = ads
 
 
 
 def _report_file_anomalies(entries: list, meta: dict, extra: dict, label: str) -> set[str]:
-    """Fichiers systeme hors root et fichiers caches ; retourne les techniques ATT&CK associees."""
+    """Fichiers système hors root et fichiers cachés ; retourne les techniques ATT&CK associées."""
     techniques: set[str] = set()
-    for title, found in (("Fichiers systeme hors root", bf.ownership_anomalies(entries)),
-                         ("Fichiers caches (systeme / temporaires)", bf.hidden_entries(entries))):
+    for title, found in (("Fichiers système hors root", bf.ownership_anomalies(entries)),
+                         ("Fichiers cachés (système / temporaires)", bf.hidden_entries(entries))):
         if found:
             meta[f"[ALERTE] {label} : {title}"] = ", ".join(f"{e.path} (uid {e.uid})" for e in found[:15])
             extra.setdefault("file_anomalies", {})[title] = [
                 {"path": e.path, "uid": e.uid, "mode": e.mode, "created": bf.utc(e.crtime),
                  "modified": bf.utc(e.mtime)} for e in found]
-            if title.startswith("Fichiers caches"):
+            if title.startswith("Fichiers cachés"):
                 techniques.add("T1564.001")
     return techniques
 
 
 def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, label: str) -> set[str]:
-    """Repli sans pytsk3 : bodyfile TSK en memoire via la commande fls."""
+    """Repli sans pytsk3 : bodyfile TSK en mémoire via la commande fls."""
     fls = shutil.which("fls")
     command = f"fls -r -m / -o {start_sector} '{path}'"
     if not fls:
-        meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; a generer avec : {command}"
+        meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; à générer avec : {command}"
         return set()
     try:
         proc = subprocess.run([fls, "-r", "-m", "/", "-o", str(start_sector), path],
@@ -272,19 +272,19 @@ def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, l
         log.warning("fls trop long sur '%s'", path)
         return set()
     if proc.returncode != 0:
-        log.warning("fls a echoue (offset %s) : %s", start_sector, proc.stderr.strip()[:200])
+        log.warning("fls a échoué (offset %s) : %s", start_sector, proc.stderr.strip()[:200])
         return set()
 
     entries = bf.parse_bodyfile_lines(proc.stdout.splitlines())
-    meta[f"{label} : entrees (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
-    meta[f"{label} : analyse complete"] = (
+    meta[f"{label} : entrées (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimées"
+    meta[f"{label} : analyse complète"] = (
         f"installer pytsk3, ou : {command} > bodyfile.txt ; tsk_recover -a -o {start_sector} '{path}' ./root ; "
         "puis --linux ./root --bodyfile bodyfile.txt")
     return _report_file_anomalies(entries, meta, extra, label)
 
 
 def _analyze_extracted(local_path: str, origin: str) -> list[FindingModel]:
-    """Passe un fichier extrait de l'image dans les analyzers du scan (hors disque/memoire)."""
+    """Passe un fichier extrait de l'image dans les analyzers du scan (hors disque/mémoire)."""
     from forensic_analyzer.core.scanner import default_registry
 
     results = []
@@ -303,7 +303,7 @@ def _analyze_extracted(local_path: str, origin: str) -> list[FindingModel]:
 
 
 class DiskAnalyzer(BaseAnalyzer):
-    """Analyse forensique de disque - partitions, systemes de fichiers, MFT NTFS, ext via TSK."""
+    """Analyse forensique de disque - partitions, systèmes de fichiers, MFT NTFS, ext via TSK."""
     name = "disk"
     heavy = True
     supported_extensions = ('.raw', '.dd', '.img', '.001', '.E01', '.mft')
@@ -313,7 +313,7 @@ class DiskAnalyzer(BaseAnalyzer):
         self.workdir = workdir or os.path.join("export", "extractions")
 
     def can_handle(self, path: str) -> bool:
-        # .raw est ambigu (dump memoire ou image disque) : on exige une structure de disque
+        # .raw est ambigu (dump mémoire ou image disque) : on exige une structure de disque
         if path.lower().endswith(".raw"):
             return layout.is_disk_image(path)
         return super().can_handle(path)
@@ -339,7 +339,7 @@ class DiskAnalyzer(BaseAnalyzer):
                                                         f"{p['sectors'] * layout.SECTOR / 2**20:,.0f} Mio")
             elif structure.get("bare_filesystem"):
                 filesystems.append(structure["bare_filesystem"])
-                meta["Systeme de fichiers"] = structure["bare_filesystem"] + " (sans table de partitions)"
+                meta["Système de fichiers"] = structure["bare_filesystem"] + " (sans table de partitions)"
 
             ext_parts = [p for p in structure.get("partitions", []) if p["filesystem"].startswith("ext")]
             if structure.get("bare_filesystem", "").startswith("ext"):
@@ -349,7 +349,7 @@ class DiskAnalyzer(BaseAnalyzer):
                 sb = p.get("superblock", {})
                 if sb:
                     meta[f"{label} : UUID"] = sb["uuid"]
-                    meta[f"{label} : derniere ecriture du superbloc"] = sb["last_written"]
+                    meta[f"{label} : dernière écriture du superbloc"] = sb["last_written"]
                     meta[f"{label} : dernier montage"] = f"{sb['last_mounted']} sur {sb['last_mount_path'] or '?'} ({sb['state']})"
 
             techniques: set[str] = set()
@@ -363,10 +363,10 @@ class DiskAnalyzer(BaseAnalyzer):
             if techniques:
                 meta["MITRE ATT&CK"] = mitre.summary(techniques)
 
-            # Heuristiques NTFS brutes : seulement sans lecture TSK du systeme de fichiers
+            # Heuristiques NTFS brutes : seulement sans lecture TSK du système de fichiers
             if not deep and ("NTFS" in filesystems or not filesystems):
                 max_read = min(file_size, 200 * 1024 * 1024)  # Scan max 200MB de raw
-                meta["Taille analysee (NTFS)"] = f"{max_read:,} octets"
+                meta["Taille analysée (NTFS)"] = f"{max_read:,} octets"
                 with open(path, "rb") as f:
                     try:
                         data = mmap.mmap(f.fileno(), max_read, access=mmap.ACCESS_READ)
@@ -388,14 +388,14 @@ class DiskAnalyzer(BaseAnalyzer):
             return None
 
     def _deep_analysis(self, path: str, meta: dict, extra: dict, techniques: set[str]) -> list[FindingModel]:
-        """Lecture pytsk3 : metadonnees, triage des artefacts, puis analyses Linux / Windows / binaires."""
+        """Lecture pytsk3 : métadonnées, triage des artefacts, puis analyses Linux / Windows / binaires."""
         from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
         from forensic_analyzer.core.scanner import auto_scan, default_registry
 
         evidence_dir = os.path.dirname(os.path.abspath(path))
         workdir = os.path.abspath(os.path.join(self.workdir, os.path.basename(path)))
         if workdir == evidence_dir or workdir.startswith(evidence_dir + os.sep):
-            log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulee (%s)", workdir)
+            log.warning("Dossier d'extraction dans le dossier des preuves : extraction annulée (%s)", workdir)
             return []
 
         nested: list[FindingModel] = []
@@ -404,10 +404,10 @@ class DiskAnalyzer(BaseAnalyzer):
                 continue
             label = f"{fs.family} @{fs.offset}"
             entries = fs.walk()
-            meta[f"{label} : entrees"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimees"
+            meta[f"{label} : entrées"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimées"
             techniques |= _report_file_anomalies(entries, meta, extra, label)
 
-            # Fichiers suspects a extraire en plus du profil de triage
+            # Fichiers suspects à extraire en plus du profil de triage
             suspects = {e.path for e in bf.ownership_anomalies(entries) + bf.hidden_entries(entries)}
             dest = os.path.join(workdir, f"{fs.family}_{fs.offset}")
             extracted = fs.triage(entries, dest, extra_paths=suspects)

@@ -207,7 +207,7 @@ _DROPPED_EXT = (".exe", ".dll", ".scr", ".ps1", ".bat", ".vbs", ".hta", ".js", "
 
 
 def _suspicious_browser_url(url: str) -> bool:
-    """Un site visite n'est pas un indicateur : seuls l'IP brute et le telechargement d'executable le sont."""
+    """Un site visite n'est pas un indicateur : seuls l'IP brute et le téléchargement d'exécutable le sont."""
     host = re.sub(r"^https?://", "", url, flags=re.I).split("/")[0].split(":")[0]
     path = url.split("?")[0].lower()
     return bool(_IP.fullmatch(host)) or path.endswith(_DROPPED_EXT)

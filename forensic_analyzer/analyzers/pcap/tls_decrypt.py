@@ -6,14 +6,14 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("pcap.tls")
 
 def extract_decrypted_http(pcap_path: str, keylog_path: str) -> list[dict]:
-    """Utilise tshark pour dechiffrer le trafic TLS avec un fichier SSLKEYLOGFILE et extraire le HTTP sous-jacent."""
+    """Utilise tshark pour déchiffrer le trafic TLS avec un fichier SSLKEYLOGFILE et extraire le HTTP sous-jacent."""
     if not os.path.exists(keylog_path):
-        log.warning(f"Fichier de cles TLS introuvable: {keylog_path}")
+        log.warning(f"Fichier de clés TLS introuvable: {keylog_path}")
         return []
         
     decrypted_data = []
     try:
-        # On extrait les hotes, URIs, et donnees POST dechiffrees
+        # On extrait les hôtes, URIs, et données POST déchiffrées
         cmd = [
             "tshark", "-r", pcap_path,
             "-o", f"tls.keylog_file:{keylog_path}",
@@ -47,6 +47,6 @@ def extract_decrypted_http(pcap_path: str, keylog_path: str) -> list[dict]:
                         "data": file_data[:500] if file_data else ""
                     })
     except Exception as e:
-        log.error(f"Erreur lors du dechiffrement TLS: {e}")
+        log.error(f"Erreur lors du déchiffrement TLS: {e}")
         
     return decrypted_data
