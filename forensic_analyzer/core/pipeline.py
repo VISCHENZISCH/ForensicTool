@@ -36,13 +36,6 @@ class AnalyzerRegistry:
             self.register(a)
         return self
 
-    def get_for(self, path: str) -> BaseAnalyzer | None:
-        """Retourne le premier analyzer capable de traiter `path`, ou None."""
-        for a in self._analyzers:
-            if a.can_handle(path):
-                return a
-        return None
-
     def get_all_for(self, path: str) -> list[BaseAnalyzer]:
         """
         Retourne tous les analyzers capables de traiter `path`.

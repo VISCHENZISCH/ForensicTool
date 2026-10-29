@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# coding: utf-8
 """
 Couche CLI pour Forensic Analyzer.
 - Sans arguments : lance le menu interactif

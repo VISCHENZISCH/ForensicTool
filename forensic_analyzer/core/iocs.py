@@ -24,7 +24,7 @@ _BENIGN_DOMAINS = {"www.debian.org", "debian.org", "gnu.org", "www.gnu.org", "ex
                    "www.example.com", "schemas.microsoft.com", "www.w3.org", "w3.org"}
 
 # Types de résultats dont le fichier analysé est lui-même un indicateur (empreinte, nom)
-_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "javascript_analysis"}
+_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis"}
 
 
 @dataclass(frozen=True)
@@ -46,19 +46,6 @@ class IOC:
     def sources(self) -> set[str]:
         return {o.source for o in self.observations}
 
-    @property
-    def artifacts(self) -> set[str]:
-        return {o.artifact for o in self.observations}
-
-
-def is_routable_ip(value: str) -> bool:
-    """Adresse publique (exclut privé, loopback, lien local, multicast, réservé)."""
-    try:
-        ip = ipaddress.ip_address(value)
-    except ValueError:
-        return False
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
-                or ip.is_reserved or ip.is_unspecified)
 
 
 def _keep_ip(value: str) -> bool:

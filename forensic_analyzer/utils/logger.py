@@ -3,7 +3,7 @@ import logging
 import re
 import sys
 
-# Constantes de couleurs Premium DFIR
+# Couleurs ANSI 256
 MG1 = "\033[38;5;28m"  # Vert sombre (Hacker)
 MG2 = "\033[38;5;34m"  # Vert moyen (Hacker)
 MG3 = "\033[38;5;75m"   # Bleu ciel / Cyan
@@ -20,7 +20,6 @@ PURPLE = MG4
 COLOR_TIME = MG2
 COLOR_MUTED = MG1
 COLOR_CYAN = MG3
-COLOR_BRIGHT_BLUE = MG3
 COLOR_YELLOW = HY
 COLOR_RED = HR
 
@@ -38,10 +37,8 @@ class ColoredFormatter(logging.Formatter):
     """Formatter logging personnalisé colorant chaque élément du log."""
 
     def format(self, record: logging.LogRecord) -> str:
-        # 1. Horodatage (Vert émeraude)
         time_str = f"{COLOR_TIME}{self.formatTime(record, '%H:%M:%S')}{COLOR_RESET}"
 
-        # 2. Niveau (Couleur correspondante)
         level_raw = record.levelname
         lvl_color = LEVEL_COLORS.get(level_raw, COLOR_MUTED)
         level_str = f"{lvl_color}[{level_raw:<5}]{COLOR_RESET}"
@@ -49,7 +46,6 @@ class ColoredFormatter(logging.Formatter):
         # 3. Logger name (Sky Blue / Muted) — padé à 24 chars pour alignement
         logger_name = f"{COLOR_CYAN}{record.name:<24}{COLOR_RESET}"
 
-        # 4. Message
         msg = record.getMessage()
 
         # Coloration des tags comme [PDF]
@@ -83,7 +79,7 @@ def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     """Retourne un logger configuré sous l'espace de noms `forensic.<name>`."""
     logger = logging.getLogger(f"forensic.{name}")
     if not logger.handlers:
-        h = DynamicStreamHandler() # Utilise le handler dynamique pour bénéficier du wrapper de marge
+        h = DynamicStreamHandler()
         h.setFormatter(ColoredFormatter())
         logger.addHandler(h)
     logger.setLevel(level)

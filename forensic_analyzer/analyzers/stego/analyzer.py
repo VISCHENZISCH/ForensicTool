@@ -12,7 +12,7 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("stego")
 
 
-def _chi_square_test(data: bytes, threshold: float = 0.05) -> dict:
+def _chi_square_test(data: bytes) -> dict:
     """Test du chi-carre sur les LSB pour detecter de la steganographie."""
     if len(data) < 256:
         return {"detected": False, "score": 0.0, "detail": "Donnees insuffisantes"}
@@ -44,35 +44,31 @@ def _chi_square_test(data: bytes, threshold: float = 0.05) -> dict:
     }
 
 
+# Valeur des `bits` bits de poids faible de chaque octet, en binaire sur `bits` caracteres
+_LSB_TABLES = {bits: [format(v & ((1 << bits) - 1), f"0{bits}b") for v in range(256)] for bits in (1, 2, 4)}
+
+
 def _extract_lsb(img, bits: int = 1, channels: str = "RGB") -> bytes:
-    """Extrait les bits de poids faible d'une image."""
+    """Extrait les bits de poids faible d'une image (canaux dans l'ordre demande, pixel par pixel)."""
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
+    raw = img.tobytes()
+    stride = len(img.mode)
+    selected = [ch for ch in ("RGBA".index(c) for c in channels if c in "RGBA") if ch < stride]
+    if not selected:
+        return b""
+    if len(selected) == stride:
+        samples = raw
+    else:
+        samples = bytearray(len(raw) // stride * len(selected))
+        for i, ch in enumerate(selected):
+            samples[i::len(selected)] = raw[ch::stride]
 
-    pixels = list(img.getdata())
-    channel_map = {"R": 0, "G": 1, "B": 2, "A": 3}
-    target_channels = [channel_map[c] for c in channels if c in channel_map]
-
-    extracted_bits = []
-    mask = (1 << bits) - 1
-
-    for pixel in pixels:
-        for ch in target_channels:
-            if ch < len(pixel):
-                extracted_bits.append(pixel[ch] & mask)
-
-    # Reconstituer les octets
-    result = bytearray()
-    bit_buffer = 0
-    bit_count = 0
-    for val in extracted_bits:
-        bit_buffer = (bit_buffer << bits) | val
-        bit_count += bits
-        while bit_count >= 8:
-            bit_count -= 8
-            result.append((bit_buffer >> bit_count) & 0xFF)
-
-    return bytes(result)
+    bitstring = "".join(map(_LSB_TABLES[bits].__getitem__, samples))
+    usable = len(bitstring) - len(bitstring) % 8
+    if not usable:
+        return b""
+    return int(bitstring[:usable], 2).to_bytes(usable // 8, "big")
 
 
 def _analyze_alpha_channel(img) -> dict:
@@ -80,22 +76,15 @@ def _analyze_alpha_channel(img) -> dict:
     if img.mode != "RGBA":
         return {"has_alpha": False, "detail": "Pas de canal alpha"}
 
-    pixels = list(img.getdata())
-    alpha_values = [p[3] for p in pixels]
-
-    set(alpha_values)
-    non_255 = sum(1 for a in alpha_values if a != 255)
-    non_0_non_255 = sum(1 for a in alpha_values if a not in (0, 255))
-
-    suspicious = non_0_non_255 > len(alpha_values) * 0.01
-
-    # Extraire les LSB du canal alpha
-    alpha_lsb = bytes([a & 1 for a in alpha_values[:1024]])
-    entropy = _byte_entropy(alpha_lsb)
+    alpha = img.getchannel("A").tobytes()
+    non_255 = len(alpha) - alpha.count(255)
+    non_0_non_255 = non_255 - alpha.count(0)
+    suspicious = non_0_non_255 > len(alpha) * 0.01
+    entropy = _byte_entropy(bytes(a & 1 for a in alpha[:1024]))
 
     return {
         "has_alpha": True,
-        "total_pixels": len(alpha_values),
+        "total_pixels": len(alpha),
         "non_opaque_pixels": non_255,
         "suspicious_alpha_pixels": non_0_non_255,
         "alpha_lsb_entropy": round(entropy, 4),
@@ -217,9 +206,13 @@ class StegoAnalyzer(BaseAnalyzer):
                 import wave
                 try:
                     with wave.open(path, "rb") as w:
-                        frames = w.readframes(w.getnframes()[:1000000]) # 1MB max pour perfs
+                        width = w.getsampwidth()
+                        frames = w.readframes(min(w.getnframes(), 1_000_000))
                         if frames:
-                            lsb_audio = bytes([b & 1 for b in frames])
+                            # LSB de l'octet de poids faible de chaque echantillon (PCM little-endian), 8 par octet
+                            bits = [b & 1 for b in frames[::width]]
+                            lsb_audio = bytes(int("".join(map(str, bits[i:i + 8])), 2)
+                                              for i in range(0, len(bits) - 7, 8))
                             cat_strs = categorize_strings(extract_strings_with_offsets(lsb_audio, min_length=5))
                             
                             flat_meta["Audio LSB"] = "Analysé"
@@ -228,6 +221,10 @@ class StegoAnalyzer(BaseAnalyzer):
                             total_iocs = sum(len(items) for items in cat_strs.values())
                             if total_iocs > 0:
                                 flat_meta["Strings Audio (LSB)"] = f"{total_iocs} IOCs cachés"
+                                suspicion_score += 5
+                            hidden = [t for _, t in extract_strings_with_offsets(lsb_audio, min_length=16)]
+                            if hidden:
+                                flat_meta["Message LSB (audio)"] = " | ".join(t[:80] for t in hidden[:3])
                                 suspicion_score += 5
                 except Exception as e:
                     flat_meta["Audio LSB"] = f"Erreur: {e}"
@@ -251,9 +248,8 @@ class StegoAnalyzer(BaseAnalyzer):
                 for ch in ("R", "G", "B", "A"):
                     if ch == "A" and img.mode != "RGBA": continue
                     ch_data = _extract_lsb(img, bits=1, channels=ch)
-                    # Strings dans les pixels de ce canal
                     ch_strs = extract_strings_with_offsets(ch_data, min_length=6)
-                    if len(ch_strs) > 10: # On cherche vraiment s'il y a de la data
+                    if len(ch_strs) > 10:
                         lsb_strings_found[ch] = len(ch_strs)
                         suspicion_score += 1
                         

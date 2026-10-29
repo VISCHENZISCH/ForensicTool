@@ -53,12 +53,10 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
         # Slack space (Espace vide a la fin de l'enregistrement MFT)
         record["mft_slack_space"] = max(0, record["allocated_size"] - record["used_size"])
 
-        # Flags interpretation
         flags_val = record["flags"]
         record["in_use"] = bool(flags_val & 0x01)
         record["is_directory"] = bool(flags_val & 0x02)
 
-        # Parser les attributs
         attr_offset = record["first_attribute_offset"]
         attributes = []
         while attr_offset < min(record["used_size"], 1024) - 4:
@@ -150,9 +148,8 @@ def detect_ads(path: str) -> list[dict]:
                 try:
                     data = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 except ValueError:
-                    return ads_found # Fichier vide
+                    return ads_found
 
-            # Scanner les records MFT (Optimisé via C-level mmap.find)
             offset = 0
             while True:
                 offset = data.find(b'FILE', offset)
@@ -182,7 +179,7 @@ def detect_ads(path: str) -> list[dict]:
 def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
     """Heuristiques NTFS : records MFT, journaux, corbeille, LNK, Prefetch, VSS, ADS."""
     # LNK, Prefetch, VSS carving (signatures)
-    lnk_count = data.find(b'\x4c\x00\x00\x00\x01\x14\x02\x00') != -1 # Simplification pour eviter scan complet lourd si mmap
+    lnk_count = data.find(b'\x4c\x00\x00\x00\x01\x14\x02\x00') != -1
     if lnk_count:
         meta["Raccourcis LNK"] = "Détectés"
         
@@ -194,7 +191,6 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
     if vss_count:
         meta["Shadow Copies (VSS)"] = "DÉTECTÉ"
 
-    # Detection MFT (O(N) optimisé en C)
     mft_records = []
     usnjrnl_found = False
     logfile_found = False
@@ -240,7 +236,6 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
             status = "SUPPRIME" if not rec.get("in_use") else "actif"
             meta[f"MFT #{i+1}"] = f"{fname} [{status}]"
 
-    # Detection ADS
     ads = detect_ads(path)
     if ads:
         meta["ADS detectes"] = str(len(ads))

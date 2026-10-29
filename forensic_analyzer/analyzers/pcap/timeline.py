@@ -12,7 +12,6 @@ except ImportError:
 def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
     timeline = []
     
-    # Fast access sets
     suspect_dns = {s['domaine'] for s in suspect_domains}
     c2_ips = set()
     for beacon in c2_beacons.get('beacons', []):
@@ -21,7 +20,6 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
         if dst:
             c2_ips.add(dst.rsplit(':', 1)[0])
     
-    # Extraction packets
     for pkt in packets:
         try:
             ts = datetime.datetime.fromtimestamp(float(pkt.time), datetime.timezone.utc).isoformat()

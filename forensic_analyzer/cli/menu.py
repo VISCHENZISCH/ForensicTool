@@ -19,7 +19,6 @@ from forensic_analyzer.analyzers.linux import \
     LinuxArtifactsAnalyzer
 from forensic_analyzer.analyzers.memory import MemoryAnalyzer
 from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
-#Imports analyzers
 from forensic_analyzer.analyzers.pdf import PDFAnalyzer
 from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
 from forensic_analyzer.analyzers.registry import RegistryAnalyzer
@@ -38,7 +37,6 @@ from forensic_analyzer.output.html_exporter import HTMLExporter
 from forensic_analyzer.output.json_exporter import JSONExporter
 from forensic_analyzer.output.pdf_exporter import PDFExporter
 
-# Dispatch mapping for menu options
 _MENU_DISPATCH = {
     "1":  ("PDF - Metadonnees",     lambda: PDFAnalyzer(),           "Entrez le chemin du fichier PDF"),
     "2":  ("Image / EXIF",          lambda: ImageAnalyzer(),          "Entrez le chemin de l'image"),
@@ -169,14 +167,12 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
 
 def _boot_sequence() -> None:
     """Verifie reellement la presence des dependances avec une animation Matrix."""
-    import time
     import sys
     import importlib.util
     from forensic_analyzer.output import ui
     
     ui.clear_screen()
     
-    # Dictionnaire des modules a verifier: { "nom_affichage": "nom_import" }
     modules = {
         "Scapy (Network)": "scapy",
         "YARA (Malware)": "yara",
@@ -191,7 +187,6 @@ def _boot_sequence() -> None:
     }
     
     print(f"\n{ui.C.MG5}INITIALISATION DU NOYAU FORENSIC ANALYZER...{ui.C.RS}\n")
-    time.sleep(0.3)
     
     items = list(modules.items())
     total_steps = len(items)
@@ -199,7 +194,6 @@ def _boot_sequence() -> None:
     for i, (display_name, import_name) in enumerate(items, 1):
         percent = int((i / total_steps) * 100)
         
-        # Barre visuelle sur 40 caracteres
         bar_len = 40
         filled = int((i / total_steps) * bar_len)
         bar = "█" * filled + "░" * (bar_len - filled)
@@ -207,7 +201,6 @@ def _boot_sequence() -> None:
         sys.stdout.write(f"\r{ui.C.MG4}[{ui.C.MG5}{bar}{ui.C.MG4}]{ui.C.RS} {ui.C.MG6}{percent:3d}%{ui.C.RS} {ui.C.MG2}| Verification : {display_name}...{ui.C.RS}\033[K")
         sys.stdout.flush()
         
-        # Verification REELLE de la dependance
         try:
             spec = importlib.util.find_spec(import_name)
             if spec is None:
@@ -217,10 +210,8 @@ def _boot_sequence() -> None:
             sys.stdout.write(f"{ui.C.HY}Veuillez relancer avec ./run.sh ou executer: pip install -r requirements.txt{ui.C.RS}\n")
             sys.exit(1)
             
-        time.sleep(0.15)  # Petit delai visuel
         
     print(f"\n\n{ui.C.MG5}[+] Toutes les dependances sont verifiees et operationnelles.{ui.C.RS}")
-    time.sleep(0.5)
 
 
 def interactive_loop() -> None:
@@ -242,7 +233,6 @@ def interactive_loop() -> None:
         if choice.isdigit() and choice != "00":
             choice = str(int(choice))
 
-        # Quitter
         if choice == "00" or choice == "0":
             print()
             ui.info("Fermeture de Forensic Analyzer.")
@@ -254,7 +244,6 @@ def interactive_loop() -> None:
             print()
             break
 
-        # Scan automatique
         if choice == "88":
             path = ui.prompt_file("Entrez le chemin du fichier ou dossier a scanner")
             if path is None:
@@ -272,13 +261,11 @@ def interactive_loop() -> None:
             ui.wait_for_key()
             continue
 
-        # Exporter rapport
         if choice == "99":
             _handle_export(session_findings)
             ui.wait_for_key()
             continue
 
-        # Dispatch standard
         if choice not in _MENU_DISPATCH:
             ui.error("Option invalide. Veuillez choisir un nombre du menu.")
             continue
@@ -287,7 +274,6 @@ def interactive_loop() -> None:
         item[0]
         action = item[1]
 
-        # Cas Timeline
         if action == "timeline":
             if not session_findings:
                 ui.warning("Aucun résultat en mémoire pour construire la timeline.")
@@ -303,7 +289,6 @@ def interactive_loop() -> None:
             ui.wait_for_key()
             continue
 
-        # Cas YARA
         if action == "yara":
             rules_path = ui.prompt_file("Entrez le chemin du fichier ou dossier de regles YARA (.yar)")
             if rules_path is None:
@@ -331,7 +316,6 @@ def interactive_loop() -> None:
             ui.wait_for_key()
             continue
 
-        # Cas Memoire
         if action == "memory":
             path = ui.prompt_file("Entrez le chemin du dump memoire (.raw)")
             if path is None:
@@ -350,7 +334,6 @@ def interactive_loop() -> None:
             ui.wait_for_key()
             continue
 
-        # Cas standard
         prompt_msg = item[2]
         path = ui.prompt_file(prompt_msg)
         if path is None:

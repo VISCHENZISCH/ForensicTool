@@ -2,8 +2,9 @@
 Gestion centralisée des dépendances optionnelles.
 Tous les modules importent leurs dépendances depuis ce fichier unique.
 """
+import importlib.util
 
-#PDF
+# PDF
 try:
     from pypdf import PdfReader
     HAS_PYPDF = True
@@ -29,14 +30,5 @@ except ImportError:
     exifread = None          # type: ignore[assignment]
     HAS_EXIFREAD = False
 
-#Rich UI
-try:
-    from rich import box
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
-    HAS_RICH = True
-except ImportError:
-    Console = Table = Panel = Text = box = None  # type: ignore[assignment,misc]
-    HAS_RICH = False
+# Rich UI
+HAS_RICH = importlib.util.find_spec("rich") is not None

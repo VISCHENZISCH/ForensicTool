@@ -70,7 +70,6 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
         "cve": [],
     }
 
-    # IPv4
     for match in _IPV4.finditer(text):
         ip = match.group()
         if not include_private_ips and ip.startswith(_PRIVATE_RANGES):
@@ -78,25 +77,21 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
         if ip not in result["ipv4"]:
             result["ipv4"].append(ip)
 
-    # IPv6
     for match in _IPV6.finditer(text):
         ip = match.group()
         if ip not in result["ipv6"]:
             result["ipv6"].append(ip)
 
-    # URLs
     for match in _URL.finditer(text):
         url = match.group().rstrip('.,;:)')
         if url not in result["urls"]:
             result["urls"].append(url)
 
-    # Domains
     for match in _DOMAIN.finditer(text):
         domain = match.group().lower()
         if domain not in result["domains"]:
             result["domains"].append(domain)
 
-    # Emails
     for match in _EMAIL.finditer(text):
         email = match.group().lower()
         if email not in result["emails"]:
@@ -124,13 +119,11 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
             and not any(h in s for s in sha1_set)):
             result["md5"].append(h)
 
-    # Bitcoin
     for match in _BITCOIN.finditer(text):
         addr = match.group()
         if addr not in result["bitcoin"]:
             result["bitcoin"].append(addr)
 
-    # CVE
     for match in _CVE.finditer(text):
         cve = match.group().upper()
         if cve not in result["cve"]:
@@ -177,13 +170,10 @@ class IOCAnalyzer(BaseAnalyzer):
             with open(path, "rb") as f:
                 data = f.read(max_read)
 
-            # Hashes du fichier
             file_hashes = compute_file_hashes(path)
 
-            # Extraction IOC
             iocs = extract_iocs(data)
 
-            # Comptage
             total_iocs = sum(len(v) for v in iocs.values())
 
             meta: dict = {
@@ -199,7 +189,6 @@ class IOCAnalyzer(BaseAnalyzer):
                 if items:
                     meta[f"IOC {ioc_type}"] = str(len(items))
 
-            # Apercu des IOCs
             for ioc_type, items in iocs.items():
                 for i, item in enumerate(items[:5]):
                     meta[f"{ioc_type} #{i+1}"] = str(item)[:100]

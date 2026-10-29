@@ -174,7 +174,6 @@ class RegistryAnalyzer(BaseAnalyzer):
 
             all_entries: list[dict] = []
 
-            # Chercher les cles d'interet
             target_keys = _FORENSIC_KEYS.get(basename, [])
             if not target_keys:
                 # Fallback : scanner les cles connues de tous les types
@@ -198,7 +197,6 @@ class RegistryAnalyzer(BaseAnalyzer):
                 for i, p in enumerate(persistence[:5]):
                     meta[f"Persistance #{i+1}"] = f"[{p['type']}] {p['name']}: {p['value'][:80]}"
 
-            # Extract Suspects
             suspects = [e for e in all_entries if e.get("suspect")]
             if suspects:
                 meta["[ALERTE] Clés Suspectes"] = f"{len(suspects)} détectées"

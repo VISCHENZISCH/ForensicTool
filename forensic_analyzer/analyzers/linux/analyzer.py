@@ -220,7 +220,6 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
     """Analyse les artefacts SSH (cles, known_hosts, authorized_keys)."""
     results: dict = {"keys": [], "known_hosts": [], "authorized_keys": []}
 
-    # Scanner les home directories
     home_base = os.path.join(root_path, "home")
     if os.path.isdir(home_base):
         for user_dir in os.listdir(home_base):
@@ -286,14 +285,12 @@ def parse_proc_maps(root_path: str = "/") -> list[dict]:
         pid_path = os.path.join(proc_dir, pid_dir)
 
         try:
-            # cmdline
             cmdline_path = os.path.join(pid_path, "cmdline")
             cmdline = ""
             if os.path.isfile(cmdline_path):
                 with open(cmdline_path, "r", errors="replace") as f:
                     cmdline = f.read().replace('\x00', ' ').strip()
 
-            # Status
             status_path = os.path.join(pid_path, "status")
             name = ""
             uid = ""
@@ -327,7 +324,7 @@ def parse_passwd_shadow(root_path: str = "/") -> dict:
             for line in f:
                 parts = line.strip().split(":")
                 if len(parts) >= 7:
-                    user, pwd, uid, gid, comment, home, shell = parts[:7]
+                    user, uid, shell = parts[0], parts[2], parts[6]
                     res["passwd"].append({"user": user, "uid": uid, "shell": shell})
                     if uid == "0":
                         res["uid_0"].append(user)
@@ -556,7 +553,6 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
             elif os.path.isdir(path):
                 meta["Type"] = "Scan complet repertoire racine"
 
-                # bash_history
                 history_files = glob.glob(os.path.join(path, "home/*/.bash_history"))
                 history_files += glob.glob(os.path.join(path, "root/.bash_history"))
                 all_history: dict = {}
@@ -568,7 +564,6 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 meta["Total commandes suspectes"] = str(total_suspicious)
                 extra["bash_histories"] = all_history
 
-                # auth.log
                 auth_paths = [
                     os.path.join(path, "var/log/auth.log"),
                     os.path.join(path, "var/log/secure"),
@@ -581,12 +576,10 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                         extra["auth_log"] = auth_result
                         break
 
-                # Crontabs
                 crons = parse_crontabs(path)
                 meta["Entrees cron"] = str(len(crons))
                 extra["crontabs"] = crons
 
-                # SSH
                 ssh = parse_ssh_artifacts(path)
                 meta["Cles SSH"] = str(len(ssh["keys"]))
                 meta["Known hosts"] = str(len(ssh["known_hosts"]))
@@ -600,7 +593,6 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     meta["Processus actifs"] = str(len(procs))
                     extra["processes"] = procs[:200]
                     
-                # Nouveaux Artefacts (Passwd, Syslog, SUID, Systemd, WTMP)
                 accts = parse_passwd_shadow(path)
                 meta["Comptes UID 0 (root)"] = ", ".join(accts["uid_0"])
                 meta["Comptes avec mot de passe"] = str(len(accts["shadow"]))

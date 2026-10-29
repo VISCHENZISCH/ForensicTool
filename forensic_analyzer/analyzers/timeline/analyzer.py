@@ -1,7 +1,6 @@
 """Analyzer Timeline - correlation multi-sources et export DFIR."""
 from __future__ import annotations
 
-import csv
 import datetime
 import os
 
@@ -17,10 +16,8 @@ def _normalize_timestamp(ts: str) -> str:
     """Tente de normaliser un timestamp en ISO 8601."""
     if not ts or ts == "N/A":
         return ""
-    # Deja ISO
     if "T" in ts:
         return ts
-    # Formats courants
     for fmt in (
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S",
@@ -209,16 +206,6 @@ def build_timeline(report: ReportModel) -> list[dict]:
     return events
 
 
-def export_timeline_csv(events: list[dict], output_path: str) -> None:
-    """Exporte la timeline en CSV compatible Plaso/DFIR."""
-    fieldnames = ["timestamp", "source", "event_type", "description", "file", "details"]
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(events)
-    log.info("Timeline CSV exportee -> %s (%d evenements)", output_path, len(events))
-
-
 class TimelineAnalyzer(BaseAnalyzer):
     """Construit une timeline forensique unifiee multi-sources."""
     name = "timeline"
@@ -234,7 +221,6 @@ class TimelineAnalyzer(BaseAnalyzer):
         """Construit la timeline depuis un ReportModel existant."""
         events = build_timeline(report)
 
-        # Stats
         sources = {}
         for e in events:
             src = e.get("source", "unknown")

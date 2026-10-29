@@ -87,7 +87,7 @@ def extract_payload_delivery(streams: dict[str, bytes]) -> list[dict]:
                 if (is_pe or is_download) and len(body) > 10000:
                     ips = stream_id.replace(" <-> ", ":").split(":")
                     if len(ips) == 4:
-                        ip1, port1, ip2, port2 = ips
+                        ip1, port1, ip2, _port2 = ips
                         src_ip = ip1 if port1 in ("80", "8080", "443", "4444") else ip2
                         deliveries.append({
                             "stream": stream_id,

@@ -156,3 +156,88 @@ def test_suricata_url_rule_is_anchored_on_host(tmp_path):
     out = DefenseRulesGenerator().generate(ReportModel.from_findings([elf]), output_dir=str(tmp_path))
     rule = next(l for l in open(out["suricata"]) if "http.uri" in l)
     assert 'http.host; content:"185.220.101.42"' in rule and 'http.uri; content:"/x"' in rule
+
+
+def _pdf(tmp_path, name: str, body: bytes) -> str:
+    path = tmp_path / name
+    path.write_bytes(b"%PDF-1.5\n" + body + b"\ntrailer<</Root 1 0 R>>\n%%EOF\n")
+    return str(path)
+
+
+def _flate(obj: int, data: bytes, extra: bytes = b"") -> bytes:
+    import zlib
+    z = zlib.compress(data)
+    return (b"%d 0 obj<</Length %d/Filter/FlateDecode%s>>stream\n" % (obj, len(z), extra)) + z + b"\nendstream endobj\n"
+
+
+def test_pdf_scoring_flags_malicious_documents(tmp_path):
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+
+    def score(path):
+        meta = PDFAnalyzer().analyze(path).metadata
+        return int(meta["Niveau de Menace (Scoring PDF)"].split("/")[0]), meta
+
+    js_open = _pdf(tmp_path, "js.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
+                                        b"2 0 obj<</S/JavaScript/JS(app.alert(1))>>endobj")
+    s, meta = score(js_open)
+    assert s >= 45 and "Critique" in meta["PDF Actions"]
+
+    obfuscated = _pdf(tmp_path, "obf.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
+                                           b"2 0 obj<</S/J#61vaScript/J#53 3 0 R>>endobj\n"
+                                           + _flate(3, b"var s=unescape('%u9090%u9090%u9090');eval(s);"))
+    s, meta = score(obfuscated)
+    assert s >= 90 and "Noms obfusques" in meta and "Shellcode" in meta
+
+    launch = _pdf(tmp_path, "launch.pdf", b"1 0 obj<</Type/Catalog/OpenAction<</S/Launch/F(cmd.exe)>>>>endobj")
+    assert score(launch)[0] >= 40
+
+    attached = _pdf(tmp_path, "att.pdf", b"1 0 obj<</Type/Catalog/Names<</EmbeddedFiles 2 0 R>>>>endobj")
+    assert "Fichiers Embarqués" in score(attached)[1]
+
+
+def test_pdf_scoring_ignores_benign_structures(tmp_path):
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+
+    benign = _pdf(tmp_path, "benign.pdf",
+                  b"1 0 obj<</Type/Catalog/OpenAction[3 0 R/Fit]/JSomething 1>>endobj\n"
+                  + _flate(2, b"BT /F1 12 Tf (Rapport annuel) Tj ET\n" * 200 + b"\x90" * 64)  # octets 0x90 bruts
+                  + b"4 0 obj<</Length 4096/Filter/DCTDecode>>stream\n" + os.urandom(4096) + b"\nendstream endobj\n")
+    meta = PDFAnalyzer().analyze(benign).metadata
+    assert meta["Niveau de Menace (Scoring PDF)"].startswith("5/100")
+    assert "Shellcode" not in meta and "/JS" not in meta.get("Tags PDF Suspects", "")
+
+
+def test_pdf_actions_hidden_in_object_stream(tmp_path):
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+
+    objects = b"2 0 3 40 <</S/JavaScript/JS(app.alert(1))>> <</Type/Catalog/OpenAction 2 0 R>>"
+    hidden = _pdf(tmp_path, "objstm.pdf", _flate(5, objects, b"/Type/ObjStm/N 2/First 8"))
+    meta = PDFAnalyzer().analyze(hidden).metadata
+    assert "Critique" in meta["PDF Actions"]
+
+
+def test_pdf_js_bytes_inside_binary_stream_are_ignored(tmp_path):
+    from forensic_analyzer.analyzers.pdf import PDFAnalyzer
+
+    image = os.urandom(2000) + b"/JS\x91" + os.urandom(2000)
+    path = _pdf(tmp_path, "img.pdf", b"1 0 obj<</Length 4004/Filter/DCTDecode>>stream\n" + image + b"\nendstream endobj")
+    assert "PDF Actions" not in PDFAnalyzer().analyze(path).metadata
+
+
+def test_stego_finds_message_in_wav_lsb(tmp_path):
+    import struct
+    import wave
+    from forensic_analyzer.analyzers.stego import StegoAnalyzer
+
+    bits = [int(b) for c in b"SECRET:flag{audio_lsb_message}" for b in f"{c:08b}"]
+    samples = [(1000 + 7 * i) & ~1 | (bits[i] if i < len(bits) else 0) for i in range(4000)]
+    path = tmp_path / "voice.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+    meta = StegoAnalyzer().analyze(str(path)).metadata
+    assert "flag{audio_lsb_message}" in meta["Message LSB (audio)"]
+    assert meta["Verdict"] == "STEGO PROBABLE"

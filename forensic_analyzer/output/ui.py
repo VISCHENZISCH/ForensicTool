@@ -8,21 +8,10 @@ import os
 import shutil
 import textwrap
 
-# Codes couleur ANSI
 
-# Constantes de couleurs ANSI 256 de WebMapper
-CRIMSON   = "\033[38;5;196m"
-EMERALD   = "\033[38;5;46m"
-GOLD      = "\033[38;5;220m"
-SKY_BLUE  = "\033[38;5;39m"
-PURPLE    = "\033[38;5;141m"
-MAGENTA   = "\033[38;5;201m"
-DARK_GREY = "\033[38;5;243m"
-# Le blanc a été intégralement supprimé pour le thème Matrix
 
 class C:
     """Palette de couleurs sémantiques propres."""
-    # Couleurs Sémantiques Spécifiques
     C_IP       = "\033[38;5;39m"   # Bleu ciel pour IPs
     C_MAC      = "\033[38;5;141m"  # Violet clair pour MACs
     C_HOST     = "\033[38;5;220m"  # Or/Jaune pour Hostnames
@@ -118,13 +107,9 @@ def banner() -> None:
 def menu() -> None:
     """Affiche le menu interactif complet avec double-lignes rouges."""
     w = _width()
-    # Separateur en rouge
-    #sep = f"{C.R}{'-' * (w - 8)}{C.RS}"
 
-    #print(f"\n{MARGIN}{sep}")
     print()
 
-    # Colonnes : gauche et droite
     left = [
         (f"{C.VB}{C.BD}Analyse Fichiers{C.RS}", None),
         (f" {C.G}[01]{C.RS} {C.W}PDF - Metadonnees{C.RS}", None),
@@ -300,7 +285,7 @@ MODULE_COLORS = {
     "elf_analysis": "\033[38;5;160m", "evidence_integrity": C.G, "correlation": C.HR
 }
 
-def separator(label: str = "", dynamic_width: int = 0, custom_color: str = C.G) -> None:
+def separator(label: str = "", custom_color: str = C.G) -> None:
     """Separateur double-ligne style hacker avec taille fixe de 85."""
     target_width = 85
     if label:
@@ -314,7 +299,7 @@ def separator(label: str = "", dynamic_width: int = 0, custom_color: str = C.G) 
         print(f"{MARGIN}{C.R}{'═' * target_width}{C.RS}")
 
 
-def finding_header(finding_type: str, filename: str, dynamic_width: int = 0) -> None:
+def finding_header(finding_type: str, filename: str) -> None:
     """Affiche l'entete d'un finding."""
     tag = MODULE_TAGS.get(finding_type, "???")
     name = MODULE_NAMES.get(finding_type, finding_type)
@@ -360,11 +345,9 @@ def render_finding(finding) -> None:
     fname = os.path.basename(finding.file)
     finding_header(finding.type, fname)
 
-    # Metadonnees
     for k, v in finding.metadata.items():
         kv(k, v)
 
-    # Extras selon le type
     extra = finding.extra or {}
 
     if finding.type == "strings" and "strings" in extra:

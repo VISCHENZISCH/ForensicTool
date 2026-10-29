@@ -33,34 +33,12 @@ class PDFAnalyzer(BaseAnalyzer):
                 log.warning("↳ Fichier corrompu ou illisible (%s)", short_msg)
                 
         # Analyse heuristique (Malware PDF)
-        from forensic_analyzer.analyzers.malware.pdf_parser import extract_pdf_artifacts
+        from forensic_analyzer.analyzers.malware.pdf_parser import extract_pdf_artifacts, pdf_threat_metadata
         pdf_info = extract_pdf_artifacts(path)
         
         if "error" not in pdf_info:
-            if pdf_info["has_js"] or pdf_info["has_openaction"]:
-                metadata["PDF Actions"] = "JavaScript / OpenAction détectés (Critique)"
-            if pdf_info["has_embedded_files"]:
-                metadata["Fichiers Embarqués"] = "Dropper détecté (EmbeddedFiles)"
-            if pdf_info["high_entropy_streams"] > 0:
-                metadata["Streams Obfusqués"] = f"{pdf_info['high_entropy_streams']} objet(s) à forte entropie (>7.5)"
-            if pdf_info.get("is_linearized"):
-                metadata["Linéarisation"] = "OUI (Fast Web View)"
-            if pdf_info.get("shellcode_detected"):
-                metadata["Shellcode"] = "DÉTECTÉ (NOP Sleds / Heap Spray) (CRITIQUE)"
-                
-            score = 0
-            if pdf_info.get("shellcode_detected"): score += 50
-            if pdf_info.get("has_js"): score += 30
-            if pdf_info.get("has_openaction"): score += 30
-            if pdf_info.get("has_embedded_files"): score += 20
-            if pdf_info.get("high_entropy_streams", 0) > 0: score += 10
-            
-            if score >= 50: level = "Critique"
-            elif score >= 30: level = "Élevé"
-            elif score > 0: level = "Moyen"
-            else: level = "Faible"
-            metadata["Niveau de Menace (Scoring PDF)"] = f"{score}/100 ({level})"
-                
+            metadata.update(pdf_threat_metadata(pdf_info))
+
             if pdf_info["urls"]:
                 url_str = "\n".join(pdf_info["urls"])
                 metadata["URLs Embedées"] = url_str[:1000] + ("..." if len(url_str) > 1000 else "")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import xml.etree.ElementTree as ET
 
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
@@ -11,20 +12,9 @@ log = get_logger("evtx")
 
 try:
     import Evtx.Evtx as evtx
-    import Evtx.Views as evtx_views
     HAS_EVTX = True
 except ImportError:
     HAS_EVTX = False
-    class DummyEvtx:
-        pass
-    evtx = DummyEvtx
-    evtx_views = None
-
-try:
-    import xml.etree.ElementTree as ET
-    HAS_XML = True
-except ImportError:
-    HAS_XML = False
 
 # Event IDs d'interet forensique
 _SECURITY_EVENTS = {
@@ -79,7 +69,6 @@ def _parse_evtx_event(xml_str: str) -> dict | None:
         channel_el = system.find(f"{_NS}Channel")
         channel = channel_el.text if channel_el is not None else ""
 
-        # Event data
         event_data = {}
         # Some logs use UserData instead of EventData
         data_section = root.find(f"{_NS}EventData")
@@ -140,11 +129,9 @@ class EVTXAnalyzer(BaseAnalyzer):
                         unreadable += 1
                         continue
 
-            # Trier par timestamp
             events.sort(key=lambda e: e.get("timestamp", ""))
             security_events.sort(key=lambda e: e.get("timestamp", ""))
 
-            # Top event IDs
             top_events = sorted(event_ids_counter.items(), key=lambda x: -x[1])[:20]
 
             meta: dict = {
@@ -165,7 +152,6 @@ class EVTXAnalyzer(BaseAnalyzer):
                     label += f" ({desc})"
                 meta[label] = f"{count} occurrences"
 
-            # Export Timeline CSV & Anomalies
             import csv
             anomalies = []
             # Dans export/, jamais a cote de la preuve
@@ -184,7 +170,6 @@ class EVTXAnalyzer(BaseAnalyzer):
                         if not user:
                             user = e["data"].get("UserID", "")
                             
-                        # Formatage détails
                         details = ""
                         if eid == 4688:
                             details = f"Proc: {e['data'].get('NewProcessName', '')} | Cmd: {e['data'].get('CommandLine', '')}"

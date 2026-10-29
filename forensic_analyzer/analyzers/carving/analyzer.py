@@ -84,13 +84,11 @@ def scan_magic_bytes(data: bytes, offset_base: int = 0) -> list[dict]:
     data_len = len(data)
 
     for sig_offset, magic, ext, desc in SIGNATURES:
-        # Recherche a partir du debut
         search_start = 0
         while search_start < data_len:
             pos = data.find(magic, search_start + sig_offset)
             if pos == -1:
                 break
-            # Verifier que l'offset relatif correspond
             actual_offset = pos - sig_offset
             if actual_offset >= 0:
                 found.append({
@@ -107,7 +105,6 @@ def scan_magic_bytes(data: bytes, offset_base: int = 0) -> list[dict]:
         if len(found) > 500:
             break
 
-    # Trier par offset
     found.sort(key=lambda x: x["offset"])
     return found
 
@@ -309,16 +306,12 @@ class CarvingAnalyzer(BaseAnalyzer):
             with open(path, "rb") as f:
                 data = f.read(max_read)
 
-            # 1. Scanner les magic bytes
             magic_hits = scan_magic_bytes(data)
 
-            # 2. Detecter les fichiers embarques
             embedded = detect_embedded_files(data)
 
-            # 3. Detecter les polyglots
             polyglots = detect_polyglot(data, path)
 
-            # 3.5 Extraction automatique & Hashing
             import hashlib
             extracted_paths = []
             evidence_dir = os.path.dirname(os.path.abspath(path))
@@ -338,7 +331,6 @@ class CarvingAnalyzer(BaseAnalyzer):
                         with open(out_file, "wb") as out_f:
                             out_f.write(carved_data)
                             
-                        # Hash & Rapport
                         file_hash = hashlib.sha256(carved_data).hexdigest()
                         emb["sha256"] = file_hash
                         emb["extracted_path"] = out_file
@@ -350,7 +342,6 @@ class CarvingAnalyzer(BaseAnalyzer):
             
 
 
-            # 4. Tenter de reparer les ZIP corrompus si trouves
             zip_repairs = []
             for emb in embedded:
                 if emb["type"] == "ZIP":
@@ -360,7 +351,6 @@ class CarvingAnalyzer(BaseAnalyzer):
                         "repair_info": repair,
                     })
 
-            # Construire metadata plate
             meta: dict = {
                 "Taille fichier": f"{file_size:,} octets",
                 "Taille analysee": f"{max_read:,} octets",
@@ -371,7 +361,6 @@ class CarvingAnalyzer(BaseAnalyzer):
             if extracted_paths:
                 meta["Fichiers extraits (DUMP)"] = f"Sauvegardés dans {out_dir}"
 
-            # Ajouter les signatures les plus importantes
             for i, hit in enumerate(magic_hits[:20]):
                 meta[f"Sig #{i+1}"] = (
                     f"[{hit['extension'].upper()}] {hit['description']} "
