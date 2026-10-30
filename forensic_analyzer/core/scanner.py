@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 
+from forensic_analyzer.core.archives import expand_archives
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
 from forensic_analyzer.models.finding import ReportModel
@@ -83,11 +84,13 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         return ReportModel(total=0, findings=[])
 
     log.info("%d fichier(s) collecté(s) depuis '%s'", len(targets), path)
+    targets, origins, notes = expand_archives(targets)
     report = run_pipeline(targets, registry)
-    if report.skipped_files:
-        log.warning("Attention : %d fichier(s) ignoré(s) lors du scan : %s",
-                    len(report.skipped_files),
-                    ", ".join(os.path.basename(f) for f in report.skipped_files[:10]))
+    report.scan_notes = notes
+    for f in report.findings:
+        if f.file in origins:
+            f.metadata = {"Origine (archive)": origins[f.file], **f.metadata}
+    report.skipped_files = [origins.get(s, s) for s in report.skipped_files]
     return report
 
 

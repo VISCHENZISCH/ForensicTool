@@ -93,7 +93,6 @@ class NmapAnalyzer(BaseAnalyzer):
                 })
 
             meta: dict[str, Any] = {
-                "Fichier": os.path.basename(path),
                 "Outil": f"{scanner} (Scan réseau)",
                 "Commande": args[:80] if args else "Non spécifiée",
                 "Hôtes actifs découverts": str(len(hosts_data)),

@@ -167,7 +167,6 @@ class RegistryAnalyzer(BaseAnalyzer):
             basename = os.path.basename(path).upper()
 
             meta: dict = {
-                "Fichier": os.path.basename(path),
                 "Taille": f"{os.path.getsize(path):,} octets",
                 "Type hive": basename,
             }

@@ -168,7 +168,8 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
 
         params = urllib.parse.parse_qs(query)
         cmd_key = next((k for k in _CMD_PARAMS if k in params), None)
-        if cmd_key and path_only.lower().endswith((".php", ".jsp", ".asp", ".aspx")):
+        shell_command = bool(cmd_key and path_only.lower().endswith((".php", ".jsp", ".asp", ".aspx")))
+        if shell_command:
             command = params[cmd_key][0]
             webshell_commands.append({"timestamp": iso_ts, "ip": ip, "shell": path_only, "command": command})
             events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "webshell_command",
@@ -203,14 +204,15 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
                 "user_agent": ua,
             }
             suspicious_requests.append(req_info)
-            events.append({
-                "timestamp": iso_ts,
-                "source": "web_access",
-                "event_type": "web_attack",
-                "description": f"Attaque web [{attack_detected}] depuis {ip} : {method} {uri[:80]} (HTTP {status})",
-                "ip": ip,
-                "file": path,
-            })
+            if not shell_command:  # sinon déjà l'événement « Commande via webshell », plus précis
+                events.append({
+                    "timestamp": iso_ts,
+                    "source": "web_access",
+                    "event_type": "web_attack",
+                    "description": f"Attaque web [{attack_detected}] depuis {ip} : {method} {uri[:80]} (HTTP {status})",
+                    "ip": ip,
+                    "file": path,
+                })
             if attack_detected == "Webshell Access":
                 webshell_access.append(req_info)
 
@@ -418,7 +420,9 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
         ms = re_sudo.search(msg) or re_sudo.search(line_clean)
         if ms:
             user, cmd = ms.group(1), ms.group(2).strip()
-            sudo_commands.append({"timestamp": iso_ts, "user": user, "command": cmd})
+            # Refus sur la même ligne (format sudo standard) ou sur la ligne suivante (voir plus bas)
+            denied = "NOT in sudoers" in line_clean or "incorrect password" in line_clean
+            sudo_commands.append({"timestamp": iso_ts, "user": user, "command": cmd, "denied": denied})
             events.append({
                 "timestamp": iso_ts,
                 "source": "syslog",
@@ -427,6 +431,11 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
                 "ip": "",
                 "file": path,
             })
+
+    # Refus journalisé à part ("www-data : NOT in sudoers") : même compte, même seconde
+    refusals = {(n["description"].split("'")[1], n["timestamp"]) for n in notable if n["type"] == "sudo_denied"}
+    for cmd in sudo_commands:
+        cmd["denied"] = cmd["denied"] or (cmd["user"], cmd["timestamp"]) in refusals
 
     return {
         "log_type": "syslog",

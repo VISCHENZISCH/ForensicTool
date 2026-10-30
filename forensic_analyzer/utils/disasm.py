@@ -188,8 +188,9 @@ def summarize(calls: list[dict]) -> dict:
                 [{"host": h, "port": None} for h in hosts] or [{"host": None, "port": p} for p in ports]
     return {
         "endpoints": endpoints,
-        "sleep_seconds": sorted({c["seconds"] for c in calls if "seconds" in c}),
-        "files": sorted({c["argument"] for c in calls if c["category"] == "fichiers" and c.get("argument")}),
+        # sleep(0) et INT_MAX (« attendre indéfiniment ») ne sont pas des intervalles de balise
+        "sleep_seconds": sorted({c["seconds"] for c in calls if 0 < c.get("seconds", 0) <= 30 * 86400}),
+        "files": sorted({c["argument"] for c in calls if c["category"] == "fichiers" and len(c.get("argument") or "") > 1}),
         "commands": sorted({c["argument"] for c in calls if c["category"] == "exécution" and c.get("argument")}),
         "urls": sorted({c["argument"] for c in calls if c["api"].startswith(("URLDownload", "InternetOpen"))
                         and c.get("argument")}),

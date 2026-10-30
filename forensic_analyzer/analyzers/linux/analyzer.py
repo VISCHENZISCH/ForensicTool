@@ -540,6 +540,19 @@ def _entry_dict(e: bf.BodyEntry) -> dict:
             "created": bf.utc(e.crtime), "modified": bf.utc(e.mtime), "accessed": bf.utc(e.atime)}
 
 
+_CRON_DIRS = {"cron.d", "cron.daily", "cron.hourly", "cron.weekly", "cron.monthly", "crontabs"}
+_NOT_CRON = (".yml", ".yaml", ".md", ".json", ".txt", ".py", ".sh", ".rules", ".yar", ".html", ".csv")
+
+
+def _is_cron_file(path: str) -> bool:
+    """Fichier crontab (crontab, anacrontab, cron.d/*, crontabs/*), pas un document dont le nom évoque cron."""
+    basename = os.path.basename(path).lower()
+    parent = os.path.basename(os.path.dirname(os.path.abspath(path))).lower()
+    if basename.endswith(_NOT_CRON):
+        return False
+    return basename in ("crontab", "anacrontab") or parent in _CRON_DIRS
+
+
 class LinuxArtifactsAnalyzer(BaseAnalyzer):
     """Analyse des artefacts forensiques Linux."""
     name = "linux_artifacts"
@@ -549,12 +562,10 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
     def can_handle(self, path: str) -> bool:
         if os.path.isfile(path):
             basename = os.path.basename(path).lower()
-            parent = os.path.basename(os.path.dirname(os.path.abspath(path))).lower()
             return (
                 "bash_history" in basename
                 or basename.endswith("_history")
-                or "cron" in parent
-                or "cron" in basename
+                or _is_cron_file(path)
                 or basename in ("passwd", "shadow")
             )
         return False
@@ -603,7 +614,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                         )
                     extra["auth_log"] = result
 
-                elif "cron" in basename or "cron" in os.path.basename(os.path.dirname(os.path.abspath(path))).lower():
+                elif _is_cron_file(path):
                     crons = parse_cron_file(path)
                     meta["Type"] = "crontab / cron.d"
                     meta["Entrées cron"] = str(len(crons))

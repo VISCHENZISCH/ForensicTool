@@ -19,7 +19,7 @@ class IntegrityAnalyzer(BaseAnalyzer):
         meta = {"Phase": f"Vérification {phase}".strip(), "Horodatage (UTC)": res["checked_at"]}
         for r in res["results"]:
             key = f"{r['file']} ({r['algo']})"
-            meta[key if r["status"] == "OK" else f"[ALERTE] {key}"] = f"{r['status']} {r['actual'] or r['expected']}"
+            meta[f"[ALERTE] {key}" if r["status"] == "DIFFÉRENT" else key] = f"{r['status']} {r['actual'] or r['expected']}"
 
         results = res["results"]
         diff_count = sum(1 for r in results if r["status"] == "DIFFÉRENT")

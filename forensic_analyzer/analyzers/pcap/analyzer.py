@@ -197,7 +197,7 @@ class PCAPAnalyzer(BaseAnalyzer):
                 "C2 Beacons détectés": str(len(c2_result["beacons"])),
                 "DNS Exfiltration": "OUI" if dns_exfil["detected"] else "NON",
                 "DNS Total requêtes": str(dns_exfil.get("total_queries", 0)),
-                "Fichiers dans flux": str(len(extracted_files)),
+                "Signatures de fichiers dans les flux": str(len(extracted_files)),
             }
 
             for i, cred in enumerate(credentials[:5]):

@@ -168,10 +168,11 @@ def cli_dispatch():
             findings.append(res)
 
     skipped: list[str] = []
+    notes: list[str] = []
     if args.scan:
         report = auto_scan(args.scan, registry)
         findings.extend(report.findings)
-        skipped = report.skipped_files
+        skipped, notes = report.skipped_files, report.scan_notes
 
     simple_analyzers = [
         (args.pdf,     PDFAnalyzer),
@@ -238,11 +239,11 @@ def cli_dispatch():
     correlation = correlate(findings) if findings else None
     if correlation:
         findings.append(correlation)
-    report = ReportModel.from_findings(findings, skipped_files=skipped)
+    report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes)
     tl = TimelineAnalyzer().build_from_report(report) if findings else None
     if tl and tl.extra.get("events"):
         findings.append(tl)
-        report = ReportModel.from_findings(findings, skipped_files=skipped)
+        report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes)
 
     renderer.render_report(report)
 

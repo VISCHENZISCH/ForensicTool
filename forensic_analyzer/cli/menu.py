@@ -47,6 +47,7 @@ _MENU_DISPATCH = {
 
 # Fichiers que le scan automatique n'a pu attribuer à aucun module pendant la session
 _SESSION_SKIPPED: list[str] = []
+_SESSION_NOTES: list[str] = []
 
 # Classes chargées par _boot_sequence ; une option absente est indisponible
 _LOADED: dict[str, type] = {}
@@ -133,7 +134,7 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(enriched))
     if timeline.extra.get("events"):
         enriched.append(timeline)
-    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED))
+    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED), scan_notes=list(_SESSION_NOTES))
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -289,8 +290,20 @@ def interactive_loop() -> None:
                 ui.render_finding(finding)
                 session_findings.append(finding)
             _SESSION_SKIPPED.extend(f for f in report.skipped_files if f not in _SESSION_SKIPPED)
+            _SESSION_NOTES.extend(n for n in report.scan_notes if n not in _SESSION_NOTES)
 
             ui.render_summary(report)
+            # Vue transverse de la session : corrélation puis chronologie, reprises dans les exports
+            from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
+            session_findings[:] = [f for f in session_findings if f.type not in ("correlation", "timeline")]
+            correlation = correlate(session_findings)
+            if correlation:
+                session_findings.append(correlation)
+            timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(session_findings))
+            if timeline.extra.get("events"):
+                session_findings.append(timeline)
+            ui.render_conclusion(ReportModel.from_findings(session_findings, skipped_files=list(_SESSION_SKIPPED),
+                                                           scan_notes=list(_SESSION_NOTES)))
             ui.wait_for_key()
             continue
 

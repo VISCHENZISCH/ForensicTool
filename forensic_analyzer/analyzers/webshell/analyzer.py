@@ -94,7 +94,6 @@ class WebshellAnalyzer(BaseAnalyzer):
             is_webshell = bool(findings_exec and findings_inputs) or bool(signatures_hit) or (bool(findings_exec) and bool(findings_obfuscation))
 
             meta: dict[str, Any] = {
-                "Fichier": os.path.basename(path),
                 "Taille": f"{file_size:,} octets",
                 "Langage": "PHP",
             }

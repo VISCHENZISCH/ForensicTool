@@ -4,6 +4,7 @@ Lignes et cadres sarcelle, titres cyan, valeurs claires ; rouge et orange réser
 """
 from __future__ import annotations
 
+import datetime
 import itertools
 import os
 import re
@@ -350,11 +351,16 @@ def kv(key: str, value, indent: int = 3) -> None:
 
     severity = _severity(f"{key} {val_str}")
     value_color = severity or C.C_RESULT
-    key_display = f"{severity or C.C_PARAM}{key:<28}{C.RS}"
-    print(f"{MARGIN}{pad} {key_display} {C.C_STRUCT}:{C.RS} {value_color}{colorize(lines[0]) if not severity else lines[0]}{C.RS}")
-    for line in lines[1:]:
-        print(f"{MARGIN}{' ' * offset}{value_color}{colorize(line) if not severity else line}{C.RS}")
-
+    shown = [colorize(line) if not severity else line for line in lines]
+    if len(key) > 28:
+        # Clé plus longue que la colonne : seule sur sa ligne, valeurs alignées dessous
+        print(f"{MARGIN}{pad} {severity or C.C_PARAM}{key}{C.RS} {C.C_STRUCT}:{C.RS}")
+        for line in shown:
+            print(f"{MARGIN}{' ' * offset}{value_color}{line}{C.RS}")
+        return
+    print(f"{MARGIN}{pad} {severity or C.C_PARAM}{key:<28}{C.RS} {C.C_STRUCT}:{C.RS} {value_color}{shown[0]}{C.RS}")
+    for line in shown[1:]:
+        print(f"{MARGIN}{' ' * offset}{value_color}{line}{C.RS}")
 
 _CRITICAL = ("CRITIQUE", "Critique", "[ALERTE]", "DÉTECTÉ", "DÉTECTE", "STEGO CERTAINE", "MODIFIE", "ALTÉRÉ")
 _WARNING = ("Élevé", "Élevé", "Avertissement", "SUSPECT", "STEGO PROBABLE", "illisible")
@@ -462,8 +468,11 @@ def render_finding(finding) -> None:
             separator("Credentials détectés")
             for c_item in creds:
                 proto = c_item.get("protocol", "?")
-                data = c_item.get("data", c_item.get("user", str(c_item)))
-                print(f"{MARGIN}    {C.G}{proto:<14}{C.RS} {C.W}{data}{C.RS}")
+                who = f"{c_item.get('username', c_item.get('user', '?'))} / {c_item.get('password', '?')}"
+                where = " -> ".join(x for x in (c_item.get("client"), c_item.get("host")) if x)
+                when = (datetime.datetime.fromtimestamp(c_item["time"], datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                        if isinstance(c_item.get("time"), (int, float)) else "")
+                print(f"{MARGIN}    {C.HR}{who}{C.RS}  {C.G}{proto}{C.RS}  {C.C_IP}{where}{C.RS}  {C.D}{when}{C.RS}")
                 
         hosts = extra.get("host_identities", {})
         if hosts:
@@ -484,13 +493,16 @@ def render_finding(finding) -> None:
                     user = h.get("user", "")
                     print(f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{mac:<18}{C.RS} {C.C_HOST}{name:<20}{C.RS} {C.C_USER}{user}{C.RS}")
 
-        ua_list = extra.get("user_agents", [])
-        if ua_list:
+        ranked = (extra.get("http_attack") or {}).get("user_agents", [])
+        if ranked:
             print()
-            separator("User-Agents suspects (Top 10)")
-            suspects = [ua for ua in ua_list if "Windows NT" not in ua.get("user_agent", "") and "Macintosh" not in ua.get("user_agent", "")]
-            for ua in suspects:
-                print(f"{MARGIN}    {C.C_DANGER}[!]{C.RS} {C.C_RESULT}{ua.get('user_agent', '')[:75]}{C.RS}")
+            separator("User-Agents par rôle")
+            marks = {"attaquant": f"{C.C_DANGER}[!] attaquant       ", "outil automatisé": f"{C.Y}[~] outil automatisé",
+                     "navigateur": f"{C.G}[ ] navigateur      "}
+            for ua in ranked[:10]:
+                clients = ", ".join(ua.get("clients", [])[:3])
+                print(f"{MARGIN}    {marks.get(ua['verdict'], '')}{C.RS} {C.C_RESULT}{ua['user_agent'][:45]:<45}{C.RS} "
+                      f"{C.D}{ua.get('requests', 0)} req. ({clients}){C.RS}")
 
     elif finding.type == "ioc" and "iocs" in extra:
         iocs = extra["iocs"]
@@ -563,6 +575,59 @@ def render_summary(report) -> None:
     print(f"{MARGIN}{C.G}[+]{C.RS} {C.W}{n} résultat{'s' if n > 1 else ''}{C.RS}  {C.D}|{C.RS}  {C.D}{report.timestamp}{C.RS}")
     print()
 
+
+
+# Conclusion d'analyse : ce qu'un lecteur doit retenir, après le détail par fichier
+
+def render_conclusion(report) -> None:
+    """Alertes, indicateurs corroborés, chaîne d'attaque (faits concordants), horloge et limites."""
+    findings = report.findings
+    alerts: dict[str, int] = {}
+    for f in findings:
+        n = sum(1 for k in f.metadata if str(k).startswith("[ALERTE]"))
+        if n:
+            name = MODULE_NAMES.get(f.type, f.type)
+            alerts[name] = alerts.get(name, 0) + n
+    corr = next((f for f in findings if f.type == "correlation"), None)
+    timeline = next((f for f in findings if f.type == "timeline"), None)
+
+    print()
+    separator("CONCLUSION DE L'ANALYSE", custom_color=C.HR if alerts else C.G)
+    print()
+    if alerts:
+        detail = ", ".join(f"{name} {n}" for name, n in sorted(alerts.items(), key=lambda x: -x[1]))
+        kv("Alertes", f"{sum(alerts.values())} ({detail})")
+    else:
+        kv("Alertes", "aucune")
+    if corr:
+        shared = [(k.replace("[CORRÉLATION]", "").strip(), v) for k, v in corr.metadata.items() if k.startswith("[CORRÉLATION]")]
+        for indicator, sources in shared[:8]:
+            kv(f"Corroboré : {indicator}", sources)
+        if not shared:
+            kv("Corrélation", "aucun indicateur vu par plusieurs sources")
+    if timeline:
+        skew = timeline.metadata.get("[ATTENTION] Décalage d'horloge")
+        if skew:
+            kv("Horloge", skew)
+        facts = [f for f in timeline.extra.get("facts", []) if f.get("confidence") == "élevée"]
+        if facts:
+            print()
+            separator("Chaîne d'attaque (faits confirmés par plusieurs sources)")
+            for fact in facts[:20]:
+                ts = str(fact["timestamp"])[:19].replace("T", " ")
+                print(f"{MARGIN}    {C.MG6}{ts}{C.RS}  {C.D}{' + '.join(fact.get('sources', []))}{C.RS}")
+                for line in textwrap.wrap(fact["description"], width=77, break_long_words=False):
+                    print(f"{MARGIN}      {C.W}{line}{C.RS}")
+    if report.skipped_files or report.scan_notes:
+        print()
+        separator("Limites")
+        if report.skipped_files:
+            names = ", ".join(os.path.basename(p) for p in report.skipped_files[:12])
+            kv("Fichiers non analysés", f"{len(report.skipped_files)} : {names}")
+        for i, note in enumerate(report.scan_notes, 1):
+            kv(f"Archive #{i}", note)
+    print()
+    info("Rapport complet : option 99 du menu, ou --export-html / --export-pdf en ligne de commande.")
 
 
 # Écran de démarrage : chaque ligne correspond à une vérification effectuée

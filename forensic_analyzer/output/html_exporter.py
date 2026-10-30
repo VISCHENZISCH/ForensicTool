@@ -60,7 +60,6 @@ def _alerts(report: ReportModel) -> list[tuple[int, FindingModel, str, str]]:
             if str(k).startswith("[ALERTE]") or "[ALERTE]" in str(v)]
 
 
-# ---------------------------------------------------------------- blocs génériques
 
 def _kv_table(rows: dict, alert_keys: bool = True) -> str:
     out = []
@@ -117,7 +116,6 @@ def _note(kind: str, inner: str) -> str:
     return f'<div class="note {kind}">{inner}</div>'
 
 
-# ---------------------------------------------------------------- sections
 
 def _synthese(report: ReportModel, alerts) -> str:
     techniques = sorted({t for f in report.findings for t in (f.extra or {}).get("mitre", []) if isinstance(t, str)})
@@ -250,7 +248,6 @@ def _limites(report: ReportModel) -> str:
     return '<h2 id="limites">Limites de l\'analyse</h2>' + "".join(items)
 
 
-# ---------------------------------------------------------------- page
 
 _CSS = """
 :root {
@@ -272,7 +269,7 @@ html.dark { --texte:#DDDDDD; --titres:#E6E6EA; --lien:#4FC1B1; --gris-tres-clair
   --etiquette:#34343A; --etiquette-texte:rgba(255,255,255,.7); --citation:#34343A;
   background: linear-gradient(150deg, var(--noir) 0%, var(--gris-sombre) 60%, var(--noir) 120%) fixed; }
 * { box-sizing: border-box; }
-body { width:min(1080px, calc(100% - 4rem)); margin:2rem auto; box-shadow:0 0 15px rgba(0,0,0,.5); }
+body { width:100%; margin:0; }  /* pleine largeur : tout l'espace va au contenu */
 body, p, pre, td, th, li { font-size:.9rem; line-height:1.6em; }
 header.page { position:sticky; top:0; z-index:5; box-shadow:0 0 8px 2px rgba(0,0,0,.8); }
 .topbar { background:var(--noir); height:4.5rem; display:flex; align-items:center; justify-content:space-between; padding:0 1.6rem; }
@@ -285,7 +282,7 @@ header.page { position:sticky; top:0; z-index:5; box-shadow:0 0 8px 2px rgba(0,0
 .navbar a:hover { color:#fff; background:var(--gris-anthracite); }
 .navbar a.active { color:#fff; background:linear-gradient(170deg, var(--sarcelle), var(--acier)); }
 main { background:var(--gris-tres-clair); display:grid; grid-template-areas:'content sidebar'; grid-template-columns:auto 14rem; }
-article { grid-area:content; padding:1.6rem 2rem; min-width:0; }
+article { grid-area:content; padding:1.2rem 1.6rem; min-width:0; }
 #controls { grid-area:sidebar; width:14rem; background:linear-gradient(150deg, var(--gris-sombre), var(--sarcelle) 200%);
             color:rgba(255,255,255,.85); padding:1.6rem 1rem; position:sticky; top:7.5rem; align-self:start; max-height:calc(100vh - 7.5rem); overflow:auto; }
 html.dark #controls { background:linear-gradient(150deg, var(--gris-tres-sombre), var(--sarcelle) 300%); }
@@ -335,14 +332,14 @@ details > summary { cursor:pointer; color:var(--lien); font-weight:bold; margin:
 .tags span { display:inline-block; background:var(--etiquette); color:var(--etiquette-texte); font-size:.6rem; text-transform:uppercase;
              border-radius:.6rem; padding:.1rem .6rem; margin:.15rem .2rem; }
 footer.page { background:var(--pied); color:var(--pied-texte); padding:.8rem 1.6rem; font-size:.8rem; }
-@media (max-width:1000px) { body { width:100%; margin:0; } main { grid-template-areas:'content'; grid-template-columns:auto; } #controls { display:none; }
+@media (max-width:1000px) { main { grid-template-areas:'content'; grid-template-columns:auto; } #controls { display:none; }
   #controls.ouvert { display:block; position:fixed; right:0; top:7.5rem; z-index:6; } #menu { display:inline-block; } }
 @media (min-width:1001px) { #menu { display:none; } }
 @media (max-width:607px) { .navbar { background:linear-gradient(150deg, var(--sarcelle) -100%, var(--gris-sombre) 150%); } .navbar a { font-size:1.2rem; }
   .topbar { height:auto; flex-wrap:wrap; gap:.4rem; padding:.6rem 1rem; } .outils button { font-size:.7rem; padding:.3rem .5rem; margin:0 .3rem 0 0; }
   article { padding:1rem; } }
 @media (min-width:608px) and (max-height:800px) { header.page { top:-4.5rem; } }
-@page { size:A4; margin:16mm 14mm 18mm;
+@page { size:A4; margin:6mm 6mm 10mm;
   @bottom-left { content:"Forensic Analyzer — rapport d'investigation"; font-size:8pt; color:#55555C; }
   @bottom-right { content:"page " counter(page) " / " counter(pages); font-size:8pt; color:#55555C; } }
 @media print {

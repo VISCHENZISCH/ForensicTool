@@ -20,3 +20,4 @@ class PlainRenderer(BaseRenderer):
         for finding in report.findings:
             self.render_finding(finding)
         ui.render_summary(report)
+        ui.render_conclusion(report)

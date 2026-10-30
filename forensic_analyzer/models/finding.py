@@ -74,7 +74,10 @@ class ReportModel(BaseModel):
     total: int = 0
     findings: list[FindingModel] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
+    scan_notes: list[str] = Field(default_factory=list)  # archives extraites ou refusées, etc.
 
     @classmethod
-    def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None) -> "ReportModel":
-        return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [])
+    def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None,
+                      scan_notes: list[str] | None = None) -> "ReportModel":
+        return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [],
+                   scan_notes=scan_notes or [])

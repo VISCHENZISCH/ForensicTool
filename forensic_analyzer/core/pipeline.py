@@ -105,7 +105,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
             continue
         analyzers = registry.get_all_for(path)
         if not analyzers:
-            log.warning("Fichier ignoré (aucun module adapté) : %s", os.path.basename(path))
+            log.debug("Fichier ignoré (aucun module adapté) : %s", os.path.basename(path))
             skipped.append(path)
         else:
             supported_paths.append(path)

@@ -228,7 +228,6 @@ class IOCAnalyzer(BaseAnalyzer):
             occurrences, offensive = _ip_roles(path, data.decode("utf-8", "replace"), set(iocs.get("ipv4", [])))
 
             meta: dict = {
-                "Fichier": os.path.basename(path),
                 "Taille": f"{file_size:,} octets",
                 "MD5": file_hashes["md5"],
                 "SHA1": file_hashes["sha1"],

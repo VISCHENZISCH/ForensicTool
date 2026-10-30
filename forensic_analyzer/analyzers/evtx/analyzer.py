@@ -143,7 +143,6 @@ class EVTXAnalyzer(BaseAnalyzer):
             top_events = sorted(event_ids_counter.items(), key=lambda x: -x[1])[:20]
 
             meta: dict = {
-                "Fichier": os.path.basename(path),
                 "Total événements": str(len(events)),
                 "Événements sécurité": str(len(security_events)),
                 "Event IDs uniques": str(len(event_ids_counter)),

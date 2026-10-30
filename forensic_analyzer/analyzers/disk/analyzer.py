@@ -323,7 +323,6 @@ class DiskAnalyzer(BaseAnalyzer):
         try:
             file_size = os.path.getsize(path)
             meta: dict = {
-                "Fichier": os.path.basename(path),
                 "Taille": f"{file_size:,} octets",
             }
             extra: dict = {}

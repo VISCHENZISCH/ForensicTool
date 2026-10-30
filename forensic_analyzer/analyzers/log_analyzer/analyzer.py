@@ -51,7 +51,6 @@ class LogAnalyzer(BaseAnalyzer):
             log.info("Analyse du journal [%s] : %s", log_type, os.path.basename(path))
 
             meta: dict[str, Any] = {
-                "Fichier": os.path.basename(path),
                 "Format": log_type,
             }
             extra: dict[str, Any] = {
@@ -96,8 +95,9 @@ class LogAnalyzer(BaseAnalyzer):
                 meta["Total lignes d'erreur"] = f"{res['total_lines']:,}"
                 if res["error_levels"]:
                     meta["Niveaux d'erreur"] = ", ".join(f"{lvl}: {cnt}" for lvl, cnt in res["error_levels"].items())
-                if res["suspicious_errors"]:
-                    meta["[ALERTE] Erreurs critiques/FastCGI"] = str(len(res["suspicious_errors"]))
+                for i, err in enumerate(res["suspicious_errors"][:8], 1):
+                    client = f" (client {err['client']})" if err.get("client") else ""
+                    meta[f"[ALERTE] Erreur serveur #{i}"] = f"{str(err['timestamp'])[:19]} [{err['level']}] {err['message']}{client}"
                 if res["client_errors"]:
                     meta["Top clients en erreur"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["client_errors"][:5])
 
@@ -116,7 +116,9 @@ class LogAnalyzer(BaseAnalyzer):
                 if res["failed_ips"]:
                     meta["[ALERTE] Top IPs brute-force (SSH)"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["failed_ips"][:5])
                 if res["sudo_commands"]:
-                    meta["Exemple commande sudo"] = f"{res['sudo_commands'][0]['user']}: {res['sudo_commands'][0]['command'][:80]}"
+                    meta["Commandes sudo"] = " ; ".join(
+                        f"{c['user']} : {c['command'][:80]} ({'REFUSÉE' if c['denied'] else 'exécutée'})"
+                        for c in res["sudo_commands"][:5])
                 for i, n in enumerate([n for n in res["notable"] if n["alert"]][:8], 1):
                     meta[f"[ALERTE] Événement #{i}"] = f"{n['timestamp'][:19]} {n['description']}"
 
