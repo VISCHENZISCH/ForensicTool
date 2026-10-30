@@ -23,10 +23,12 @@
 | **Réseau**        | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3               |
 | **Windows**       | EVTX, registre, Prefetch, LNK                                                        |
 | **Linux**         | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne) |
+| **Journaux**      | nginx/Apache, syslog, auth, WordPress : brute-force, webshell, exfiltration, sudo    |
+| **Web**           | Webshells PHP, rapports nmap (`-oX`)                                                 |
 | **Binaires**      | PE et ELF : désassemblage des appels sensibles, YARA, capa                           |
 | **Fichiers**      | PDF, EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox              |
 
-Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance.
+Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance. Un décalage d'horloge entre capture réseau et journaux est détecté et recalé, l'heure d'origine restant conservée.
 
 ## Installation
 
@@ -41,6 +43,7 @@ git clone https://github.com/VISCHENZISCH/ForensicTool && cd ForensicTool
 ./run.sh                                          # menu interactif
 ./run.sh --scan ./preuves --export-html rapport.html
 ./run.sh --pe ./preuves                           # uniquement les exécutables PE du dossier
+./run.sh --logs /var/log/nginx                    # journaux web et système
 ```
 
 Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls les fichiers du type choisi sont analysés.
@@ -52,8 +55,9 @@ Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls
 | `--export-graph`                 | Graphe interactif de la chaîne de compromission           |
 | `--export-rules`                 | Règles YARA, Suricata, Sigma et bundle STIX 2.1           |
 | `--verify-hashes MANIFESTE`      | Contrôle d'intégrité des preuves avant et après l'analyse |
+| `--evidence-dir DOSSIER`         | Dossier de référence des chemins relatifs du manifeste    |
 
-Tout est écrit dans `export/`, jamais dans le dossier des preuves.
+Chaque analyse écrit dans son propre dossier, `export/AAAAMMJJ-HHMMSS_<preuves>/` (ou `--export-dir`), jamais dans le dossier des preuves.
 
 ## Hors ligne par défaut
 
