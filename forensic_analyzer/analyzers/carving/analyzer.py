@@ -7,6 +7,7 @@ import struct
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.exports import export_root
 
 log = get_logger("carving")
 
@@ -291,7 +292,7 @@ class CarvingAnalyzer(BaseAnalyzer):
 
     def __init__(self, workdir: str | None = None) -> None:
         # Dossier des fichiers extraits : jamais dans le dossier des preuves
-        self.workdir = workdir or os.path.join("export", "extractions")
+        self.workdir = workdir or os.path.join(export_root(), "extractions")
 
     def can_handle(self, path: str) -> bool:
         ext = os.path.splitext(path)[1].lower()

@@ -14,6 +14,7 @@ from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.exports import export_root
 
 log = get_logger("disk")
 
@@ -310,7 +311,7 @@ class DiskAnalyzer(BaseAnalyzer):
 
     def __init__(self, workdir: str | None = None) -> None:
         # Dossier des artefacts extraits : jamais dans le dossier des preuves
-        self.workdir = workdir or os.path.join("export", "extractions")
+        self.workdir = workdir or os.path.join(export_root(), "extractions")
 
     def can_handle(self, path: str) -> bool:
         # .raw est ambigu (dump mémoire ou image disque) : on exige une structure de disque

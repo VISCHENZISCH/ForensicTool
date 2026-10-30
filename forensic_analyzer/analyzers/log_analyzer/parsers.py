@@ -5,7 +5,10 @@ import datetime
 import gzip
 import os
 import re
+import urllib.parse
 from typing import Any, Generator
+
+from forensic_analyzer.analyzers.linux.analyzer import _syslog_iso
 
 
 # Regex Web Access (Combined Log Format & Common Log Format)
@@ -16,7 +19,9 @@ _ACCESS_LOG_REGEX = re.compile(
 
 # Regex Nginx Error
 _NGINX_ERROR_REGEX = re.compile(
-    r'^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+\d+#\d+:\s+(?:\*\d+\s+)?(.*?)(?:,\s+client:\s+(\S+))?(?:,\s+server:\s+(\S+))?(?:,\s+request:\s+"([^"]*)")?'
+    # Message gourmand jusqu'à « , client: » : en non gourmand suivi de groupes optionnels, il restait vide
+    r'^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+\d+#\d+:\s+(?:\*\d+\s+)?((?:(?!,\s+client:).)*)'
+    r'(?:,\s+client:\s+([^,\s]+))?(?:,\s+server:\s+([^,\s]+))?(?:,\s+request:\s+"([^"]*)")?'
 )
 
 # Regex Apache Error
@@ -39,6 +44,14 @@ _WP_DEBUG_REGEX = re.compile(
     r'^\[(\d{2}-[A-Za-z]{3}-\d{4}\s+\d{2}:\d{2}:\d{2}(?:\s+UTC)?)\]\s+(PHP\s+(?:Fatal error|Parse error|Warning|Notice|Deprecated)):\s+(.*)$'
 )
 
+# Avis WordPress significatifs dans wp-debug.log : (motif, type, gabarit)
+_WP_NOTABLE = [
+    (re.compile(r'wp_login_failed (\S+) from (\S+)'), "auth_failed", "Échec de connexion WordPress '{0}' depuis {1}"),
+    (re.compile(r'wp_login OK (\S+) from (\S+)'), "auth_success", "Connexion WordPress réussie '{0}' depuis {1}"),
+    (re.compile(r'attachment uploaded (\S+) by (\S+)'), "upload", "Fichier {0} téléversé par '{1}'"),
+    (re.compile(r'(?i)file extension (\.\w+) allowed in uploads'), "misconfiguration", "Extension {0} autorisée dans les téléversements (mauvaise configuration)"),
+]
+
 # Attaques web courantes dans les URI / requêtes
 _WEB_ATTACKS = [
     (re.compile(r'(?i)(?:union\s+select|select\s+.*\s+from|concat\(|information_schema|waitfor\s+delay|sleep\(\d+\)|benchmark\(|load_file\(|order\s+by\s+\d+|[\'"]\s+or\s+[\'"]\d+[\'"]=[\'"]\d+|[\'"]\s+or\s+1=1)'), "SQL Injection (SQLi)"),
@@ -50,8 +63,23 @@ _WEB_ATTACKS = [
 
 # Scanners web identifiables dans User-Agent
 _SCANNER_AGENTS = re.compile(
-    r'(?i)(?:sqlmap|nikto|wpscan|dirbuster|gobuster|ffuf|acunetix|masscan|zgrab|nessus|openvas|hydra|burpcollaborator)'
+    r'(?i)(?:sqlmap|nikto|wpscan|dirbuster|gobuster|ffuf|acunetix|masscan|zgrab|nessus|openvas|hydra|burpcollaborator|^nmap|nmap scripting engine)'
 )
+_LOGIN_URI = re.compile(r'(?i)wp-login\.php|xmlrpc\.php|/login|/signin')
+_UPLOAD_URI = re.compile(r'(?i)async-upload\.php|/upload|media-new\.php')
+_SENSITIVE_DOWNLOAD = re.compile(r'(?i)\.(sql|sql\.gz|gz|tgz|tar|zip|7z|rar|bak|dump|db|sqlite|csv|xlsx?)$')
+_CMD_PARAMS = ("c", "cmd", "command", "exec", "e")
+BRUTE_FORCE_THRESHOLD = 20  # tentatives de connexion depuis une même IP
+
+# Lignes syslog notables : (motif, type, gabarit de description, alerte)
+_SYSLOG_NOTABLE = [
+    (re.compile(r'(\S+)\s*:\s*.*NOT in sudoers'), "sudo_denied", "Tentative sudo refusée pour '{0}'", True),
+    (re.compile(r'LOGIN SUCCESS user=(\S+) from (\S+)'), "app_login", "Connexion applicative réussie '{0}' depuis {1}", True),
+    (re.compile(r'RELOAD \((/etc/cron[^)]*)\)'), "cron_reload", "Rechargement de la tâche planifiée {0}", True),
+    (re.compile(r'(?i)seg(?:mentation)? ?fault.*?from (\d+\.\d+\.\d+\.\d+)'), "crash", "Plantage déclenché par une requête de {0}", True),
+    (re.compile(r'Connection from (\S+) port'), "ssh_connection", "Connexion SSH entrante depuis {0}", False),
+    (re.compile(r'useradd\[?\d*\]?:.*new user: name=(\S+?),'), "user_created", "Création du compte {0}", True),
+]
 
 
 def _open_log(path: str) -> Generator[str, None, None]:
@@ -76,15 +104,14 @@ def _parse_apache_timestamp(ts_str: str) -> str:
         return ts_str
 
 
-def _parse_syslog_timestamp(ts_str: str) -> str:
-    """Convertit un timestamp syslog (Oct 12 10:14:02) en ISO 8601 UTC."""
-    try:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        dt = datetime.datetime.strptime(ts_str, "%b %d %H:%M:%S")
-        dt = dt.replace(year=now.year, tzinfo=datetime.timezone.utc)
-        return dt.isoformat()
-    except Exception:
-        return ts_str
+def _parse_syslog_timestamp(ts_str: str, ref: datetime.datetime) -> str:
+    """Timestamp syslog sans année (Oct 12 10:14:02) en ISO 8601 UTC : année du mtime du journal."""
+    iso = _syslog_iso(ts_str, ref)
+    return iso + "+00:00" if iso[:4].isdigit() and "+" not in iso[10:] else iso
+
+
+def _log_mtime(path: str) -> datetime.datetime:
+    return datetime.datetime.fromtimestamp(os.path.getmtime(path))
 
 
 def parse_web_access_log(path: str) -> dict[str, Any]:
@@ -100,7 +127,13 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
     valid_entries = 0
 
     login_attempts: dict[str, int] = {}
+    login_window: dict[str, list[str]] = {}
+    login_success: list[dict[str, Any]] = []
     webshell_access: list[dict[str, Any]] = []
+    webshell_commands: list[dict[str, Any]] = []
+    uploads: list[dict[str, Any]] = []
+    exfiltration: list[dict[str, Any]] = []
+    scanner_ips: set[str] = set()
 
     for line in _open_log(path):
         total_lines += 1
@@ -113,7 +146,9 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         method = m.group(4)
         uri = m.group(5) or ""
         status = int(m.group(7))
+        size = int(m.group(8)) if m.group(8).isdigit() else 0
         ua = m.group(10) or ""
+        path_only, _, query = uri.partition("?")
 
         ip_counts[ip] = ip_counts.get(ip, 0) + 1
         status_counts[status] = status_counts.get(status, 0) + 1
@@ -125,6 +160,30 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         # Détection scanners
         if ua and _SCANNER_AGENTS.search(ua):
             scanners_detected.add(f"{ip} ({ua[:50]})")
+            if ip not in scanner_ips:
+                scanner_ips.add(ip)
+                events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "recon",
+                               "description": f"Reconnaissance par outil automatisé ({ua[:40]}) depuis {ip} : {method} {uri[:60]}",
+                               "ip": ip, "file": path})
+
+        params = urllib.parse.parse_qs(query)
+        cmd_key = next((k for k in _CMD_PARAMS if k in params), None)
+        if cmd_key and path_only.lower().endswith((".php", ".jsp", ".asp", ".aspx")):
+            command = params[cmd_key][0]
+            webshell_commands.append({"timestamp": iso_ts, "ip": ip, "shell": path_only, "command": command})
+            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "webshell_command",
+                           "description": f"Commande via webshell {path_only} : {command[:80]} ({ip})", "ip": ip, "file": path})
+
+        if method == "POST" and _UPLOAD_URI.search(path_only) and status < 400:
+            uploads.append({"timestamp": iso_ts, "ip": ip, "uri": path_only})
+            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "upload",
+                           "description": f"Téléversement de fichier par {ip} : POST {path_only}", "ip": ip, "file": path})
+
+        if method == "GET" and status in (200, 206) and _SENSITIVE_DOWNLOAD.search(path_only):
+            exfiltration.append({"timestamp": iso_ts, "ip": ip, "uri": path_only, "bytes": size})
+            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "exfiltration",
+                           "description": f"Téléchargement de {path_only} ({size / 1024 / 1024:.1f} Mo) par {ip}",
+                           "ip": ip, "file": path})
 
         # Détection attaques web dans l'URI
         attack_detected = None
@@ -155,21 +214,34 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
             if attack_detected == "Webshell Access":
                 webshell_access.append(req_info)
 
-        # Détection brute-force web (wp-login.php, /login, etc.)
-        if "login" in uri.lower() or "xmlrpc.php" in uri.lower():
+        # Brute-force web : regroupé par IP en fin de lecture ; un 302 après POST = connexion acceptée
+        if method == "POST" and _LOGIN_URI.search(path_only):
             login_attempts[ip] = login_attempts.get(ip, 0) + 1
-            if method == "POST":
-                events.append({
-                    "timestamp": iso_ts,
-                    "source": "web_access",
-                    "event_type": "auth_attempt",
-                    "description": f"Tentative d'authentification web depuis {ip} : {method} {uri[:60]}",
-                    "ip": ip,
-                    "file": path,
-                })
+            login_window.setdefault(ip, [iso_ts, iso_ts])[1] = iso_ts
+            if status in (301, 302, 303):
+                login_success.append({"timestamp": iso_ts, "ip": ip, "uri": path_only})
 
+    brute_force = []
+    for ip, count in sorted(login_attempts.items(), key=lambda x: -x[1]):
+        won = [s for s in login_success if s["ip"] == ip]
+        if count >= BRUTE_FORCE_THRESHOLD:
+            start, end = login_window[ip]
+            brute_force.append({"ip": ip, "attempts": count, "first": start, "last": end, "succeeded": bool(won)})
+            events.append({"timestamp": start, "source": "web_access", "event_type": "brute_force",
+                           "description": f"Début du brute-force web depuis {ip} ({count} tentatives jusqu'à {end})",
+                           "ip": ip, "file": path})
+        for w in won:
+            events.append({"timestamp": w["timestamp"], "source": "web_access", "event_type": "auth_success",
+                           "description": f"Connexion web réussie depuis {ip} ({w['uri']}, HTTP 302)"
+                                          + (" après brute-force" if count >= BRUTE_FORCE_THRESHOLD else ""),
+                           "ip": ip, "file": path})
+
+    # Attaquant : IP qui a agi offensivement, et non simple client fréquent
+    attackers = ({b["ip"] for b in brute_force} | {r["ip"] for r in suspicious_requests} | scanner_ips
+                 | {c["ip"] for c in webshell_commands} | {e["ip"] for e in exfiltration})
     top_ips = sorted(ip_counts.items(), key=lambda x: -x[1])[:10]
     top_uris = sorted(uri_counts.items(), key=lambda x: -x[1])[:10]
+    events.sort(key=lambda e: e["timestamp"])
 
     return {
         "log_type": "web_access",
@@ -183,8 +255,14 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         "suspicious_requests": suspicious_requests,
         "webshell_hits": webshell_access,
         "login_attempts": login_attempts,
+        "brute_force": brute_force,
+        "login_success": login_success,
+        "webshell_commands": webshell_commands,
+        "uploads": uploads,
+        "exfiltration": exfiltration,
+        "attackers": sorted(attackers),
         "scanners": sorted(scanners_detected),
-        "events": events[:100],  # Les 100 événements les plus significatifs
+        "events": events,  # faits d'attaque uniquement (les tentatives de connexion sont regroupées)
     }
 
 
@@ -202,10 +280,12 @@ def parse_web_error_log(path: str) -> dict[str, Any]:
         m_nginx = _NGINX_ERROR_REGEX.match(line_clean)
         if m_nginx:
             ts_raw, level, msg, client, _, req = m_nginx.groups()
-            iso_ts = ts_raw.replace("/", "-") + "T" + ts_raw.split(" ")[1] if " " in ts_raw else ts_raw
+            iso_ts = ts_raw.replace("/", "-").replace(" ", "T") + "+00:00"
             error_levels[level] = error_levels.get(level, 0) + 1
             if client:
                 client_errors[client] = client_errors.get(client, 0) + 1
+            if "limiting requests" in msg:
+                msg = "Limitation de débit déclenchée (rafale de requêtes, brute-force probable)"
             if level in ("crit", "alert", "error", "emerg") or "FastCGI" in msg or "denied" in msg:
                 err_data = {
                     "timestamp": iso_ts,
@@ -265,7 +345,10 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
     sudo_commands: list[dict[str, Any]] = []
     failed_ips: dict[str, int] = {}
     events: list[dict[str, Any]] = []
+    notable: list[dict[str, Any]] = []
+    notable_ips: set[str] = set()
     total_lines = 0
+    ref = _log_mtime(path)
 
     re_failed = re.compile(r'Failed\s+(?:password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\S+)\s+from\s+(\S+)')
     re_accepted = re.compile(r'Accepted\s+(?:password|publickey)\s+for\s+(\S+)\s+from\s+(\S+)')
@@ -277,15 +360,13 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
         m = _SYSLOG_RFC5424.match(line_clean)
         if m:
             iso_ts = m.group(1)
-            host = m.group(2)
             service = m.group(3).strip()
             msg = m.group(5)
         else:
             m2 = _SYSLOG_RFC3164.match(line_clean)
             if not m2:
                 continue
-            iso_ts = _parse_syslog_timestamp(m2.group(1))
-            host = m2.group(2)
+            iso_ts = _parse_syslog_timestamp(m2.group(1), ref)
             service = m2.group(3).strip()
             msg = m2.group(5)
 
@@ -319,6 +400,16 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
                 "file": path,
             })
 
+        for pattern, kind, template, alert in _SYSLOG_NOTABLE:
+            mn = pattern.search(msg)
+            if mn:
+                description = template.format(*mn.groups())
+                notable.append({"timestamp": iso_ts, "type": kind, "description": description, "alert": alert})
+                notable_ips.update(g for g in mn.groups() if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", g or ""))
+                events.append({"timestamp": iso_ts, "source": "syslog", "event_type": kind,
+                               "description": description, "ip": "", "file": path})
+                break
+
         ms = re_sudo.search(msg) or re_sudo.search(line_clean)
         if ms:
             user, cmd = ms.group(1), ms.group(2).strip()
@@ -340,7 +431,9 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
         "auth_successes": auth_successes,
         "failed_ips": sorted(failed_ips.items(), key=lambda x: -x[1])[:10],
         "sudo_commands": sudo_commands[:30],
-        "events": events[:100],
+        "notable": notable[:200],
+        "notable_ips": sorted(notable_ips),
+        "events": events[:500],
     }
 
 
@@ -350,6 +443,7 @@ def parse_wp_debug_log(path: str) -> dict[str, Any]:
     warnings: list[dict[str, Any]] = []
     referenced_files: set[str] = set()
     events: list[dict[str, Any]] = []
+    notable: list[str] = []
     total_lines = 0
 
     for line in _open_log(path):
@@ -382,6 +476,13 @@ def parse_wp_debug_log(path: str) -> dict[str, Any]:
             })
         else:
             warnings.append({"timestamp": iso_ts, "severity": severity, "message": msg})
+            for pattern, kind, template in _WP_NOTABLE:
+                mw = pattern.search(msg)
+                if mw:
+                    events.append({"timestamp": iso_ts, "source": "wp_debug", "event_type": kind,
+                                   "description": template.format(*mw.groups()), "ip": "", "file": path})
+                    notable.append(template.format(*mw.groups()))
+                    break
 
     return {
         "log_type": "wp_debug",
@@ -389,7 +490,8 @@ def parse_wp_debug_log(path: str) -> dict[str, Any]:
         "fatal_errors": fatal_errors[:50],
         "warnings_count": len(warnings),
         "referenced_files": sorted(referenced_files),
-        "events": events[:50],
+        "notable": notable,
+        "events": events[:200],
     }
 
 

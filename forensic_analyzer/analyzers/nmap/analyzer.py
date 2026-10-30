@@ -49,13 +49,14 @@ class NmapAnalyzer(BaseAnalyzer):
                 iso_start = dt.isoformat()
 
             hosts_data = []
+            scripts: list[str] = []
             all_ips = set()
             total_open_ports = 0
 
             for host in root.findall("host"):
+                # Sans <status>, nmap ne liste que les hôtes qui ont répondu
                 status_el = host.find("status")
-                state = status_el.get("state") if status_el is not None else "unknown"
-                if state != "up":
+                if status_el is not None and status_el.get("state") != "up":
                     continue
 
                 addr_el = host.find("address[@addrtype='ipv4']")
@@ -77,9 +78,13 @@ class NmapAnalyzer(BaseAnalyzer):
                         svc_name = svc_el.get("name", "unknown") if svc_el is not None else "unknown"
                         product = svc_el.get("product", "") if svc_el is not None else ""
                         version = svc_el.get("version", "") if svc_el is not None else ""
-                        desc = f"{port_id}/{proto} ({svc_name}" + (f" {product} {version}".strip() if product else "") + ")"
+                        desc = f"{port_id}/{proto} ({svc_name}" + (" " + f"{product} {version}".strip() if product else "") + ")"
                         open_ports.append(desc)
                         total_open_ports += 1
+                        for script in p.findall("script"):
+                            output = " ".join(script.get("output", "").split())
+                            if output:
+                                scripts.append(f"{ip}:{port_id} [{script.get('id')}] {output}")
 
                 hosts_data.append({
                     "ip": ip,
@@ -94,6 +99,9 @@ class NmapAnalyzer(BaseAnalyzer):
                 "Hôtes actifs découverts": str(len(hosts_data)),
                 "Total ports ouverts": str(total_open_ports),
             }
+
+            for i, out in enumerate(scripts[:5], 1):
+                meta[f"Script nmap #{i}"] = out[:160]
 
             for i, h in enumerate(hosts_data[:5]):
                 ports_str = ", ".join(h["open_ports"][:5]) or "Aucun port ouvert détecté"

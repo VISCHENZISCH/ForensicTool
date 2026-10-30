@@ -22,21 +22,18 @@ class IntegrityAnalyzer(BaseAnalyzer):
             meta[key if r["status"] == "OK" else f"[ALERTE] {key}"] = f"{r['status']} {r['actual'] or r['expected']}"
 
         results = res["results"]
-        ok_count = sum(1 for r in results if r["status"] == "OK")
         diff_count = sum(1 for r in results if r["status"] == "DIFFÉRENT")
         absent_count = sum(1 for r in results if r["status"] == "ABSENT")
         outside_count = sum(1 for r in results if r["status"] == "HORS PÉRIMÈTRE")
 
+        # Une empreinte différente prouve une altération ; un fichier introuvable empêche seulement de conclure
+        others = ", ".join(part for part in (f"{absent_count} introuvable(s)" if absent_count else "",
+                                             f"{outside_count} hors périmètre" if outside_count else "") if part)
         if res["all_ok"]:
             meta["Verdict"] = "Toutes les preuves sont intactes"
+        elif diff_count:
+            meta["Verdict"] = f"[ALERTE] Preuves altérées : {diff_count} empreinte(s) différente(s)" + (f", {others}" if others else "")
         else:
-            verdict_parts = []
-            if diff_count:
-                verdict_parts.append(f"{diff_count} altérée(s)")
-            if absent_count:
-                verdict_parts.append(f"{absent_count} introuvable(s)")
-            if outside_count:
-                verdict_parts.append(f"{outside_count} hors périmètre")
-            breakdown = ", ".join(verdict_parts)
-            meta["Verdict"] = f"[ALERTE] Intégrité non confirmée ({breakdown})"
+            meta["Verdict"] = (f"Vérification incomplète : {others} (aucune empreinte différente ; "
+                               "vérifier les chemins du manifeste ou --evidence-dir)")
         return FindingModel(type="evidence_integrity", file=path, metadata=meta, extra=res)

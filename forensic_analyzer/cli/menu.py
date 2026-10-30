@@ -15,6 +15,7 @@ from forensic_analyzer.core.correlation import correlate
 from forensic_analyzer.core.scanner import auto_scan, default_registry, targeted_scan
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output import ui
+from forensic_analyzer.utils.exports import export_root, new_case_dir
 
 # Option -> (libelle, "module:Classe" ou action spéciale, invite)
 # Les modules d'analyse sont chargés à l'écran de démarrage, pas à l'import du menu.
@@ -145,14 +146,14 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         path = ui.prompt_input(f"Entrez le chemin du fichier {what}")
         if path:
             getattr(importlib.import_module(module), cls)().export(report, path)
-            ui.success(f"{label} exporté dans : {os.path.join('export', os.path.basename(path))}")
+            ui.success(f"{label} exporté dans : {os.path.join(export_root(), os.path.basename(path))}")
 
     elif choice == "G":
         path = ui.prompt_input("Entrez le chemin du graphe HTML de sortie (.html)")
         if path and correlation:
             from forensic_analyzer.output.graph_renderer import render_correlation_graph
-            os.makedirs("export", exist_ok=True)
-            target_path = os.path.join("export", os.path.basename(path))
+            os.makedirs(export_root(), exist_ok=True)
+            target_path = os.path.join(export_root(), os.path.basename(path))
             if render_correlation_graph(correlation, target_path):
                 ui.success(f"Graphe de corrélation exporté dans : {target_path}")
             else:
@@ -162,9 +163,9 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
 
     elif choice == "S":
         from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
-        outputs = DefenseRulesGenerator().generate(report, output_dir=os.path.join("export", "rules"))
+        outputs = DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_root(), "rules"))
         if outputs:
-            ui.success(f"{len(outputs)} fichier(s) de règles et STIX exportés dans export/rules/")
+            ui.success(f"{len(outputs)} fichier(s) de règles et STIX exportés dans {os.path.join(export_root(), 'rules')}")
         else:
             ui.warning("Aucun indicateur exploitable : pas de règle générée.")
 
@@ -242,6 +243,7 @@ def _boot_sequence() -> dict[str, str]:
 def interactive_loop() -> None:
     """Boucle interactive principale."""
     unavailable = _boot_sequence()
+    new_case_dir("session")
 
     session_findings: list[FindingModel] = []
 

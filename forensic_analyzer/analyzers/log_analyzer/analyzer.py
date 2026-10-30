@@ -72,13 +72,24 @@ class LogAnalyzer(BaseAnalyzer):
                     meta["[ALERTE] Accès Webshell"] = f"{len(res['webshell_hits'])} requête(s) vers un webshell !"
                 if res["scanners"]:
                     meta["[ALERTE] Scanners automatisés"] = ", ".join(res["scanners"][:5])
-                if res["login_attempts"]:
-                    top_logins = sorted(res["login_attempts"].items(), key=lambda x: -x[1])[:3]
-                    meta["Tentatives de login (POST/GET)"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in top_logins)
+                for bf in res["brute_force"]:
+                    outcome = "RÉUSSI (HTTP 302)" if bf["succeeded"] else "sans succès"
+                    meta[f"[ALERTE] Brute-force {bf['ip']}"] = (f"{bf['attempts']} tentatives "
+                                                               f"({bf['first'][11:19]} → {bf['last'][11:19]}), {outcome}")
+                if res["uploads"]:
+                    meta["[ALERTE] Téléversements"] = ", ".join(f"{u['ip']} → {u['uri']}" for u in res["uploads"][:3])
+                if res["webshell_commands"]:
+                    meta["[ALERTE] Commandes via webshell"] = " ; ".join(c["command"] for c in res["webshell_commands"][:8])
+                for ex in res["exfiltration"]:
+                    meta[f"[ALERTE] Exfiltration {ex['uri'].rsplit('/', 1)[-1]}"] = (
+                        f"téléchargé par {ex['ip']} ({ex['bytes'] / 1024 / 1024:.1f} Mo)")
+                if res["attackers"]:
+                    meta["IP offensives"] = ", ".join(res["attackers"])
 
                 extra["details"] = res
                 extra["timeline_events"] = res.get("events", [])
-                extra["iocs"]["ips"] = {ip for ip, _ in res["top_ips"]}
+                # Indicateurs : IP qui ont agi comme attaquant, pas les clients les plus actifs
+                extra["iocs"]["ips"] = set(res["attackers"])
 
             elif log_type == "web_error":
                 res = parse_web_error_log(path)
@@ -104,10 +115,12 @@ class LogAnalyzer(BaseAnalyzer):
                     meta["[ALERTE] Top IPs brute-force (SSH)"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["failed_ips"][:5])
                 if res["sudo_commands"]:
                     meta["Exemple commande sudo"] = f"{res['sudo_commands'][0]['user']}: {res['sudo_commands'][0]['command'][:80]}"
+                for i, n in enumerate([n for n in res["notable"] if n["alert"]][:8], 1):
+                    meta[f"[ALERTE] Événement #{i}"] = f"{n['timestamp'][:19]} {n['description']}"
 
                 extra["details"] = res
                 extra["timeline_events"] = res.get("events", [])
-                extra["iocs"]["ips"] = {ip for ip, _ in res["failed_ips"]}
+                extra["iocs"]["ips"] = {ip for ip, _ in res["failed_ips"]} | set(res["notable_ips"])
 
             elif log_type == "wp_debug":
                 res = parse_wp_debug_log(path)
@@ -118,6 +131,8 @@ class LogAnalyzer(BaseAnalyzer):
                     meta["Fichiers PHP impliqués"] = ", ".join(os.path.basename(f) for f in res["referenced_files"][:5])
                 if res["fatal_errors"]:
                     meta["[ALERTE] Dernière erreur fatale"] = res["fatal_errors"][-1]["message"][:100]
+                for i, note in enumerate(res["notable"][:8], 1):
+                    meta[f"[ALERTE] Événement WordPress #{i}"] = note
 
                 extra["details"] = res
                 extra["timeline_events"] = res.get("events", [])

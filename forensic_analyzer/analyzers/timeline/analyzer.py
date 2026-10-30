@@ -218,9 +218,11 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "file": file,
                     "details": "",
                 })
-            for cred in finding.extra.get("credentials", []):
+            # Seuls les identifiants datés (ceux qui ont fonctionné) : un mot de passe essayé
+            # pendant un brute-force n'est pas un événement
+            for cred in (c for c in finding.extra.get("credentials", []) if c.get("time")):
                 events.append({
-                    "timestamp": "",
+                    "timestamp": datetime.datetime.fromtimestamp(cred["time"], datetime.timezone.utc).isoformat(),
                     "source": "pcap",
                     "event_type": "credential_found",
                     "description": f"[{cred.get('protocol','?')}] {cred.get('username','?')}",
@@ -284,10 +286,14 @@ class TimelineAnalyzer(BaseAnalyzer):
         pcap_ts = [t for t in pcap_ts if t]
         host_ts = [t for t in host_ts if t]
         if pcap_ts and host_ts:
-            delta_sec = abs((min(pcap_ts) - min(host_ts)).total_seconds())
-            if delta_sec > 3600:
-                hours = delta_sec / 3600
-                meta["[ATTENTION] Décalage d'horloge"] = f"Écart de ~{hours:.1f}h détecté entre le PCAP et les journaux hôtes"
+            delta = (min(pcap_ts) - min(host_ts)).total_seconds()
+            if abs(delta) > 3600:
+                minutes = round(abs(delta) / 60)
+                days, rem = divmod(minutes, 24 * 60)
+                span = (f"{days} j " if days else "") + f"{rem // 60} h {rem % 60:02d} min"
+                ahead = "PCAP en avance" if delta > 0 else "PCAP en retard"
+                meta["[ATTENTION] Décalage d'horloge"] = (f"{span} entre le PCAP et les journaux hôtes ({ahead}) : "
+                                                         "recaler les horodatages avant de fusionner les sources")
 
         facts = consolidate(events)
         if facts:

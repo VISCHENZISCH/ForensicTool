@@ -143,11 +143,18 @@ class ELFAnalyzer(BaseAnalyzer):
         if software:
             meta["Identification"] = ", ".join(software)
 
-        ips = sorted({ip for s in strings for ip in _IP.findall(s) if not _is_benign_ip(ip)})
+        all_ips = {ip for s in strings for ip in _IP.findall(s)}
+        ips = sorted(ip for ip in all_ips if not _is_benign_ip(ip))
+        # Internes / réservées : trop banales pour une alerte (adresses par défaut de BusyBox...),
+        # mais gardées : la corrélation les fait ressortir si une autre source les voit aussi
+        internal_ips = sorted(ip for ip in all_ips if _is_benign_ip(ip) and ip not in _BENIGN_IPS
+                              and not ip.startswith(("0.", "127.", "255.")))
         urls = sorted({u for s in strings for u in _URL.findall(s) if not _is_benign_url(u)})
         paths = _hidden_system_paths(strings)
         if ips:
             meta["[ALERTE] Adresses IP codées en dur"] = ", ".join(ips[:20])
+        if internal_ips:
+            meta["Adresses IP internes ou réservées"] = ", ".join(internal_ips[:20])
         if urls:
             meta["URLs"] = ", ".join(urls[:20])
         if paths:
@@ -177,7 +184,7 @@ class ELFAnalyzer(BaseAnalyzer):
             metadata=meta,
             extra={
                 "elf": info,
-                "iocs": {"ips": ips, "urls": urls, "paths": paths},
+                "iocs": {"ips": ips, "urls": urls, "paths": paths, "internal_ips": internal_ips},
                 "yara": yara_hits,
                 "disassembly": behaviour,
                 "network": (behaviour or {}).get("summary", {}).get("endpoints", []),

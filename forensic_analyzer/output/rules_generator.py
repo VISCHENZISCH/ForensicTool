@@ -89,7 +89,9 @@ class DefenseRulesGenerator:
         names: set[str] = set()
         for f in binaries:
             fmt, magic = _BINARY_TYPES[f.type]
-            strings = _distinctive_strings(f)
+            # Logiciel identifié (BusyBox...) : ses chaînes sont celles de toute installation légitime,
+            # seule l'empreinte désigne ce fichier
+            strings = [] if f.metadata.get("Identification") else _distinctive_strings(f)
             name = _slug(os.path.basename(f.metadata.get("Origine (image)", "").split(":")[-1] or f.file))
             sha256 = f.metadata.get("SHA-256", "")
             if sha256:
@@ -104,7 +106,10 @@ class DefenseRulesGenerator:
             names.add(name)
             modifiers = "ascii wide" if fmt == "PE" else "ascii"
             lines = [f'        $s{i} = "{_yara_escape(s)}" {modifiers}' for i, s in enumerate(strings)]
-            needed = 1 if len(strings) == 1 else 2
+            # Chaînes propres au binaire : toutes requises (au plus 3), sinon la règle reconnaîtrait d'autres binaires
+            strings = strings[:3]
+            lines = lines[:3]
+            needed = "all"
             rules.append(
                 f"rule FA_{fmt}_{name} {{\n"
                 f"    meta:\n"
@@ -129,16 +134,33 @@ class DefenseRulesGenerator:
             rules.append(f'alert tcp $HOME_NET any -> {host} {port or "any"} (msg:"FA - Balise vers C2 {host}:{port or "any"}"; '
                          f'flow:to_server; flags:S; classtype:trojan-activity; sid:{sid}; rev:1;)')
             sid += 1
+        # Comportements observés dans le PCAP : balise sortante et brute-force de formulaire
+        beacons = {(b["destination"], b["port"], b["uri"].split("?")[0]) for f in findings
+                   for b in f.extra.get("http_attack", {}).get("beacons", []) if b.get("outbound")}
+        for host, port, uri in sorted(beacons, key=str):
+            rules.append(f'alert http $HOME_NET any -> {host} {port} (msg:"FA - Balise C2 HTTP vers {host}:{port}"; '
+                         f'flow:to_server,established; http.uri; content:"{_suricata_content(uri)}"; startswith; '
+                         f'classtype:trojan-activity; sid:{sid}; rev:1;)')
+            sid += 1
+        login_uris = {f.extra["http_attack"]["successful_logins"][0]["uri"] if f.extra.get("http_attack", {}).get("successful_logins")
+                      else "/wp-login.php" for f in findings if f.extra.get("http_attack", {}).get("brute_force")}
+        for uri in sorted(login_uris):
+            rules.append(f'alert http any any -> $HOME_NET any (msg:"FA - Brute-force sur {_suricata_content(uri)}"; '
+                         f'flow:to_server,established; http.method; content:"POST"; http.uri; content:"{_suricata_content(uri)}"; '
+                         f'threshold:type both, track by_src, count 20, seconds 60; classtype:attempted-user; sid:{sid}; rev:1;)')
+            sid += 1
         covered = {h for h, _p in endpoints}
         for i in all_iocs:
             if i.kind == "ipv4" and _external_ip(i.value) and i.value not in covered:
                 contexts = " ".join(o.context.lower() for o in i.observations)
                 is_suspect_or_threat = any(k in contexts for k in (
-                    "c2", "balise", "alerte", "scan", "brute-force", "attaque", "suspect", "exfiltration", "webshell"
+                    "c2", "balise", "alerte", "scan", "brute-force", "attaque", "suspect", "exfiltration", "webshell",
+                    "offensi", "cron"
                 )) or not contexts
                 if not is_suspect_or_threat:
                     continue
-                rules.append(f'alert ip $HOME_NET any -> {i.value} any (msg:"FA - Trafic vers IP suspecte {i.value}"; '
+                # Dans les deux sens : un attaquant externe initie souvent lui-même la connexion
+                rules.append(f'alert ip {i.value} any <> $HOME_NET any (msg:"FA - Trafic avec IP suspecte {i.value}"; '
                              f'classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "domain":
                 rules.append(f'alert dns $HOME_NET any -> any any (msg:"FA - Résolution du domaine suspect {i.value}"; '
@@ -146,8 +168,10 @@ class DefenseRulesGenerator:
             elif i.kind == "url":
                 host = re.sub(r"^https?://", "", i.value, flags=re.I).split("/")[0].split(":")[0]
                 path = re.sub(r"^https?://[^/]+", "", i.value) or "/"
+                if path == "/" and not _external_ip(host):
+                    continue  # tout le trafic HTTP vers un hôte interne : règle sans valeur de détection
                 uri = f' http.uri; content:"{_suricata_content(path[:200])}";' if path != "/" else ""
-                rules.append(f'alert http $HOME_NET any -> any any (msg:"FA - Requête vers URL suspecte {_suricata_content(host)}"; '
+                rules.append(f'alert http any any -> any any (msg:"FA - Requête vers URL suspecte {_suricata_content(host)}"; '
                              f'http.host; content:"{_suricata_content(host)}"; nocase;{uri} classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "ja3":
                 rules.append(f'alert tls $HOME_NET any -> any any (msg:"FA - Empreinte JA3 suspecte"; '
@@ -275,7 +299,11 @@ def ntname(path: str) -> str:
 
 
 def _is_suspicious_binary(f: FindingModel) -> bool:
-    return any(k.startswith("[ALERTE]") for k in f.metadata) or bool(f.extra.get("yara") or f.extra.get("yara_matches"))
+    """Alerte explicite, YARA, ou profil de porte dérobée : réseau + exécution de commandes."""
+    if any(k.startswith("[ALERTE]") for k in f.metadata) or f.extra.get("yara") or f.extra.get("yara_matches"):
+        return True
+    caps = " ".join(k for k in f.metadata if k.startswith("Capacité"))
+    return "réseau" in caps.lower() and "exécution de commandes" in caps.lower()
 
 
 _GENERIC_STRINGS = {

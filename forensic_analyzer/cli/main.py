@@ -127,9 +127,19 @@ def cli_dispatch():
     from forensic_analyzer.output.rich_renderer import RichRenderer
     from forensic_analyzer.utils.deps import HAS_RICH
     from forensic_analyzer.utils.network import set_online
+    from forensic_analyzer.utils.exports import export_root
 
     parser = build_parser()
     args = parser.parse_args()
+
+    # Un sous-dossier par analyse dans export/ (ou --export-dir), pour ne pas mélanger les affaires
+    from forensic_analyzer.utils.exports import new_case_dir, set_export_root
+    if args.export_dir:
+        set_export_root(args.export_dir)
+    else:
+        target = next((v for v in (args.scan, args.linux, args.disk, args.mem, args.pcap, args.pe, args.elf,
+                                   args.evtx, args.registry, args.pdf, args.image, args.ioc) if v), "analyse")
+        new_case_dir(target)
 
     if getattr(args, 'update', False):
         from forensic_analyzer.core.updater import Updater
@@ -232,7 +242,7 @@ def cli_dispatch():
         CSVExporter().export(report, args.export_csv)
     if args.export_pdf and report.findings:
         PDFExporter().export(report, args.export_pdf)
-    export_dir = getattr(args, 'export_dir', None) or "export"
+    export_dir = export_root()
     if args.export_graph and correlation:
         out_graph = args.export_graph if os.path.dirname(args.export_graph) else os.path.join(export_dir, args.export_graph)
         os.makedirs(os.path.dirname(out_graph) or export_dir, exist_ok=True)

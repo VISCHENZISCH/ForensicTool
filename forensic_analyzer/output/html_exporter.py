@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.exports import export_root
 
 log = get_logger("html_exporter")
 
@@ -393,8 +394,8 @@ class HTMLExporter:
 
     def export(self, report: ReportModel, output_path: str) -> None:
         filename = os.path.basename(output_path)
-        os.makedirs("export", exist_ok=True)
-        target_path = os.path.join("export", filename)
+        os.makedirs(export_root(), exist_ok=True)
+        target_path = os.path.join(export_root(), filename)
         content = build_interactive_html(report)
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(content)

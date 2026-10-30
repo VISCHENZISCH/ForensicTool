@@ -56,7 +56,8 @@ class WebshellAnalyzer(BaseAnalyzer):
         try:
             with open(path, "rb") as f:
                 head = f.read(256)
-                if b"<?php" in head or b"<?" in head:
+                # "<?xml" n'est pas du PHP : seules les balises <?php, <?= et <? suivies d'un blanc comptent
+                if re.search(rb"<\?(?:php\b|=|\s)", head):
                     return True
         except Exception:
             pass

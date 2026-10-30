@@ -155,6 +155,53 @@ def compute_file_hashes(path: str) -> dict:
     }
 
 
+# Marqueurs d'attaque non ambigus dans une ligne de texte quelconque
+_OFFENSIVE_LINE = re.compile(
+    r"(?i)failed password|invalid user|not in sudoers|authentication failure|union\s+select|\.\./|"
+    r"/etc/(?:passwd|shadow)|\.(?:php|jsp|aspx?)\?(?:c|cmd|exec|command)=|sqlmap|nikto|hydra|masscan|"
+    r"\bnmap\b|limiting requests|seg ?fault|reverse shell|/beacon\b")
+
+
+def _ip_roles(path: str, text: str, ips: set[str]) -> tuple[dict[str, int], dict[str, str]]:
+    """Occurrences de chaque IP et, pour celles qui ont agi offensivement, la raison."""
+    from collections import Counter
+
+    from forensic_analyzer.analyzers.log_analyzer.parsers import (
+        detect_log_type, parse_syslog_file, parse_web_access_log, parse_web_error_log)
+
+    offensive: dict[str, str] = {}
+    log_type = detect_log_type(path)
+    if log_type == "web_access":
+        res = parse_web_access_log(path)
+        for bf in res["brute_force"]:
+            offensive[bf["ip"]] = f"brute-force ({bf['attempts']} tentatives)"
+        for ip in res["attackers"]:
+            offensive.setdefault(ip, "attaque web (webshell, exfiltration, scan ou injection)")
+    elif log_type == "syslog":
+        res = parse_syslog_file(path)
+        for ip in res["notable_ips"]:
+            offensive.setdefault(ip, "événement système notable")
+    elif log_type == "web_error":
+        for err in parse_web_error_log(path)["suspicious_errors"]:
+            if err.get("client"):
+                offensive.setdefault(err["client"], "erreur serveur déclenchée")
+
+    occurrences: Counter = Counter()
+    hits: Counter = Counter()
+    for line in text.splitlines():
+        found = set(_IPV4.findall(line)) & ips
+        if not found:
+            continue
+        attack = bool(_OFFENSIVE_LINE.search(line))
+        for ip in found:
+            occurrences[ip] += 1
+            hits[ip] += attack
+    for ip, n in hits.items():
+        if n:
+            offensive.setdefault(ip, f"{n} ligne(s) d'attaque")
+    return dict(occurrences), offensive
+
+
 class IOCAnalyzer(BaseAnalyzer):
     """Extraction d'indicateurs de compromission (IOC) depuis des fichiers."""
     name = "ioc"
@@ -178,13 +225,7 @@ class IOCAnalyzer(BaseAnalyzer):
 
             total_iocs = sum(len(v) for v in iocs.values())
 
-            text_str = data.decode('utf-8', 'replace')
-            ip_freqs: dict[str, int] = {}
-            for ip in iocs.get("ipv4", []):
-                ip_freqs[ip] = len(re.findall(r'\b' + re.escape(ip) + r'\b', text_str))
-
-            rare_ips = [ip for ip, cnt in sorted(ip_freqs.items(), key=lambda x: x[1]) if cnt < 50]
-            frequent_ips = [ip for ip, cnt in sorted(ip_freqs.items(), key=lambda x: -x[1]) if cnt >= 50]
+            occurrences, offensive = _ip_roles(path, data.decode("utf-8", "replace"), set(iocs.get("ipv4", [])))
 
             meta: dict = {
                 "Fichier": os.path.basename(path),
@@ -195,14 +236,15 @@ class IOCAnalyzer(BaseAnalyzer):
                 "Total IOCs extraits": str(total_iocs),
             }
 
-            if rare_ips:
-                meta["IOC rares (à investiguer en priorité)"] = ", ".join(
-                    f"{ip} ({ip_freqs[ip]}x)" for ip in rare_ips[:5]
-                )
-            if frequent_ips:
-                meta["IOC haute fréquence (serveurs / bruit)"] = ", ".join(
-                    f"{ip} ({ip_freqs[ip]}x)" for ip in frequent_ips[:5]
-                )
+            # Le rôle et non la fréquence : un brute-force rend l'attaquant majoritaire dans un journal
+            if offensive:
+                meta["[ALERTE] IP à l'activité offensive"] = " | ".join(
+                    f"{ip} ({occurrences.get(ip, 0)}x : {reason})" for ip, reason in sorted(
+                        offensive.items(), key=lambda x: -occurrences.get(x[0], 0))[:10])
+            others = sorted((ip for ip in occurrences if ip not in offensive), key=lambda ip: -occurrences[ip])
+            if others:
+                meta["Autres IP (aucune activité offensive observée)"] = (
+                    f"{len(others)} : " + ", ".join(f"{ip} ({occurrences[ip]}x)" for ip in others[:5]))
 
             for ioc_type, items in iocs.items():
                 if items:
@@ -220,9 +262,8 @@ class IOCAnalyzer(BaseAnalyzer):
                     "file_hashes": file_hashes,
                     "iocs": iocs,
                     "total_iocs": total_iocs,
-                    "frequencies": ip_freqs,
-                    "rare_iocs": rare_ips,
-                    "frequent_iocs": frequent_ips,
+                    "occurrences": occurrences,
+                    "offensive_ips": offensive,
                 },
             )
         except Exception as exc:

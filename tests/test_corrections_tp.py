@@ -1,21 +1,16 @@
 """Tests de validation des corrections apportées d'après les faiblesses du TP."""
 import gzip
-import os
+
 import pytest
 
-from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
+from forensic_analyzer.core.pipeline import run_pipeline
 from forensic_analyzer.core.scanner import default_registry
-from forensic_analyzer.core.integrity import verify_manifest
-from forensic_analyzer.analyzers.elf import ELFAnalyzer
 from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
 from forensic_analyzer.analyzers.log_analyzer import LogAnalyzer
 from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
 from forensic_analyzer.analyzers.nmap import NmapAnalyzer
 from forensic_analyzer.analyzers.pcap.credentials import extract_credentials
-from forensic_analyzer.analyzers.pcap.streams import rebuild_tcp_streams, extract_http_auth_attempts, extract_http_exfiltration
-from forensic_analyzer.analyzers.pcap.timeline import build_attack_timeline
-from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
-from forensic_analyzer.models.finding import FindingModel, ReportModel
+from forensic_analyzer.analyzers.pcap.streams import rebuild_tcp_streams
 
 
 def test_log_analyzer_parses_web_access(tmp_path):

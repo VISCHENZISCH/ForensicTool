@@ -5,6 +5,7 @@ import os
 
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.exports import export_root
 
 log = get_logger("pdf_exporter")
 
@@ -24,8 +25,8 @@ class PDFExporter:
 
         try:
             filename = os.path.basename(output_path)
-            os.makedirs("export", exist_ok=True)
-            target_path = os.path.join("export", filename)
+            os.makedirs(export_root(), exist_ok=True)
+            target_path = os.path.join(export_root(), filename)
             from forensic_analyzer.output.html_exporter import \
                 build_interactive_html
             html_content = build_interactive_html(report)

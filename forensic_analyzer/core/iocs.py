@@ -86,9 +86,9 @@ class _Collector:
             if host.lower() in _BENIGN_DOMAINS:
                 return
             if _IP.fullmatch(host):
-                self.add("ipv4", host, context)
+                self.add("ipv4", host, "hôte d'une URL observée")
             else:
-                self.add("domain", host, context)
+                self.add("domain", host, "hôte d'une URL observée")
         if kind == "path":
             self.add("filename", _filename(value), context)
         self.items.append(Observation(kind, value, self.f.type, _artifact(self.f), context))
@@ -98,7 +98,9 @@ class _Collector:
         if not isinstance(text, str):
             return
         for url in _URL.findall(text):
-            self.add("url", url.rstrip(".,;)"), context)
+            # Une substitution shell ($(hostname), `id`, ${VAR}) n'est pas une valeur littérale
+            url = re.split(r"\$\(|\$\{|`", url)[0]
+            self.add("url", url.rstrip(".,;)?&="), context)
         for ip in _IP.findall(text):
             self.add("ipv4", ip, context)
 
@@ -120,6 +122,8 @@ def _elf(c: _Collector, f: FindingModel) -> None:
     iocs = f.extra.get("iocs", {})
     for ip in iocs.get("ips", []):
         c.add("ipv4", ip, "chaîne du binaire")
+    for ip in iocs.get("internal_ips", []):
+        c.add("ipv4", ip, "adresse interne dans le binaire")
     for url in iocs.get("urls", []):
         c.add("url", url, "chaîne du binaire")
     for p in iocs.get("paths", []):
@@ -138,9 +142,21 @@ def _pe(c: _Collector, f: FindingModel) -> None:
 
 def _pcap(c: _Collector, f: FindingModel) -> None:
     for beacon in f.extra.get("c2_beacons", {}).get("beacons", []):
-        c.text(beacon.get("connection", ""), f"beacon ~{beacon.get('avg_interval_sec')} s")
-    for ip in f.extra.get("top_dst_ips", {}):
-        c.add("ipv4", ip, "destination fréquente")
+        # "source -> destination:port" : la source est la machine compromise, pas un indicateur
+        dest = beacon.get("connection", "").split(" -> ")[-1].rsplit(":", 1)[0]
+        c.add("ipv4", dest, "destination de balise C2")
+    for move in f.extra.get("smb_lateral", []):
+        c.add("ipv4", move.split(" -> ")[-1].rsplit(":", 1)[0], "cible de mouvement latéral SMB")
+    # Rôles et non volumes : les destinations fréquentes sont le serveur victime et ses clients
+    attack = f.extra.get("http_attack", {})
+    for ip in attack.get("attackers", []):
+        c.add("ipv4", ip, "client offensif (brute-force, webshell, exfiltration)")
+    for cmd in attack.get("webshell_commands", [])[:1]:
+        c.add("url", f"http://{cmd['server']}{cmd['shell']}", "webshell appelé")
+        c.add("filename", _filename(cmd["shell"]), "webshell appelé (réseau)")
+    for ex in attack.get("exfiltration", []):
+        c.add("url", f"http://{ex['server']}{ex['uri']}", "fichier exfiltré")
+        c.add("filename", _filename(ex["uri"]), "fichier exfiltré (réseau)")
     for d in f.extra.get("typosquatting", []):
         c.add("domain", d.get("domain") if isinstance(d, dict) else d, "domaine suspect (typosquatting)")
     for q in f.extra.get("dns_exfiltration", {}).get("long_queries", []) or []:
@@ -149,8 +165,6 @@ def _pcap(c: _Collector, f: FindingModel) -> None:
         c.add("ja3", ja3, f"empreinte TLS {conn}")
     for cred in f.extra.get("credentials", []):
         c.add("domain", cred.get("host"), f"identifiants {cred.get('protocol', '')} en clair")
-    for req in f.extra.get("http_exfiltration", []):
-        c.text(str(req), "exfiltration HTTP")
 
 
 def _memory(c: _Collector, f: FindingModel) -> None:
@@ -177,6 +191,14 @@ def _linux(c: _Collector, f: FindingModel) -> None:
             c.add("path", item.get("path"), "persistance")
     for a in f.extra.get("auth_log", {}).get("failed_details", []):
         c.add("ipv4", a.get("source_ip"), "échec d'authentification")
+    histories = [f.extra["bash_history"]] if f.extra.get("bash_history") else list(f.extra.get("bash_histories") or [])
+    for hist in histories:
+        for cmd in (hist.get("suspicious", []) if isinstance(hist, dict) else []):
+            c.text(cmd.get("command", ""), "commande suspecte (historique bash)")
+            for name in re.findall(r"[\w.-]+\.(?:sql\.gz|sql|php|gz|zip|tar)\b", cmd.get("command", "")):
+                c.add("filename", name.lower(), "fichier manipulé (historique bash)")
+    for cron in f.extra.get("crontabs", []) or []:
+        c.text(cron.get("entry", ""), "tâche planifiée (cron) suspecte")
 
 
 def _disk(c: _Collector, f: FindingModel) -> None:
@@ -256,7 +278,12 @@ def _ioc_extractor(c: _Collector, f: FindingModel) -> None:
 def _log_analysis(c: _Collector, f: FindingModel) -> None:
     iocs = f.extra.get("iocs", {})
     for ip in iocs.get("ips", []):
-        c.add("ipv4", ip, f"journal {f.extra.get('log_type', 'système')}")
+        c.add("ipv4", ip, f"activité offensive (journal {f.extra.get('log_type', 'système')})")
+    details = f.extra.get("details", {})
+    for cmd in details.get("webshell_commands", [])[:1]:
+        c.add("filename", _filename(cmd["shell"]), "webshell appelé (journal web)")
+    for ex in details.get("exfiltration", []):
+        c.add("filename", _filename(ex["uri"]), "fichier téléchargé (journal web)")
     for url in iocs.get("urls", []):
         c.add("url", url, f"journal {f.extra.get('log_type', 'système')}")
     for rfile in f.extra.get("referenced_files", []):
@@ -265,14 +292,6 @@ def _log_analysis(c: _Collector, f: FindingModel) -> None:
 
 def _webshell(c: _Collector, f: FindingModel) -> None:
     c.add("filename", _filename(f.file), "webshell détecté")
-
-
-def _network_recon(c: _Collector, f: FindingModel) -> None:
-    for h in f.extra.get("hosts", []):
-        if h.get("ip"):
-            c.add("ipv4", h["ip"], "cible scan nmap")
-        for hn in h.get("hostnames", []):
-            c.add("domain", hn, "nom d'hôte nmap")
 
 
 _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
@@ -291,7 +310,6 @@ _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "ioc": _ioc_extractor,
     "log_analysis": _log_analysis,
     "webshell_analysis": _webshell,
-    "network_recon": _network_recon,
 }
 
 

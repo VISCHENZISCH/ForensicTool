@@ -28,6 +28,15 @@ _SUDO = re.compile(
     r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sudo:\s+(\S+)\s+:.*COMMAND=(.*)',
 )
 
+# Mots de passe passés en clair sur la ligne de commande (mysql -pX, smbclient -U u%X, --password=X...)
+_CLEARTEXT_PASSWORDS = [
+    re.compile(r'\b(?:mysql|mysqldump|mysqladmin)\b.*?\s-p(?!\s)(\S+)'),
+    re.compile(r'\s-U\s+\S+?%(\S+)'),
+    re.compile(r'--password[= ](\S+)'),
+    re.compile(r'\bsshpass\s+-p\s*(\S+)'),
+    re.compile(r'(?i)://[^/:\s]+:([^@/\s]+)@'),
+]
+
 # Commandes suspectes dans bash_history
 _SUSPICIOUS_CMDS = [
     r'wget\s+http',
@@ -47,6 +56,11 @@ _SUSPICIOUS_CMDS = [
     r'rm\s+.*/var/log/',
     r'smbclient',
     r'mysql\s+.*-p',
+    r'mysqldump\s+',
+    r'pg_dump\s+',
+    r'(?:cat|less|more|head|tail|grep)\s+.*(?:wp-config\.php|/etc/shadow|\.env\b|config\.php|id_rsa|\.pgpass|\.my\.cnf)',
+    r'(?:curl|wget|nc)\s+.*(?:10\.\d+|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d+\.\d+',
+    r'>\s*/etc/cron',
     r'mount\s+.*-t\s+cifs',
     r'ssh\s+.*@',
     r'/dev/tcp/',
@@ -110,8 +124,17 @@ def parse_bash_history(path: str) -> dict:
                     })
                     break
 
+        cleartext = []
+        for cmd in commands:
+            for pattern in _CLEARTEXT_PASSWORDS:
+                mp = pattern.search(cmd)
+                if mp:
+                    cleartext.append({"command": cmd[:200], "password": mp.group(1).strip("'\"")})
+                    break
+
         return {
             "total_commands": len(commands),
+            "cleartext_passwords": cleartext,
             "suspicious_commands": len(suspicious),
             "suspicious": suspicious[:100],
             "last_commands": commands[-20:] if commands else [],
@@ -560,8 +583,11 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     meta["Type"] = "bash_history"
                     meta["Total commandes"] = str(result.get("total_commands", 0))
                     meta["Commandes suspectes"] = str(result.get("suspicious_commands", 0))
-                    for i, s in enumerate(result.get("suspicious", [])[:5]):
-                        meta[f"Suspect #{i+1}"] = s["command"][:80]
+                    for i, s in enumerate(result.get("suspicious", [])[:15]):
+                        meta[f"Suspect #{i+1}"] = s["command"][:100]
+                    secrets = sorted({c["password"] for c in result.get("cleartext_passwords", [])})
+                    if secrets:
+                        meta["[ALERTE] Mots de passe en clair"] = ", ".join(secrets)
                     extra["bash_history"] = result
 
                 elif "auth.log" in basename or "secure" in basename:
@@ -633,8 +659,15 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     extra["processes"] = procs[:200]
                     
                 accts = parse_passwd_shadow(path)
-                meta["Comptes UID 0 (root)"] = ", ".join(accts["uid_0"]) if accts.get("uid_0") else "root"
-                meta["Comptes avec mot de passe"] = str(len(accts["shadow"]))
+                # Sans /etc/passwd dans la copie, ne rien affirmer sur les comptes
+                if accts["passwd"]:
+                    uid0 = accts["uid_0"]
+                    label = "[ALERTE] Comptes UID 0 (root)" if set(uid0) - {"root"} else "Comptes UID 0 (root)"
+                    meta[label] = ", ".join(uid0) or "aucun"
+                else:
+                    meta["Comptes UID 0 (root)"] = "non déterminé (/etc/passwd absent de la copie)"
+                if accts["shadow"]:
+                    meta["Comptes avec mot de passe"] = str(len(accts["shadow"]))
                 extra["accounts"] = accts
                 
                 syslog = parse_syslog(path)

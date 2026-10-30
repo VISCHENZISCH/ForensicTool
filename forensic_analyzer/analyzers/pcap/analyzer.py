@@ -1,4 +1,5 @@
 from __future__ import annotations
+import datetime
 import os
 from collections import Counter
 from forensic_analyzer.core.base import BaseAnalyzer
@@ -6,6 +7,7 @@ from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 
 from .credentials import extract_credentials
+from .http import analyze_http_attack, extract_http_transactions
 from .streams import (
     rebuild_tcp_streams,
     extract_files_from_streams,
@@ -69,6 +71,27 @@ class PCAPAnalyzer(BaseAnalyzer):
             payload_deliveries = extract_payload_delivery(streams)
             http_exfil = extract_http_exfiltration(streams)
             auth_attempts = extract_http_auth_attempts(streams)
+            http_attack = analyze_http_attack(extract_http_transactions(packets))
+            attackers = set(http_attack["attackers"])
+
+            # Les mots de passe d'un brute-force ne sont pas des identifiants : seul celui qui
+            # a fonctionné l'est (réponse 302 + session), placé en tête
+            brute_clients = {b["client"] for b in http_attack["brute_force"]}
+            winners = [{"protocol": "HTTP Form (POST) - VALIDE", "host": s["server"], "client": s["client"],
+                        "username": s["username"], "password": s["password"], "time": s["time"]}
+                       for s in http_attack["successful_logins"]]
+            credentials = winners + [c for c in credentials if not (
+                c.get("protocol", "").startswith("HTTP Form") and c.get("stream", "").split(" <-> ")[-1].split(":")[0] in brute_clients)]
+
+            # Balises : une requête isolée vers un port de C2 compte (pas seulement les séries périodiques)
+            known = {b["connection"] for b in c2_result["beacons"]}
+            for b in http_attack["beacons"]:
+                conn = f"{b['source']} -> {b['destination']}:{b['port']}"
+                if b["outbound"] and conn not in known:
+                    c2_result["beacons"].append({"connection": conn, "count": 1, "avg_interval_sec": 0, "jitter_pct": 0,
+                                                 "detail": f"Requête sortante vers C2 : {conn} {b['uri']}"})
+                    known.add(conn)
+            c2_result["detected"] = bool(c2_result["beacons"])
 
             # --- DÉTECTION SCANS & LATERAL MOVEMENT ---
             syn_scans = 0
@@ -98,7 +121,7 @@ class PCAPAnalyzer(BaseAnalyzer):
                     if tcp.dport in (445, 139) and ('S' in flags and 'A' not in flags):
                         src_net = ip.src.rsplit('.', 1)[0]
                         dst_net = ip.dst.rsplit('.', 1)[0]
-                        if src_net != dst_net:
+                        if src_net != dst_net and ip.src not in attackers:
                             smb_desc = f"{ip.src} -> {ip.dst}:{tcp.dport}"
                             if smb_desc not in smb_lateral:
                                 smb_lateral.append(smb_desc)
@@ -131,6 +154,8 @@ class PCAPAnalyzer(BaseAnalyzer):
                 tls_decrypted = extract_decrypted_http(path, sslkeylogfile)
                 
             attack_timeline = build_attack_timeline(packets, suspect_domains, c2_result)
+            attack_timeline = sorted(attack_timeline + _http_attack_events(http_attack),
+                                     key=lambda e: e["time"])
             
             malware_hits = []
             if pe_files:
@@ -183,10 +208,28 @@ class PCAPAnalyzer(BaseAnalyzer):
             if suspect_domains:
                 meta["Alerte Phishing/Typosquatting"] = f"{len(suspect_domains)} domaine(s) suspect(s) !"
 
-            # Add User-Agents
-            if user_agents:
-                suspect_uas = [ua for ua in user_agents if "Windows NT" not in ua["user_agent"] and "Macintosh" not in ua["user_agent"]]
-                meta["User-Agents suspects"] = str(len(suspect_uas))
+            for bf in http_attack["brute_force"]:
+                outcome = f"RÉUSSI : {bf['winning_credential']}" if bf["succeeded"] else "sans succès"
+                meta[f"[ALERTE] Brute-force HTTP {bf['client']}"] = (
+                    f"{bf['attempts']} tentatives vers {bf['server']} en {bf['last'] - bf['first']:.0f} s, {outcome}")
+            for up in http_attack["uploads"]:
+                label = "[ALERTE] Téléversement de script" if up["php"] else "Téléversement"
+                meta[f"{label} {up['filename']}"] = f"{up['client']} -> {up['server']}{up['uri']}"
+            if http_attack["webshell_commands"]:
+                cmds = http_attack["webshell_commands"]
+                meta["[ALERTE] Commandes via webshell"] = (f"{len(cmds)} ({cmds[0]['shell']}) : "
+                                                          + " ; ".join(c["command"] for c in cmds))
+            for ex in http_attack["exfiltration"]:
+                size = f"{ex['bytes'] / 1024 / 1024:.1f} Mo" if ex["bytes"] else "réponse non capturée"
+                meta[f"[ALERTE] Exfiltration HTTP {ex['uri'].rsplit('/', 1)[-1]}"] = (
+                    f"téléchargé par {ex['client']} depuis {ex['server']} ({size})")
+            if smb_lateral:
+                meta["[ALERTE] Mouvement latéral SMB"] = " | ".join(smb_lateral)
+
+            if http_attack["user_agents"]:
+                ranked = http_attack["user_agents"]
+                meta["User-Agents (par rôle)"] = " | ".join(f"{u['user_agent']} ({u['verdict']})" for u in ranked[:5])
+                meta["User-Agents suspects"] = str(sum(u["verdict"] == "attaquant" for u in ranked))
                 
             # Add Auto-Malware Pipeline hits
             if malware_hits:
@@ -206,8 +249,6 @@ class PCAPAnalyzer(BaseAnalyzer):
             if tls_snis:
                 meta["TLS SNI (Serveurs ciblés)"] = " | ".join(list(set(tls_snis))[:5])
                 
-            if http_exfil:
-                meta["Données exfiltrées (HTTP)"] = str(len(http_exfil))
                 
             if tls_decrypted:
                 meta["Déchiffrement TLS"] = f"SUCCÈS ({len(tls_decrypted)} requêtes HTTP extraites)"
@@ -234,9 +275,39 @@ class PCAPAnalyzer(BaseAnalyzer):
                     "http_exfiltration": http_exfil,
                     "auth_attempts": auth_attempts,
                     "smb_lateral": smb_lateral,
+                    "http_attack": http_attack,
                     "tls_decrypted": tls_decrypted
                 },
             )
         except Exception as exc:
             log.error("Erreur PCAP '%s' : %s", os.path.basename(path), exc)
             return None
+
+
+def _iso(ts: float) -> str:
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).isoformat()
+
+
+def _http_attack_events(http_attack: dict) -> list[dict]:
+    """Étapes de l'attaque, datées, pour la chronologie (un événement par fait, pas par paquet)."""
+    events = []
+    for bf in http_attack["brute_force"]:
+        events.append({"time": _iso(bf["first"]), "type": "BRUTE-FORCE",
+                       "desc": f"Début du brute-force HTTP depuis {bf['client']} ({bf['attempts']} tentatives)"})
+    for s in http_attack["successful_logins"]:
+        events.append({"time": _iso(s["time"]), "type": "CONNEXION RÉUSSIE",
+                       "desc": f"Connexion réussie {s['username']} depuis {s['client']} ({s['uri']})"})
+    for up in http_attack["uploads"]:
+        events.append({"time": _iso(up["time"]), "type": "TÉLÉVERSEMENT",
+                       "desc": f"Téléversement de {up['filename']} par {up['client']}"})
+    for c in http_attack["webshell_commands"]:
+        events.append({"time": _iso(c["time"]), "type": "WEBSHELL",
+                       "desc": f"Commande via {c['shell']} : {c['command']} ({c['client']})"})
+    for ex in http_attack["exfiltration"]:
+        events.append({"time": _iso(ex["time"]), "type": "EXFILTRATION",
+                       "desc": f"Téléchargement de {ex['uri']} par {ex['client']}"})
+    for b in http_attack["beacons"]:
+        if b["outbound"]:
+            events.append({"time": _iso(b["time"]), "type": "C2 BEACON",
+                           "desc": f"Requête sortante {b['source']} -> {b['destination']}:{b['port']} {b['uri']}"})
+    return events

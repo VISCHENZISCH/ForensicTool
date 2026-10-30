@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.exports import export_root
 from forensic_analyzer.utils.spreadsheet import neutralize_formula
 
 log = get_logger("evtx")
@@ -156,7 +157,7 @@ class EVTXAnalyzer(BaseAnalyzer):
             import csv
             anomalies = []
             # Dans export/, jamais à côté de la preuve
-            csv_dir = os.path.join("export", "timelines")
+            csv_dir = os.path.join(export_root(), "timelines")
             csv_path = os.path.join(csv_dir, os.path.basename(path) + ".timeline.csv")
             try:
                 os.makedirs(csv_dir, exist_ok=True)
