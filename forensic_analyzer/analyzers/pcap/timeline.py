@@ -15,11 +15,14 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
     seen_http_reqs = set()
 
     suspect_dns = {s['domaine'] for s in suspect_domains} if suspect_domains else set()
-    c2_ips = set()
+    # Couple IP/port de la balise : une réponse du serveur vers un port client de cette IP n'est pas du C2
+    c2_endpoints = set()
     for beacon in c2_beacons.get('beacons', []):
         dst = beacon.get('connection', '').split(' -> ')[-1]
-        if dst:
-            c2_ips.add(dst.rsplit(':', 1)[0])
+        if ':' in dst:
+            ip, port = dst.rsplit(':', 1)
+            if port.isdigit():
+                c2_endpoints.add((ip, int(port)))
 
     for pkt in packets:
         try:
@@ -43,7 +46,8 @@ def build_attack_timeline(packets, suspect_domains, c2_beacons) -> list[dict]:
                 dst = ip.dst
                 stream_id = f"{ip.src} -> {ip.dst}:{tcp.dport}"
 
-                if dst in c2_ips and not any(e["desc"].endswith(dst) for e in timeline if e["type"] == "C2 CONNECT"):
+                if (dst, tcp.dport) in c2_endpoints and not any(
+                        e["desc"].endswith(f"{dst}:{tcp.dport}") for e in timeline if e["type"] == "C2 CONNECT"):
                     timeline.append({"time": ts, "type": "C2 CONNECT", "desc": f"Début de la communication C2 vers {dst}:{tcp.dport}"})
                     seen_streams.add(stream_id)
 

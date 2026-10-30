@@ -110,6 +110,8 @@ class LogAnalyzer(BaseAnalyzer):
                 meta["Lignes analysées"] = f"{res['total_lines']:,}"
                 meta["Échecs d'authentification"] = str(res["auth_failures"])
                 meta["Succès d'authentification"] = str(res["auth_successes"])
+                if res["ssh_sources"]:
+                    meta["Comptes / sources SSH"] = f"{len(res['ssh_sources'])} : " + ", ".join(res["ssh_sources"][:8])
                 meta["Commandes SUDO"] = str(len(res["sudo_commands"]))
                 if res["failed_ips"]:
                     meta["[ALERTE] Top IPs brute-force (SSH)"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["failed_ips"][:5])

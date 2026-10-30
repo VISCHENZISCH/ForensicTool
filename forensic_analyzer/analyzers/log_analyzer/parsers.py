@@ -347,6 +347,7 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
     notable: list[dict[str, Any]] = []
     notable_ips: set[str] = set()
+    ssh_pairs: set[tuple[str, str]] = set()
     total_lines = 0
     ref = _log_mtime(path)
 
@@ -391,14 +392,18 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
         if ma:
             user, ip = ma.group(1), ma.group(2)
             auth_successes += 1
-            events.append({
-                "timestamp": iso_ts,
-                "source": "syslog",
-                "event_type": "auth_success",
-                "description": f"Connexion SSH réussie pour '{user}' depuis {ip}",
-                "ip": ip,
-                "file": path,
-            })
+            # Une connexion par (compte, source) suffit : la première d'une nouvelle source est le
+            # signal utile, les suivantes (sessions d'exploitation régulières) noient la chronologie
+            if (user, ip) not in ssh_pairs:
+                ssh_pairs.add((user, ip))
+                events.append({
+                    "timestamp": iso_ts,
+                    "source": "syslog",
+                    "event_type": "auth_success",
+                    "description": f"Première connexion SSH réussie de '{user}' depuis {ip}",
+                    "ip": ip,
+                    "file": path,
+                })
 
         for pattern, kind, template, alert in _SYSLOG_NOTABLE:
             mn = pattern.search(msg)
@@ -429,6 +434,7 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
         "services": sorted(services.items(), key=lambda x: -x[1])[:10],
         "auth_failures": auth_failures,
         "auth_successes": auth_successes,
+        "ssh_sources": sorted({f"{u}@{ip}" for u, ip in ssh_pairs}),
         "failed_ips": sorted(failed_ips.items(), key=lambda x: -x[1])[:10],
         "sudo_commands": sudo_commands[:30],
         "notable": notable[:200],

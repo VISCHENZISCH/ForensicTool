@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 
 from forensic_analyzer.analyzers.timeline import build_timeline
+from forensic_analyzer.analyzers.timeline.analyzer import align_pcap_clock
 from forensic_analyzer.core.timeline import consolidate
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
@@ -13,7 +14,7 @@ from forensic_analyzer.utils.spreadsheet import neutralize_formula
 log = get_logger("csv_exporter")
 
 _FIELDNAMES = ["timestamp", "source", "event_type", "description", "file", "details",
-               "confidence", "corroborating_sources"]
+               "confidence", "corroborating_sources", "timestamp_origine"]
 
 
 class CSVExporter:
@@ -29,6 +30,7 @@ class CSVExporter:
             os.makedirs(export_root(), exist_ok=True)
             target_path = os.path.join(export_root(), output_path)
         events = build_timeline(report)
+        align_pcap_clock(events)  # même recalage que la chronologie du rapport
         # Confiance du fait consolide auquel appartient chaque événement
         for fact in consolidate(events):
             for e in fact["events"]:

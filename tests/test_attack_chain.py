@@ -197,3 +197,29 @@ def test_each_analysis_gets_its_own_export_folder():
         assert path.startswith(os.path.join("export", "")) and path.endswith("_affaire_42")
     finally:
         exports.set_export_root(before)
+
+
+def test_pcap_clock_is_aligned_on_an_ip_seen_on_both_sides():
+    from forensic_analyzer.analyzers.timeline.analyzer import align_pcap_clock
+
+    events = [
+        {"timestamp": "2026-10-25T06:12:04+00:00", "source": "web_access", "description": f"Reconnaissance depuis {ATTACKER}"},
+        {"timestamp": "2026-10-30T13:32:04+00:00", "source": "pcap", "description": f"Connexion TCP {ATTACKER}:40000 -> {SERVER}:21"},
+        {"timestamp": "2026-10-30T14:27:04+00:00", "source": "pcap", "description": "Début du brute-force HTTP"},
+    ]
+    clock = align_pcap_clock(events)
+    assert clock["anchor"] == ATTACKER and clock["offset_seconds"] == (5 * 24 * 60 + 7 * 60 + 20) * 60
+    shifted = [e for e in events if e["source"] == "pcap"]
+    assert shifted[0]["timestamp"].startswith("2026-10-25T06:12:04")
+    assert shifted[0]["timestamp_origine"].startswith("2026-10-30T13:32:04")   # heure d'origine conservée
+
+
+def test_routine_ssh_logins_are_collapsed_per_account_and_source(tmp_path):
+    from forensic_analyzer.analyzers.log_analyzer.parsers import parse_syslog_file
+
+    log = tmp_path / "auth.log"
+    log.write_text("".join(f"Oct 25 06:{i:02d}:00 web-01 sshd[1]: Accepted publickey for ops from 192.0.2.{11 + i % 2} port 1\n"
+                           for i in range(40)))
+    res = parse_syslog_file(str(log))
+    assert res["auth_successes"] == 40 and len(res["events"]) == 2
+    assert res["ssh_sources"] == ["ops@192.0.2.11", "ops@192.0.2.12"]

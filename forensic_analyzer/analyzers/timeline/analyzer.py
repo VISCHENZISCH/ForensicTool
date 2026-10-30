@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.core.timeline import consolidate, parse_ts
@@ -250,6 +251,55 @@ def build_timeline(report: ReportModel) -> list[dict]:
     return events
 
 
+_HOST_SOURCES = {"syslog", "auth.log", "web_access", "web_error", "wp_debug"}
+_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+
+def _span(seconds: float) -> str:
+    minutes = round(abs(seconds) / 60)
+    days, rem = divmod(minutes, 24 * 60)
+    return (f"{days} j " if days else "") + f"{rem // 60} h {rem % 60:02d} min"
+
+
+def align_pcap_clock(events: list[dict]) -> dict | None:
+    """
+    Recale les événements PCAP sur l'horloge des hôtes quand elles divergent de plus d'une heure.
+
+    Le décalage est mesuré sur les IP vues des deux côtés (première apparition dans la capture
+    contre première apparition dans les journaux), médiane arrondie à la minute. L'heure d'origine
+    reste dans `timestamp_origine` : seule la mise en concordance des sources change.
+    """
+    first_pcap: dict[str, datetime.datetime] = {}
+    first_host: dict[str, datetime.datetime] = {}
+    for e in events:
+        ts = parse_ts(e.get("timestamp", ""))
+        side = first_pcap if e.get("source") == "pcap" else first_host if e.get("source") in _HOST_SOURCES else None
+        if ts is None or side is None:
+            continue
+        for ip in set(_IPV4.findall(f"{e.get('description', '')} {e.get('ip', '')}")):
+            if ip not in side or ts < side[ip]:
+                side[ip] = ts
+    shared = set(first_pcap) & set(first_host)
+    if not shared:
+        return None
+    offsets = sorted((first_pcap[ip] - first_host[ip]).total_seconds() for ip in shared)
+    offset = round(offsets[len(offsets) // 2] / 60) * 60
+    if abs(offset) < 3600:
+        return None
+    anchor = min(shared, key=lambda ip: abs((first_pcap[ip] - first_host[ip]).total_seconds() - offset))
+    shift = datetime.timedelta(seconds=offset)
+    shifted = 0
+    for e in events:
+        ts = parse_ts(e.get("timestamp", "")) if e.get("source") == "pcap" else None
+        if ts:
+            e["timestamp_origine"] = e["timestamp"]
+            e["timestamp"] = (ts - shift).isoformat()
+            shifted += 1
+    far_future = parse_ts("9999-01-01T00:00:00")
+    events.sort(key=lambda e: parse_ts(e.get("timestamp", "")) or far_future)
+    return {"offset_seconds": offset, "anchor": anchor, "shifted": shifted}
+
+
 class TimelineAnalyzer(BaseAnalyzer):
     """Construit une timeline forensique unifiée multi-sources."""
     name = "timeline"
@@ -276,24 +326,18 @@ class TimelineAnalyzer(BaseAnalyzer):
         for src, count in sorted(sources.items(), key=lambda x: -x[1]):
             meta[f"Source: {src}"] = str(count)
 
+        # Horloge de la capture recalée sur celle des hôtes (ancre : une IP vue des deux côtés)
+        clock = align_pcap_clock(events)
+        if clock:
+            meta["[ATTENTION] Décalage d'horloge"] = (
+                f"{_span(clock['offset_seconds'])} entre le PCAP et les journaux hôtes "
+                f"({'PCAP en avance' if clock['offset_seconds'] > 0 else 'PCAP en retard'})")
+            meta["Recalage PCAP"] = (f"{clock['shifted']} événement(s) recalé(s), ancre : première apparition de "
+                                     f"{clock['anchor']} ; heure d'origine conservée (timestamp_origine)")
+
         if events:
             meta["Premier événement"] = events[0].get("timestamp", "?")
             meta["Dernier événement"] = events[-1].get("timestamp", "?")
-
-        # Détection d'écart d'horloge entre PCAP et journaux hôtes
-        pcap_ts = [parse_ts(e["timestamp"]) for e in events if e.get("source") == "pcap" and e.get("timestamp")]
-        host_ts = [parse_ts(e["timestamp"]) for e in events if e.get("source") in ("syslog", "auth.log", "web_access", "web_error") and e.get("timestamp")]
-        pcap_ts = [t for t in pcap_ts if t]
-        host_ts = [t for t in host_ts if t]
-        if pcap_ts and host_ts:
-            delta = (min(pcap_ts) - min(host_ts)).total_seconds()
-            if abs(delta) > 3600:
-                minutes = round(abs(delta) / 60)
-                days, rem = divmod(minutes, 24 * 60)
-                span = (f"{days} j " if days else "") + f"{rem // 60} h {rem % 60:02d} min"
-                ahead = "PCAP en avance" if delta > 0 else "PCAP en retard"
-                meta["[ATTENTION] Décalage d'horloge"] = (f"{span} entre le PCAP et les journaux hôtes ({ahead}) : "
-                                                         "recaler les horodatages avant de fusionner les sources")
 
         facts = consolidate(events)
         if facts:
