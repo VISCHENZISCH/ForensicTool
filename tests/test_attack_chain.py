@@ -223,3 +223,56 @@ def test_routine_ssh_logins_are_collapsed_per_account_and_source(tmp_path):
     res = parse_syslog_file(str(log))
     assert res["auth_successes"] == 40 and len(res["events"]) == 2
     assert res["ssh_sources"] == ["ops@192.0.2.11", "ops@192.0.2.12"]
+
+
+_NS = "http://schemas.microsoft.com/win/2004/08/events/event"
+
+
+def _evtx_xml(eid, ts, data, provider="Microsoft-Windows-Security-Auditing", channel="Security"):
+    fields = "".join(f'<Data Name="{k}">{v}</Data>' for k, v in data.items())
+    return (f'<Event xmlns="{_NS}"><System><Provider Name="{provider}"/><EventID>{eid}</EventID>'
+            f'<TimeCreated SystemTime="{ts}"/><Channel>{channel}</Channel><Computer>DC01</Computer></System>'
+            f"<EventData>{fields}</EventData></Event>")
+
+
+def test_evtx_detections_feed_metadata_timeline_and_iocs(tmp_path, monkeypatch):
+    from forensic_analyzer.analyzers.evtx import analyzer as evtx_mod
+    from forensic_analyzer.analyzers.timeline.analyzer import build_timeline
+    from forensic_analyzer.core import iocs
+
+    spray = "198.51.100.7"
+    records = [_evtx_xml(4625, f"2026-10-25T06:00:{i:02d}Z", {"TargetUserName": f"user{i % 6}", "IpAddress": spray})
+               for i in range(12)]
+    records += [
+        _evtx_xml(4624, "2026-10-25T06:01:00Z", {"TargetUserName": "user3", "IpAddress": spray, "LogonType": "10"}),
+        _evtx_xml(1102, "2026-10-25T06:30:00Z", {}),
+        _evtx_xml(7045, "2026-10-25T06:05:00Z", {"ServiceName": "updater", "ImagePath": "cmd.exe /c C:\\Users\\Public\\x.bat"},
+                  provider="Service Control Manager", channel="System"),
+        _evtx_xml(4104, "2026-10-25T06:06:00Z", {"ScriptBlockText": "powershell -nop -enc SQBFAFgA "},
+                  provider="Microsoft-Windows-PowerShell", channel="Microsoft-Windows-PowerShell/Operational"),
+        _evtx_xml(13, "2026-10-25T06:07:00Z", {"TargetObject": "HKU\\S-1\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\upd",
+                                               "Details": "C:\\Users\\Public\\x.exe"},
+                  provider="Microsoft-Windows-Sysmon", channel="Microsoft-Windows-Sysmon/Operational"),
+    ]
+
+    class FakeLog:
+        def __init__(self, path): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def records(self):
+            return [type("R", (), {"xml": lambda self, x=x: x})() for x in records]
+
+    monkeypatch.setattr(evtx_mod, "HAS_EVTX", True)
+    monkeypatch.setattr(evtx_mod.evtx, "Evtx", FakeLog, raising=False)
+    monkeypatch.chdir(tmp_path)
+    f = evtx_mod.EVTXAnalyzer().analyze(str(tmp_path / "Security.evtx"))
+
+    kinds = {d["kind"] for d in f.extra["detections"]}
+    assert {"password_spraying", "success_after_failures", "log_cleared", "service_installed",
+            "suspicious_command", "registry_persistence"} <= kinds
+    assert f.extra["detections"][0]["severity"] == "critique"            # critiques en tête
+    assert {"T1110.003", "T1070.001", "T1543.003", "T1547.001"} <= set(f.extra["mitre"])
+    assert "RDP" in f.metadata["Connexions distantes (réseau / RDP)"] or "type 10" in f.metadata["Connexions distantes (réseau / RDP)"]
+    timeline = build_timeline(ReportModel.from_findings([f]))
+    assert any(e["event_type"] == "détection log_cleared" for e in timeline)
+    assert spray in {i.value for i in iocs.collect([f])}

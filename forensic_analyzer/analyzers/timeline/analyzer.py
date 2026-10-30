@@ -109,6 +109,16 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "file": file,
                     "details": str(evt.get("data", {}))[:200],
                 })
+            for det in finding.extra.get("detections", []):
+                if det.get("timestamp"):
+                    events.append({
+                        "timestamp": _normalize_timestamp(det["timestamp"]),
+                        "source": "evtx",
+                        "event_type": f"détection {det['kind']}",
+                        "description": det["description"][:200],
+                        "file": file,
+                        "details": f"{det['severity']} - {det['technique']}",
+                    })
 
         # Firefox history
         elif source == "firefox_history":

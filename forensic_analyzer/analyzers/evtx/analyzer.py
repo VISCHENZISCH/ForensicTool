@@ -4,11 +4,14 @@ from __future__ import annotations
 import os
 import xml.etree.ElementTree as ET
 
+from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 from forensic_analyzer.utils.exports import export_root
 from forensic_analyzer.utils.spreadsheet import neutralize_formula
+
+from .detections import EventDetector
 
 log = get_logger("evtx")
 
@@ -113,6 +116,7 @@ class EVTXAnalyzer(BaseAnalyzer):
             security_events = []
             event_ids_counter: dict[int, int] = {}
             unreadable = 0
+            detector = EventDetector()
 
             with evtx.Evtx(path) as log_file:
                 for record in log_file.records():
@@ -123,6 +127,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                             eid = parsed["event_id"]
                             event_ids_counter[eid] = event_ids_counter.get(eid, 0) + 1
                             events.append(parsed)
+                            detector.feed(parsed)
 
                             if eid in _SECURITY_EVENTS:
                                 security_events.append(parsed)
@@ -131,6 +136,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                         unreadable += 1
                         continue
 
+            detector.finish()
             events.sort(key=lambda e: e.get("timestamp", ""))
             security_events.sort(key=lambda e: e.get("timestamp", ""))
 
@@ -209,6 +215,21 @@ class EVTXAnalyzer(BaseAnalyzer):
                 
             if anomalies:
                 meta["Anomalies Comportementales"] = f"{len(anomalies)} détectées (ex: {anomalies[0]})"
+
+            # Détections (force brute, pulvérisation, LOLBins, persistance, Sysmon) : critiques d'abord
+            rank = {"critique": 0, "haute": 1, "moyenne": 2}
+            detections = sorted(detector.alerts, key=lambda a: (rank.get(a["severity"], 3), a["timestamp"]))
+            for kind, count in sorted(detector.counts.items(), key=lambda x: -x[1]):
+                if any(a["kind"] == kind for a in detections):
+                    meta[f"[ALERTE] Détection {kind}"] = str(count)
+            for i, a in enumerate(detections[:10], 1):
+                meta[f"[ALERTE] #{i} ({a['severity']})"] = f"{a['timestamp'][:19]} {a['description'][:150]}"
+            if detector.remote_logons:
+                meta["Connexions distantes (réseau / RDP)"] = ", ".join(
+                    f"{user} depuis {ip} (type {lt}, {n}x)"
+                    for (ip, user, lt), n in detector.remote_logons.most_common(5))
+            if detector.techniques:
+                meta["MITRE ATT&CK"] = mitre.summary(detector.techniques)
                 
             meta["Timeline Exportée"] = csv_path
 
@@ -225,6 +246,8 @@ class EVTXAnalyzer(BaseAnalyzer):
                         "audit_cleared": audit_cleared,
                         "new_services": new_services,
                     },
+                    "detections": detections,
+                    "mitre": sorted(detector.techniques),
                 },
             )
         except Exception as exc:

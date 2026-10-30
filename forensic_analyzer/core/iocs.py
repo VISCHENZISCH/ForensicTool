@@ -217,6 +217,9 @@ def _evtx(c: _Collector, f: FindingModel) -> None:
             c.add("ipv4", data.get("IpAddress"), f"logon {e.get('event_id')}")
         if e.get("event_id") == 4688:
             c.add("path", data.get("NewProcessName"), "processus créé (EVTX 4688)")
+    for det in f.extra.get("detections", []):
+        if det.get("severity") == "critique":
+            c.text(det.get("description", ""), f"alerte EVTX : {det.get('kind')}")
 
 
 def _registry(c: _Collector, f: FindingModel) -> None:
