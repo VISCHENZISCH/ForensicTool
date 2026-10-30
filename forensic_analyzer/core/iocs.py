@@ -24,7 +24,7 @@ _BENIGN_DOMAINS = {"www.debian.org", "debian.org", "gnu.org", "www.gnu.org", "ex
                    "www.example.com", "schemas.microsoft.com", "www.w3.org", "w3.org"}
 
 # Types de résultats dont le fichier analysé est lui-même un indicateur (empreinte, nom)
-_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis"}
+_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "webshell_analysis"}
 
 
 @dataclass(frozen=True)
@@ -253,6 +253,28 @@ def _ioc_extractor(c: _Collector, f: FindingModel) -> None:
         c.add("domain", d, "extraction IOC")
 
 
+def _log_analysis(c: _Collector, f: FindingModel) -> None:
+    iocs = f.extra.get("iocs", {})
+    for ip in iocs.get("ips", []):
+        c.add("ipv4", ip, f"journal {f.extra.get('log_type', 'système')}")
+    for url in iocs.get("urls", []):
+        c.add("url", url, f"journal {f.extra.get('log_type', 'système')}")
+    for rfile in f.extra.get("referenced_files", []):
+        c.add("path", rfile, "fichier référencé dans les logs")
+
+
+def _webshell(c: _Collector, f: FindingModel) -> None:
+    c.add("filename", _filename(f.file), "webshell détecté")
+
+
+def _network_recon(c: _Collector, f: FindingModel) -> None:
+    for h in f.extra.get("hosts", []):
+        if h.get("ip"):
+            c.add("ipv4", h["ip"], "cible scan nmap")
+        for hn in h.get("hostnames", []):
+            c.add("domain", hn, "nom d'hôte nmap")
+
+
 _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "elf_analysis": _elf,
     "malware_analysis": _pe, "pe_analysis": _pe, "pdf_analysis": _pe,
@@ -267,6 +289,9 @@ _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "prefetch": _prefetch, "lnk_shortcut": _prefetch,
     "ids_alerts": _ids,
     "ioc": _ioc_extractor,
+    "log_analysis": _log_analysis,
+    "webshell_analysis": _webshell,
+    "network_recon": _network_recon,
 }
 
 

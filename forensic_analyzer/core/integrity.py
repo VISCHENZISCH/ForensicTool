@@ -18,16 +18,13 @@ def _digest(path: str, algo: str) -> str:
     return h.hexdigest()
 
 
-def verify_manifest(manifest: str, confined: bool = False) -> dict:
+def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | None = None) -> dict:
     """
     Vérifie chaque ligne « empreinte  fichier » du manifeste.
 
-    Les chemins relatifs sont résolus depuis le dossier du manifeste ; l'algorithme
-    est déduit de la longueur de l'empreinte. `confined` : manifeste trouvé parmi les
-    preuves (donc non fiable), limité aux fichiers de son dossier ; sinon il pourrait faire
-    hacher n'importe quel fichier de l'analyste (~/.ssh/id_rsa...) et en révéler l'empreinte.
     """
-    base = os.path.dirname(os.path.abspath(manifest))
+    manifest_dir = os.path.dirname(os.path.abspath(manifest))
+    base = os.path.abspath(evidence_dir) if evidence_dir else manifest_dir
     real_base = os.path.realpath(base)
     results = []
     with open(manifest, errors="replace") as f:
@@ -37,7 +34,32 @@ def verify_manifest(manifest: str, confined: bool = False) -> dict:
                 continue
             expected, name = m.group(1).lower(), m.group(2)
             algo = _ALGOS[len(expected)]
-            path = name if os.path.isabs(name) else os.path.join(base, name)
+
+            if os.path.isabs(name):
+                path = name
+            else:
+                candidate = os.path.join(base, name)
+                if os.path.isfile(candidate):
+                    path = candidate
+                elif not confined:
+                    cwd_candidate = os.path.join(os.getcwd(), name)
+                    man_candidate = os.path.join(manifest_dir, name)
+                    parent_candidate = os.path.join(os.path.dirname(base), name)
+                    basename_candidate = os.path.join(base, os.path.basename(name))
+
+                    if os.path.isfile(cwd_candidate):
+                        path = cwd_candidate
+                    elif os.path.isfile(man_candidate):
+                        path = man_candidate
+                    elif os.path.isfile(parent_candidate):
+                        path = parent_candidate
+                    elif os.path.isfile(basename_candidate):
+                        path = basename_candidate
+                    else:
+                        path = candidate
+                else:
+                    path = candidate
+
             if confined and not os.path.realpath(path).startswith(real_base + os.sep):
                 results.append({"file": name, "algo": algo, "expected": expected, "actual": "",
                                 "status": "HORS PÉRIMÈTRE"})

@@ -122,7 +122,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "details": entry.get("url", ""),
                 })
 
-        # Linux auth.log
+        # Linux auth.log, sudo, et bash_history
         elif source == "linux_artifacts":
             auth = finding.extra.get("auth_log", {})
             for entry in auth.get("failed_details", []):
@@ -143,6 +143,31 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "file": file,
                     "details": str(entry),
                 })
+            for entry in auth.get("sudo_details", []):
+                events.append({
+                    "timestamp": _normalize_timestamp(entry.get("timestamp", "")),
+                    "source": "auth.log",
+                    "event_type": "sudo",
+                    "description": f"Commande SUDO par {entry.get('user', '?')} : {entry.get('command', '?')[:80]}",
+                    "file": file,
+                    "details": str(entry),
+                })
+            bh = finding.extra.get("bash_history")
+            histories = finding.extra.get("bash_histories", {})
+            all_bh = ([bh] if bh else []) + list(histories.values())
+            for h in all_bh:
+                if not h: continue
+                for cmd_str in h.get("commands", []):
+                    if cmd_str.startswith("[") and "]" in cmd_str:
+                        ts_part, real_cmd = cmd_str[1:].split("]", 1)
+                        events.append({
+                            "timestamp": _normalize_timestamp(ts_part.strip()),
+                            "source": "bash_history",
+                            "event_type": "bash_command",
+                            "description": f"Commande bash : {real_cmd.strip()[:80]}",
+                            "file": file,
+                            "details": real_cmd.strip(),
+                        })
 
         # Chromium history & downloads
         elif source == "chromium_artifacts":
@@ -203,7 +228,21 @@ def build_timeline(report: ReportModel) -> list[dict]:
                     "details": str(cred),
                 })
 
-    # Trier chronologiquement (les événements sans date en fin de liste)
+        if finding.file and os.path.isfile(finding.file) and source not in ("timeline", "scan_summary", "evidence_integrity"):
+            try:
+                mtime = os.path.getmtime(finding.file)
+                mtime_iso = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc).isoformat()
+                events.append({
+                    "timestamp": mtime_iso,
+                    "source": "filesystem",
+                    "event_type": "file_modified",
+                    "description": f"Dernière modification : {file}",
+                    "file": file,
+                    "details": f"mtime: {mtime_iso}",
+                })
+            except OSError:
+                pass
+
     far_future = parse_ts("9999-01-01T00:00:00")
     events.sort(key=lambda e: parse_ts(e.get("timestamp", "")) or far_future)
     return events
@@ -238,6 +277,17 @@ class TimelineAnalyzer(BaseAnalyzer):
         if events:
             meta["Premier événement"] = events[0].get("timestamp", "?")
             meta["Dernier événement"] = events[-1].get("timestamp", "?")
+
+        # Détection d'écart d'horloge entre PCAP et journaux hôtes
+        pcap_ts = [parse_ts(e["timestamp"]) for e in events if e.get("source") == "pcap" and e.get("timestamp")]
+        host_ts = [parse_ts(e["timestamp"]) for e in events if e.get("source") in ("syslog", "auth.log", "web_access", "web_error") and e.get("timestamp")]
+        pcap_ts = [t for t in pcap_ts if t]
+        host_ts = [t for t in host_ts if t]
+        if pcap_ts and host_ts:
+            delta_sec = abs((min(pcap_ts) - min(host_ts)).total_seconds())
+            if delta_sec > 3600:
+                hours = delta_sec / 3600
+                meta["[ATTENTION] Décalage d'horloge"] = f"Écart de ~{hours:.1f}h détecté entre le PCAP et les journaux hôtes"
 
         facts = consolidate(events)
         if facts:

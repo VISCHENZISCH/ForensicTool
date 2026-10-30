@@ -10,17 +10,44 @@ from forensic_analyzer.utils.logger import get_logger
 log = get_logger("pcap")
 
 def rebuild_tcp_streams(packets) -> dict[str, bytes]:
+    sessions: dict[tuple[str, str], int] = defaultdict(int)
     streams: dict[str, list[tuple[int, bytes]]] = defaultdict(list)
+    active_session: dict[tuple[str, str], int] = {}
+
     for pkt in packets:
-        if not pkt.haslayer(TCP) or not pkt.haslayer(Raw): continue
+        if not pkt.haslayer(TCP):
+            continue
         ip = pkt[IP] if pkt.haslayer(IP) else None
-        if not ip: continue
+        if not ip:
+            continue
         tcp = pkt[TCP]
         src, dst = f"{ip.src}:{tcp.sport}", f"{ip.dst}:{tcp.dport}"
-        stream_key = tuple(sorted([src, dst]))
-        stream_id = f"{stream_key[0]} <-> {stream_key[1]}"
+        pair_key = tuple(sorted([src, dst]))
+
+        flags = tcp.flags if hasattr(tcp, 'flags') else 0
+        if isinstance(flags, int):
+            is_syn = bool(flags & 0x02)
+            is_ack = bool(flags & 0x10)
+        else:
+            s_flags = str(flags)
+            is_syn = 'S' in s_flags
+            is_ack = 'A' in s_flags
+
+        if is_syn and not is_ack:
+            sessions[pair_key] += 1
+            active_session[pair_key] = sessions[pair_key]
+        elif pair_key not in active_session:
+            sessions[pair_key] = 1
+            active_session[pair_key] = 1
+
+        if not pkt.haslayer(Raw):
+            continue
+
+        sess_idx = active_session[pair_key]
+        stream_id = f"{pair_key[0]} <-> {pair_key[1]}" if sess_idx == 1 else f"{pair_key[0]} <-> {pair_key[1]}#{sess_idx}"
         seq = tcp.seq if hasattr(tcp, 'seq') else 0
         streams[stream_id].append((seq, bytes(pkt[Raw].load)))
+
     result = {}
     for stream_id, segments in streams.items():
         segments.sort(key=lambda x: x[0])
@@ -98,39 +125,66 @@ def extract_payload_delivery(streams: dict[str, bytes]) -> list[dict]:
     return deliveries
 
 
+def extract_http_auth_attempts(streams: dict[str, bytes]) -> list[dict]:
+    """Extrait les tentatives de connexion HTTP (wp-login.php, formulaires de login)."""
+    import urllib.parse
+    auth_attempts = []
+    for stream_id, data in streams.items():
+        if b"POST " not in data:
+            continue
+        try:
+            first_line = data.split(b"\r\n")[0]
+            url = first_line.split(b" ")[1].decode('utf-8', 'ignore') if len(first_line.split(b" ")) > 1 else ""
+            if any(k in url.lower() for k in ("wp-login.php", "login", "auth", "signin", "xmlrpc.php")):
+                parts = data.split(b"\r\n\r\n", 1)
+                body = parts[1].split(b"HTTP/1.")[0] if len(parts) > 1 else b""
+                body_str = body.decode('utf-8', 'ignore').strip()
+                payload = urllib.parse.parse_qs(body_str) if b"application/x-www-form-urlencoded" in parts[0] else body_str[:200]
+                auth_attempts.append({
+                    "stream": stream_id,
+                    "url": url,
+                    "payload": payload,
+                })
+        except Exception:
+            continue
+    return auth_attempts
+
+
 def extract_http_exfiltration(streams: dict[str, bytes]) -> list[dict]:
-    """Parse le trafic HTTP POST/GET pour extraire les données exfiltrées (mots de passe, paramètres C2)."""
+    """Parse le trafic HTTP POST/GET pour extraire les données exfiltrées (hors formulaires d'authentification)."""
     import urllib.parse
     exfil_data = []
-    
+
     for stream_id, data in streams.items():
         try:
-            # Recherche de requêtes POST
             if b"POST " in data:
-                parts = data.split(b"\r\n\r\n")
+                first_line = data.split(b"\r\n")[0]
+                url = first_line.split(b" ")[1].decode('utf-8', 'ignore') if len(first_line.split(b" ")) > 1 else ""
+                if any(k in url.lower() for k in ("wp-login.php", "login", "auth", "signin", "xmlrpc.php")):
+                    continue
+
+                parts = data.split(b"\r\n\r\n", 1)
                 if len(parts) > 1:
                     headers = parts[0]
-                    body = parts[1].split(b"HTTP/1.")[0] # Prendre juste le body de la requête
-                    if len(body) > 0 and len(body) < 1000:
+                    body = parts[1].split(b"HTTP/1.")[0]
+                    if 0 < len(body) < 10000:
                         body_str = body.decode('utf-8', 'ignore').strip()
-                        # Si le corps ressemble à des données de formulaire (x-www-form-urlencoded)
                         if b"application/x-www-form-urlencoded" in headers:
                             parsed = urllib.parse.parse_qs(body_str)
-                            exfil_data.append({"stream": stream_id, "method": "POST", "payload": parsed})
+                            exfil_data.append({"stream": stream_id, "method": "POST", "url": url, "payload": parsed})
                         elif b"application/json" in headers or body_str.startswith("{"):
-                            exfil_data.append({"stream": stream_id, "method": "POST JSON", "payload": body_str[:200]})
+                            exfil_data.append({"stream": stream_id, "method": "POST JSON", "url": url, "payload": body_str[:200]})
                         else:
-                            exfil_data.append({"stream": stream_id, "method": "POST RAW", "payload": body_str[:200]})
-                            
-            # Recherche de paramètres suspects dans les GET (Base64, longs hex)
+                            exfil_data.append({"stream": stream_id, "method": "POST RAW", "url": url, "payload": body_str[:200]})
+
             if b"GET " in data:
                 first_line = data.split(b"\r\n")[0]
-                url = first_line.split(b" ")[1] if len(first_line.split(b" ")) > 1 else b""
-                if b"?" in url:
-                    params = url.split(b"?")[1]
-                    if len(params) > 50: # URL parameters unusually long
+                url_b = first_line.split(b" ")[1] if len(first_line.split(b" ")) > 1 else b""
+                if b"?" in url_b:
+                    params = url_b.split(b"?")[1]
+                    if len(params) > 50:
                         exfil_data.append({"stream": stream_id, "method": "GET PARAM", "payload": urllib.parse.unquote(params.decode('utf-8', 'ignore'))})
         except Exception as exc:
             log.debug("Flux %s ignore (exfiltration HTTP) : %s", stream_id, exc)
-            
+
     return exfil_data

@@ -132,13 +132,18 @@ class DefenseRulesGenerator:
         covered = {h for h, _p in endpoints}
         for i in all_iocs:
             if i.kind == "ipv4" and _external_ip(i.value) and i.value not in covered:
+                contexts = " ".join(o.context.lower() for o in i.observations)
+                is_suspect_or_threat = any(k in contexts for k in (
+                    "c2", "balise", "alerte", "scan", "brute-force", "attaque", "suspect", "exfiltration", "webshell"
+                )) or not contexts
+                if not is_suspect_or_threat:
+                    continue
                 rules.append(f'alert ip $HOME_NET any -> {i.value} any (msg:"FA - Trafic vers IP suspecte {i.value}"; '
                              f'classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "domain":
                 rules.append(f'alert dns $HOME_NET any -> any any (msg:"FA - Résolution du domaine suspect {i.value}"; '
                              f'dns.query; content:"{i.value}"; nocase; endswith; classtype:trojan-activity; sid:{sid}; rev:1;)')
             elif i.kind == "url":
-                # L'hôte ancre la règle : un chemin court ("/x") seul alerterait sur tout le trafic HTTP
                 host = re.sub(r"^https?://", "", i.value, flags=re.I).split("/")[0].split(":")[0]
                 path = re.sub(r"^https?://[^/]+", "", i.value) or "/"
                 uri = f' http.uri; content:"{_suricata_content(path[:200])}";' if path != "/" else ""
@@ -273,6 +278,13 @@ def _is_suspicious_binary(f: FindingModel) -> bool:
     return any(k.startswith("[ALERTE]") for k in f.metadata) or bool(f.extra.get("yara") or f.extra.get("yara_matches"))
 
 
+_GENERIC_STRINGS = {
+    "/dev/null", "/dev/tty", "/dev/console", "/dev/urandom", "/dev/random", "/dev/zero",
+    "/proc/self", "/proc/self/exe", "/proc/self/maps", "/proc/cpuinfo", "/etc/resolv.conf",
+    "/bin/sh", "/bin/bash", "/usr/bin/env", "cmd.exe", "powershell.exe",
+}
+
+
 def _distinctive_strings(f: FindingModel) -> list[str]:
     """Chaînes propres au binaire : IP, chemins cachés, fichiers et commandes reconstruits."""
     summary = f.extra.get("disassembly", {}).get("summary", {}) if f.extra.get("disassembly") else {}
@@ -281,9 +293,16 @@ def _distinctive_strings(f: FindingModel) -> list[str]:
                   *summary.get("files", []), *summary.get("commands", []), *summary.get("urls", [])]
     seen, strings = set(), []
     for s in candidates:
-        if s and len(s) >= 6 and s not in seen:
-            seen.add(s)
-            strings.append(s)
+        if not s or len(s) < 6:
+            continue
+        s_clean = s.strip()
+        if s_clean in _GENERIC_STRINGS or s_clean.startswith(("/dev/", "/proc/", "/sys/")):
+            continue
+        if any(lib in s_clean.lower() for lib in ("libc.so", "ld-linux", "glibc", "uclibc", "musl")):
+            continue
+        if s_clean not in seen:
+            seen.add(s_clean)
+            strings.append(s_clean)
     return strings[:10]
 
 

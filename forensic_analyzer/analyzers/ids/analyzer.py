@@ -11,6 +11,14 @@ class IDSAnalyzer(BaseAnalyzer):
     name = "ids"
     supported_extensions = ('.json', '.log')
 
+    def can_handle(self, path: str) -> bool:
+        fname = os.path.basename(path).lower()
+        return (
+            fname in ("eve.json", "fast.log")
+            or (fname.endswith(".json") and "eve" in fname)
+            or (fname.endswith(".log") and ("fast" in fname or "suricata" in fname or "snort" in fname))
+        )
+
     def analyze(self, filepath: str) -> FindingModel | None:
         fname = os.path.basename(filepath).lower()
         if fname not in ("eve.json", "fast.log"):

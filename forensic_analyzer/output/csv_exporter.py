@@ -20,9 +20,13 @@ class CSVExporter:
 
     def export(self, report: ReportModel, output_path: str) -> None:
         import os
-        filename = os.path.basename(output_path)
-        os.makedirs("export", exist_ok=True)
-        target_path = os.path.join("export", filename)
+        target_dir = os.path.dirname(output_path)
+        if target_dir:
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = output_path
+        else:
+            os.makedirs("export", exist_ok=True)
+            target_path = os.path.join("export", output_path)
         events = build_timeline(report)
         # Confiance du fait consolide auquel appartient chaque événement
         for fact in consolidate(events):

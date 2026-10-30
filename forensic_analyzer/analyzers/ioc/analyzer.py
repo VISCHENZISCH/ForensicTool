@@ -178,6 +178,14 @@ class IOCAnalyzer(BaseAnalyzer):
 
             total_iocs = sum(len(v) for v in iocs.values())
 
+            text_str = data.decode('utf-8', 'replace')
+            ip_freqs: dict[str, int] = {}
+            for ip in iocs.get("ipv4", []):
+                ip_freqs[ip] = len(re.findall(r'\b' + re.escape(ip) + r'\b', text_str))
+
+            rare_ips = [ip for ip, cnt in sorted(ip_freqs.items(), key=lambda x: x[1]) if cnt < 50]
+            frequent_ips = [ip for ip, cnt in sorted(ip_freqs.items(), key=lambda x: -x[1]) if cnt >= 50]
+
             meta: dict = {
                 "Fichier": os.path.basename(path),
                 "Taille": f"{file_size:,} octets",
@@ -186,6 +194,15 @@ class IOCAnalyzer(BaseAnalyzer):
                 "SHA256": file_hashes["sha256"],
                 "Total IOCs extraits": str(total_iocs),
             }
+
+            if rare_ips:
+                meta["IOC rares (à investiguer en priorité)"] = ", ".join(
+                    f"{ip} ({ip_freqs[ip]}x)" for ip in rare_ips[:5]
+                )
+            if frequent_ips:
+                meta["IOC haute fréquence (serveurs / bruit)"] = ", ".join(
+                    f"{ip} ({ip_freqs[ip]}x)" for ip in frequent_ips[:5]
+                )
 
             for ioc_type, items in iocs.items():
                 if items:
@@ -203,6 +220,9 @@ class IOCAnalyzer(BaseAnalyzer):
                     "file_hashes": file_hashes,
                     "iocs": iocs,
                     "total_iocs": total_iocs,
+                    "frequencies": ip_freqs,
+                    "rare_iocs": rare_ips,
+                    "frequent_iocs": frequent_ips,
                 },
             )
         except Exception as exc:

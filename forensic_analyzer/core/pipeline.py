@@ -95,9 +95,27 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
                 results.append(res)
         return results
 
-    # Parallélisation du traitement (I/O & CPU-bound mixtes)
+    # Identifier les fichiers pris en charge vs ignorés
+    skipped: list[str] = []
+    supported_paths: list[str] = []
+    for path in paths:
+        if not os.path.isfile(path):
+            log.warning("Fichier introuvable, ignoré : %s", path)
+            skipped.append(path)
+            continue
+        analyzers = registry.get_all_for(path)
+        if not analyzers:
+            log.warning("Fichier ignoré (aucun module adapté) : %s", os.path.basename(path))
+            skipped.append(path)
+        else:
+            supported_paths.append(path)
+
+    if skipped:
+        log.warning("%d fichier(s) ignoré(s) (aucun module adapté) : %s",
+                    len(skipped), ", ".join(os.path.basename(f) for f in skipped[:15]))
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
-        results = executor.map(process_path, paths)
+        results = executor.map(process_path, supported_paths)
 
     findings = [res for per_path in results for res in per_path]
-    return ReportModel.from_findings(findings)
+    return ReportModel.from_findings(findings, skipped_files=skipped)

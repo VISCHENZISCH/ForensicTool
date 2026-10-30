@@ -29,6 +29,63 @@ _TEMP_PREFIXES = ("/tmp/", "/var/tmp/", "/dev/shm/")
 _BENIGN_TEMP = re.compile(r"^\.(?:X(?:%d|\d+)-lock|X11-unix|ICE-unix|XIM-unix|font-unix|Test-unix)$")
 # Versions de bibliothèques et adresses non routables fréquentes dans les binaires légitimes
 _BENIGN_IPS = {"0.0.0.0", "127.0.0.1", "255.255.255.255"}
+# Domaines/URL courants dans les binaires légitimes (licences, code source, doc)
+_BENIGN_URL_DOMAINS = {
+    "github.com", "www.github.com", "gitlab.com", "www.gnu.org", "gnu.org",
+    "www.debian.org", "debian.org", "www.kernel.org", "kernel.org",
+    "www.w3.org", "w3.org", "schemas.microsoft.com", "example.com",
+    "www.example.com", "sourceware.org", "busybox.net", "www.busybox.net",
+    "uclibc.org", "musl.libc.org", "www.openssl.org", "openssl.org",
+    "creativecommons.org", "spdx.org", "fsf.org", "www.fsf.org",
+}
+# Signatures de logiciels connus dans les chaînes (nom, regex version)
+_KNOWN_SOFTWARE = [
+    (re.compile(r"BusyBox\s+v?(\d+\.\d+[\.\d]*)"), "BusyBox"),
+    (re.compile(r"GNU\s+coreutils\s+(\d+[\.\d]*)"), "GNU coreutils"),
+    (re.compile(r"OpenSSH[_\s]+(\d+[\.\d]*)"), "OpenSSH"),
+    (re.compile(r"OpenSSL\s+(\d+[\.\d]+[a-z]?)"), "OpenSSL"),
+    (re.compile(r"bash,?\s+version\s+(\d+[\.\d]*)"), "GNU Bash"),
+    (re.compile(r"curl\s+(\d+[\.\d]*)"), "curl"),
+    (re.compile(r"GNU\s+Wget\s+(\d+[\.\d]*)"), "GNU Wget"),
+    (re.compile(r"dropbear(?:bear)?\s+v?(\d+[\.\d]*)"), "Dropbear"),
+    (re.compile(r"nmap(?:\.org)?\s+(\d+[\.\d]*)"), "Nmap"),
+]
+
+
+def _is_benign_ip(ip_str: str) -> bool:
+    """IP privée, de documentation, link-local ou multicast : pas un indicateur dans un binaire."""
+    import ipaddress as _ipa
+    try:
+        ip = _ipa.ip_address(ip_str)
+    except ValueError:
+        return True
+    return (ip.is_private or ip.is_reserved or ip.is_loopback
+            or ip.is_link_local or ip.is_multicast or ip.is_unspecified
+            or ip_str in _BENIGN_IPS)
+
+
+def _is_benign_url(url: str) -> bool:
+    """URL appartenant à un domaine de documentation / code source légitime."""
+    host = re.sub(r"^https?://", "", url, flags=re.IGNORECASE).split("/")[0].split(":")[0].lower()
+    return host in _BENIGN_URL_DOMAINS
+
+
+def _identify_software(strings: list[str]) -> list[str]:
+    """Identifie les logiciels connus à partir des chaînes extraites du binaire."""
+    identified = []
+    for s in strings:
+        for pattern, name in _KNOWN_SOFTWARE:
+            m = pattern.search(s)
+            if m:
+                version = m.group(1)
+                ident = f"{name} {version}"
+                if ident not in identified:
+                    identified.append(ident)
+    # Détection BusyBox par sa signature multi-call
+    if not any("BusyBox" in i for i in identified):
+        if any("BusyBox is a multi-call binary" in s for s in strings):
+            identified.insert(0, "BusyBox (version non déterminée)")
+    return identified
 
 
 def _hidden_system_paths(strings: list[str]) -> list[str]:
@@ -82,8 +139,12 @@ class ELFAnalyzer(BaseAnalyzer):
             meta[f"Capacité : {cap}"] = ", ".join(syms)
 
         strings = [s for _, s in extract_strings_with_offsets(data, min_length=6)]
-        ips = sorted({ip for s in strings for ip in _IP.findall(s)} - _BENIGN_IPS)
-        urls = sorted({u for s in strings for u in _URL.findall(s)})
+        software = _identify_software(strings)
+        if software:
+            meta["Identification"] = ", ".join(software)
+
+        ips = sorted({ip for s in strings for ip in _IP.findall(s) if not _is_benign_ip(ip)})
+        urls = sorted({u for s in strings for u in _URL.findall(s) if not _is_benign_url(u)})
         paths = _hidden_system_paths(strings)
         if ips:
             meta["[ALERTE] Adresses IP codées en dur"] = ", ".join(ips[:20])

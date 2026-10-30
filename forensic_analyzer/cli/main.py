@@ -63,6 +63,8 @@ Exemples :
     g3.add_argument("--bodyfile", metavar="FICHIER", help="Bodyfile TSK (fls -r -m /) de l'image, avec --linux")
     g3.add_argument("--verify-hashes", metavar="MANIFESTE",
                     help="Vérifier les empreintes des preuves (format sha256sum) avant et après l'analyse")
+    g3.add_argument("--evidence-dir", metavar="DOSSIER",
+                    help="Dossier racine des preuves pour résoudre les chemins relatifs du manifeste")
 
     # Threat Hunting
     g4 = p.add_argument_group("Threat Hunting")
@@ -81,6 +83,7 @@ Exemples :
     g5.add_argument("--export-graph", metavar="HTML",
                     help="Graphe interactif de la chaîne de compromission (indicateurs partagés)")
     g5.add_argument("--export-rules", action="store_true", help="Règles YARA, Suricata, Sigma et bundle STIX 2.1 dans export/rules/")
+    g5.add_argument("--export-dir", metavar="DOSSIER", help="Dossier de destination pour les exports (défaut : export/)")
 
     return p
 
@@ -143,7 +146,7 @@ def cli_dispatch():
     findings = []
 
     if args.verify_hashes:
-        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="initiale")
+        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="initiale", evidence_dir=args.evidence_dir)
         if res:
             findings.append(res)
 
@@ -205,7 +208,7 @@ def cli_dispatch():
             ui.info("Indiquez une cible à scanner avec YARA (--scan ou une autre option d'analyse).")
 
     if args.verify_hashes:
-        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="finale")
+        res = IntegrityAnalyzer().analyze(args.verify_hashes, phase="finale", evidence_dir=args.evidence_dir)
         if res:
             findings.append(res)
 
@@ -229,13 +232,15 @@ def cli_dispatch():
         CSVExporter().export(report, args.export_csv)
     if args.export_pdf and report.findings:
         PDFExporter().export(report, args.export_pdf)
+    export_dir = getattr(args, 'export_dir', None) or "export"
     if args.export_graph and correlation:
-        os.makedirs("export", exist_ok=True)
-        render_correlation_graph(correlation, os.path.join("export", os.path.basename(args.export_graph)))
+        out_graph = args.export_graph if os.path.dirname(args.export_graph) else os.path.join(export_dir, args.export_graph)
+        os.makedirs(os.path.dirname(out_graph) or export_dir, exist_ok=True)
+        render_correlation_graph(correlation, out_graph)
         
     if getattr(args, 'export_rules', False) and report.findings:
         from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
-        DefenseRulesGenerator().generate(report, output_dir=os.path.join("export", "rules"))
+        DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_dir, "rules"))
 
 def main():
     """Point d'entrée : menu interactif par défaut, CLI si arguments."""

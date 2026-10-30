@@ -73,7 +73,8 @@ class ReportModel(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     total: int = 0
     findings: list[FindingModel] = Field(default_factory=list)
+    skipped_files: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_findings(cls, findings: list[FindingModel]) -> "ReportModel":
-        return cls(total=len(findings), findings=findings)
+    def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None) -> "ReportModel":
+        return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [])

@@ -43,6 +43,12 @@ _SUSPICIOUS_CMDS = [
     r'crontab\s+-[re]',
     r'iptables\s+-[FX]',
     r'rm\s+-rf\s+/',
+    r'rm\s+.*\.(?:log|conf)',
+    r'rm\s+.*/var/log/',
+    r'smbclient',
+    r'mysql\s+.*-p',
+    r'mount\s+.*-t\s+cifs',
+    r'ssh\s+.*@',
     r'/dev/tcp/',
     r'/dev/udp/',
     r'mkfifo',
@@ -214,6 +220,20 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                         log.debug("Crontab illisible '%s' : %s", fpath, exc)
                         continue
     return crons
+
+
+def parse_cron_file(path: str) -> list[dict]:
+    """Parse un fichier crontab individuel (ex: /etc/cron.d/updater)."""
+    entries = []
+    try:
+        with open(path, "r", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    entries.append({"source": path, "entry": line})
+    except OSError as exc:
+        log.debug("Fichier cron illisible '%s' : %s", path, exc)
+    return entries
 
 
 def parse_ssh_artifacts(root_path: str = "/") -> dict:
@@ -504,7 +524,17 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
     takes_directory = True
 
     def can_handle(self, path: str) -> bool:
-        return False  # Active uniquement via CLI
+        if os.path.isfile(path):
+            basename = os.path.basename(path).lower()
+            parent = os.path.basename(os.path.dirname(os.path.abspath(path))).lower()
+            return (
+                "bash_history" in basename
+                or basename.endswith("_history")
+                or "cron" in parent
+                or "cron" in basename
+                or basename in ("passwd", "shadow")
+            )
+        return False
 
     def analyze(self, path: str, bodyfile: str | None = None,
                 entries: list | None = None, file_hasher=None) -> FindingModel | None:
@@ -546,6 +576,14 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                             f"{ip}({c})" for ip, c in sorted(bf.items(), key=lambda x: -x[1])[:5]
                         )
                     extra["auth_log"] = result
+
+                elif "cron" in basename or "cron" in os.path.basename(os.path.dirname(os.path.abspath(path))).lower():
+                    crons = parse_cron_file(path)
+                    meta["Type"] = "crontab / cron.d"
+                    meta["Entrées cron"] = str(len(crons))
+                    for i, c in enumerate(crons[:5]):
+                        meta[f"Entrée #{i+1}"] = c["entry"][:80]
+                    extra["crontabs"] = crons
 
                 else:
                     meta["Type"] = "fichier générique"
@@ -595,7 +633,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     extra["processes"] = procs[:200]
                     
                 accts = parse_passwd_shadow(path)
-                meta["Comptes UID 0 (root)"] = ", ".join(accts["uid_0"])
+                meta["Comptes UID 0 (root)"] = ", ".join(accts["uid_0"]) if accts.get("uid_0") else "root"
                 meta["Comptes avec mot de passe"] = str(len(accts["shadow"]))
                 extra["accounts"] = accts
                 

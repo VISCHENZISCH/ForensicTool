@@ -6,7 +6,15 @@ from forensic_analyzer.models.finding import FindingModel
 from forensic_analyzer.utils.logger import get_logger
 
 from .credentials import extract_credentials
-from .streams import rebuild_tcp_streams, extract_files_from_streams, extract_http_user_agents, extract_pe_from_streams, extract_http_exfiltration, extract_payload_delivery
+from .streams import (
+    rebuild_tcp_streams,
+    extract_files_from_streams,
+    extract_http_user_agents,
+    extract_pe_from_streams,
+    extract_http_exfiltration,
+    extract_http_auth_attempts,
+    extract_payload_delivery,
+)
 from .dns_exfil import detect_dns_exfiltration
 from .beacons import detect_c2_beacons
 from .identities import extract_host_identities
@@ -60,20 +68,51 @@ class PCAPAnalyzer(BaseAnalyzer):
             pe_files = extract_pe_from_streams(streams)
             payload_deliveries = extract_payload_delivery(streams)
             http_exfil = extract_http_exfiltration(streams)
-            
-            # --- DÉTECTION SCANS (NMAP / SYN FLOOD) ---
+            auth_attempts = extract_http_auth_attempts(streams)
+
+            # --- DÉTECTION SCANS & LATERAL MOVEMENT ---
             syn_scans = 0
             xmas_scans = 0
             null_scans = 0
+            syn_velocity: dict[tuple[str, str], list[tuple[float, int]]] = {}
+            smb_lateral: list[str] = []
+
             for pkt in packets:
-                if pkt.haslayer(TCP):
-                    flags = pkt[TCP].flags
-                    if flags == 'S': syn_scans += 1
-                    elif flags == 'FPU': xmas_scans += 1
+                if pkt.haslayer(TCP) and pkt.haslayer(IP):
+                    ip = pkt[IP]
+                    tcp = pkt[TCP]
+                    flags = str(tcp.flags)
+                    t = float(pkt.time) if hasattr(pkt, 'time') else 0.0
+
+                    if 'S' in flags and 'A' not in flags:
+                        syn_scans += 1
+                        pair = (ip.src, ip.dst)
+                        if pair not in syn_velocity:
+                            syn_velocity[pair] = []
+                        syn_velocity[pair].append((t, tcp.dport))
+
+                    if flags == 'FPU': xmas_scans += 1
                     elif flags == '': null_scans += 1
 
+                    # Mouvement latéral SMB (ports 445, 139) entre sous-réseaux (/24 différents)
+                    if tcp.dport in (445, 139) and ('S' in flags and 'A' not in flags):
+                        src_net = ip.src.rsplit('.', 1)[0]
+                        dst_net = ip.dst.rsplit('.', 1)[0]
+                        if src_net != dst_net:
+                            smb_desc = f"{ip.src} -> {ip.dst}:{tcp.dport}"
+                            if smb_desc not in smb_lateral:
+                                smb_lateral.append(smb_desc)
+
             scan_alerts = []
-            # Heuristique basique : si beaucoup de SYN par rapport au trafic ou volume énorme
+            # Détection de scan par vélocité (>= 5 ports distincts sur la même cible)
+            for (src, dst), events in syn_velocity.items():
+                distinct_ports = {p for _, p in events}
+                if len(distinct_ports) >= 5:
+                    times = [t for t, _ in events]
+                    duration = max(times) - min(times) if times else 0
+                    if duration <= 15 or len(distinct_ports) >= 10:
+                        scan_alerts.append(f"Scan SYN détecté : {src} -> {dst} ({len(distinct_ports)} ports en {duration:.1f}s)")
+
             if syn_scans > 1000 and (syn_scans / max(1, total)) > 0.2:
                 scan_alerts.append(f"SYN Flood / Port Scan Agressif ({syn_scans} paquets)")
             if xmas_scans > 0:
@@ -193,6 +232,8 @@ class PCAPAnalyzer(BaseAnalyzer):
                     "ja3_fingerprints": ja3_fingerprints,
                     "timeline": attack_timeline,
                     "http_exfiltration": http_exfil,
+                    "auth_attempts": auth_attempts,
+                    "smb_lateral": smb_lateral,
                     "tls_decrypted": tls_decrypted
                 },
             )

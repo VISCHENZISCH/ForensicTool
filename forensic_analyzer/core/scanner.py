@@ -83,7 +83,12 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         return ReportModel(total=0, findings=[])
 
     log.info("%d fichier(s) collecté(s) depuis '%s'", len(targets), path)
-    return run_pipeline(targets, registry)
+    report = run_pipeline(targets, registry)
+    if report.skipped_files:
+        log.warning("Attention : %d fichier(s) ignoré(s) lors du scan : %s",
+                    len(report.skipped_files),
+                    ", ".join(os.path.basename(f) for f in report.skipped_files[:10]))
+    return report
 
 
 def default_registry() -> AnalyzerRegistry:
@@ -97,12 +102,16 @@ def default_registry() -> AnalyzerRegistry:
     from forensic_analyzer.analyzers.ids import IDSAnalyzer
     from forensic_analyzer.analyzers.image import ImageAnalyzer
     from forensic_analyzer.analyzers.integrity import IntegrityAnalyzer
+    from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
+    from forensic_analyzer.analyzers.log_analyzer import LogAnalyzer
     from forensic_analyzer.analyzers.malware import MalwareAnalyzer
     from forensic_analyzer.analyzers.memory import MemoryAnalyzer
+    from forensic_analyzer.analyzers.nmap import NmapAnalyzer
     from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
     from forensic_analyzer.analyzers.pdf import PDFAnalyzer
     from forensic_analyzer.analyzers.registry import RegistryAnalyzer
     from forensic_analyzer.analyzers.stego import StegoAnalyzer
+    from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
     from forensic_analyzer.analyzers.windows_execution import WindowsExecutionAnalyzer
 
     return AnalyzerRegistry().register_all(
@@ -112,4 +121,5 @@ def default_registry() -> AnalyzerRegistry:
         MemoryAnalyzer(), DiskAnalyzer(), MalwareAnalyzer(), ELFAnalyzer(),
         ChromiumAnalyzer(), FirefoxHistoryAnalyzer(), FirefoxCookiesAnalyzer(),
         WindowsExecutionAnalyzer(), IDSAnalyzer(),
+        LinuxArtifactsAnalyzer(), LogAnalyzer(), WebshellAnalyzer(), NmapAnalyzer(),
     )
