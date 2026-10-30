@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Forensic Analyzer" width="560">
-</p>
-
-<p align="center">
   Triage DFIR de bout en bout : disques, mémoire, réseau, journaux et binaires,<br>
   corrélés dans une chronologie unique.
 </p>
@@ -20,15 +16,15 @@
 
 ## Ce qui est analysé
 
-| Source | Points clés |
-|---|---|
-| **Images disque** | GPT/MBR, NTFS et ext4 lus avec pytsk3, sans montage ; triage Linux et Windows |
-| **Mémoire** | Volatility 3 : processus cachés, injections, appels système détournés, connexions |
-| **Réseau** | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3 |
-| **Windows** | EVTX, registre, Prefetch, LNK |
-| **Linux** | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne) |
-| **Binaires** | PE et ELF : désassemblage des appels sensibles, YARA, capa |
-| **Fichiers** | PDF, EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox |
+| Source            | Points clés                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Images disque** | GPT/MBR, NTFS et ext4 lus avec pytsk3, sans montage ; triage Linux et Windows        |
+| **Mémoire**       | Volatility 3 : processus cachés, injections, appels système détournés, connexions    |
+| **Réseau**        | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3               |
+| **Windows**       | EVTX, registre, Prefetch, LNK                                                        |
+| **Linux**         | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne) |
+| **Binaires**      | PE et ELF : désassemblage des appels sensibles, YARA, capa                           |
+| **Fichiers**      | PDF, EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox              |
 
 Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance.
 
@@ -49,13 +45,13 @@ git clone https://github.com/VISCHENZISCH/ForensicTool && cd ForensicTool
 
 Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls les fichiers du type choisi sont analysés.
 
-| Export | Contenu |
-|---|---|
-| `--export-html` / `--export-pdf` | Rapport complet |
-| `--export-csv` | Chronologie (Timeline Explorer, Excel) |
-| `--export-graph` | Graphe interactif de la chaîne de compromission |
-| `--export-rules` | Règles YARA, Suricata, Sigma et bundle STIX 2.1 |
-| `--verify-hashes MANIFESTE` | Contrôle d'intégrité des preuves avant et après l'analyse |
+| Export                           | Contenu                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `--export-html` / `--export-pdf` | Rapport complet                                           |
+| `--export-csv`                   | Chronologie (Timeline Explorer, Excel)                    |
+| `--export-graph`                 | Graphe interactif de la chaîne de compromission           |
+| `--export-rules`                 | Règles YARA, Suricata, Sigma et bundle STIX 2.1           |
+| `--verify-hashes MANIFESTE`      | Contrôle d'intégrité des preuves avant et après l'analyse |
 
 Tout est écrit dans `export/`, jamais dans le dossier des preuves.
 
