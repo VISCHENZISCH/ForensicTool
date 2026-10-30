@@ -177,12 +177,12 @@ def test_pdf_scoring_flags_malicious_documents(tmp_path):
 
     def score(path):
         meta = PDFAnalyzer().analyze(path).metadata
-        return int(meta["Niveau de Menace (Scoring PDF)"].split("/")[0]), meta
+        return int(meta["Score de menace"].split("/")[0]), meta
 
     js_open = _pdf(tmp_path, "js.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
                                         b"2 0 obj<</S/JavaScript/JS(app.alert(1))>>endobj")
     s, meta = score(js_open)
-    assert s >= 45 and "Critique" in meta["PDF Actions"]
+    assert 75 <= s <= 85 and "Critique" in meta["PDF Actions"] and meta["Score de menace"].endswith("(Critique)")
 
     obfuscated = _pdf(tmp_path, "obf.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
                                            b"2 0 obj<</S/J#61vaScript/J#53 3 0 R>>endobj\n"
@@ -205,7 +205,7 @@ def test_pdf_scoring_ignores_benign_structures(tmp_path):
                   + _flate(2, b"BT /F1 12 Tf (Rapport annuel) Tj ET\n" * 200 + b"\x90" * 64)  # octets 0x90 bruts
                   + b"4 0 obj<</Length 4096/Filter/DCTDecode>>stream\n" + os.urandom(4096) + b"\nendstream endobj\n")
     meta = PDFAnalyzer().analyze(benign).metadata
-    assert meta["Niveau de Menace (Scoring PDF)"].startswith("5/100")
+    assert meta["Score de menace"].startswith("5/100")
     assert "Shellcode" not in meta and "/JS" not in meta.get("Tags PDF Suspects", "")
 
 

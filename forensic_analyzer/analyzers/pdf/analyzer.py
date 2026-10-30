@@ -41,7 +41,7 @@ class PDFAnalyzer(BaseAnalyzer):
 
             if pdf_info["urls"]:
                 url_str = "\n".join(pdf_info["urls"])
-                metadata["URLs Embedées"] = url_str[:1000] + ("..." if len(url_str) > 1000 else "")
+                metadata["URLs intégrées"] = url_str[:1000] + ("..." if len(url_str) > 1000 else "")
                 extra["pdf_urls"] = pdf_info["urls"]
                 
             if pdf_info["suspicious_tags"]:
