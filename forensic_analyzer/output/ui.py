@@ -4,6 +4,7 @@ Lignes et cadres sarcelle, titres cyan, valeurs claires ; rouge et orange réser
 """
 from __future__ import annotations
 
+import itertools
 import os
 import re
 import shutil
@@ -142,7 +143,10 @@ def menu(unavailable: frozenset[str] = frozenset()) -> None:
         (f" {C.G}[19]{C.RS} {C.W}Extraction IOC{C.RS}", None),
         (f" {C.G}[20]{C.RS} {C.W}Timeline DFIR{C.RS}", None),
         ("", None),
-        ("", None),
+        (f"{C.VB}{C.BD}Journaux & Web{C.RS}", None),
+        (f" {C.G}[21]{C.RS} {C.W}Journaux Web / Système{C.RS}", None),
+        (f" {C.G}[22]{C.RS} {C.W}Détection Webshell{C.RS}", None),
+        (f" {C.G}[23]{C.RS} {C.W}Rapport Nmap (XML){C.RS}", None),
     ]
 
     def option(text: str) -> str:
@@ -152,7 +156,7 @@ def menu(unavailable: frozenset[str] = frozenset()) -> None:
         return text
 
     col_w = (w - 12) // 2
-    for l_line, r_line in zip(left, right):
+    for l_line, r_line in itertools.zip_longest(left, right, fillvalue=("", None)):
         l_text = option(l_line[0])
         r_text = option(r_line[0])
         l_visible = _strip_ansi(l_text)
@@ -257,7 +261,9 @@ def status(msg: str) -> None:
 
 MODULE_TAGS = {
     "pdf": "PDF", "pdf_analysis": "PDF", "image": "IMG", "gps": "GPS", "strings": "STR",
-    "firefox_history": "FHX", "firefox_cookies": "FCK",
+    "firefox_history": "FHX", "firefox_places": "FHX", "firefox_cookies": "FCK",
+    "log_analysis": "LOG", "webshell_analysis": "WSH", "network_recon": "NMP", "ids_alerts": "IDS",
+    "stego_audio": "SGA",
     "stego": "SGO", "carving": "CRV", "pcap": "NET", "memory": "MEM",
     "disk": "DSK", "evtx": "EVT", "registry": "REG",
     "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
@@ -268,7 +274,9 @@ MODULE_TAGS = {
 MODULE_NAMES = {
     "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "image": "Analyse d'image / EXIF",
     "gps": "Coordonnées GPS", "strings": "Extraction Strings",
-    "firefox_history": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
+    "firefox_history": "Historique Firefox", "firefox_places": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
+    "log_analysis": "Journaux Web / Système", "webshell_analysis": "Détection Webshell",
+    "network_recon": "Rapport Nmap", "ids_alerts": "Alertes IDS", "stego_audio": "Stéganographie audio",
     "stego": "Stéganographie", "carving": "File Carving",
     "pcap": "Analyse réseau PCAP", "memory": "Analyse mémoire",
     "disk": "Forensique disque", "evtx": "Windows Event Logs",
@@ -282,7 +290,9 @@ MODULE_NAMES = {
 
 MODULE_COLORS = {
     "pdf": "\033[38;5;203m", "pdf_analysis": "\033[38;5;203m", "image": C.Y, "gps": C.B, "strings": C.D,
-    "firefox_history": C.M, "firefox_cookies": C.P,
+    "firefox_history": C.M, "firefox_places": C.M, "firefox_cookies": C.P,
+    "log_analysis": "\033[38;5;214m", "webshell_analysis": "\033[38;5;160m", "network_recon": C.VB,
+    "ids_alerts": C.HR, "stego_audio": "\033[38;5;198m",
     "stego": "\033[38;5;198m", "carving": "\033[38;5;208m", 
     "pcap": C.VB, "memory": "\033[38;5;111m",
     "disk": "\033[38;5;240m", "evtx": "\033[38;5;45m", "registry": "\033[38;5;99m",
@@ -378,8 +388,8 @@ def render_finding(finding) -> None:
         for i, s in enumerate(strings, 1):
             print(f"{MARGIN}    {C.D}{i:>4}.{C.RS} {C.W}{s}{C.RS}")
 
-    elif finding.type == "firefox_history" and "entries" in extra:
-        entries = extra["entries"]
+    elif finding.type in ("firefox_history", "firefox_places") and (extra.get("history") or extra.get("entries")):
+        entries = extra.get("history") or extra.get("entries")
         if entries:
             print()
             separator("Historique")
@@ -426,6 +436,12 @@ def render_finding(finding) -> None:
             for u in extra["chromium_urls"]:
                 url = str(u.get('url', ''))[:65]
                 print(f"{MARGIN}    {C.VB}{u.get('visites', 0):>4}x{C.RS} {C.C_DNS}{url}{C.RS}")
+
+    elif finding.type == "firefox_cookies" and extra.get("domains"):
+        print()
+        separator("Cookies par domaine")
+        for host, info in list(extra["domains"].items())[:30]:
+            print(f"{MARGIN}    {C.C_HOST}{host:<35}{C.RS} {C.C_RESULT}{str(info)[:60]}{C.RS}")
 
     elif finding.type == "firefox_cookies" and "entries" in extra:
         entries = extra["entries"]

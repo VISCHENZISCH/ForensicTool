@@ -20,16 +20,22 @@ _TYPE_LABELS = {
     "yara": "YARA Matches", "ioc": "IOCs", "timeline": "DFIR Timeline",
     "pe_analysis": "PE Malware Triage", "chromium_artifacts": "Chromium Artifacts",
     "prefetch": "WinExec Prefetch", "lnk_shortcut": "WinExec LNK",
+    "malware_analysis": "PE Malware Triage", "elf_analysis": "Linux Binary (ELF)", "firefox_places": "Firefox History",
+    "log_analysis": "Web / System Logs", "webshell_analysis": "Webshell Detection", "network_recon": "Nmap Report",
+    "ids_alerts": "IDS Alerts", "stego_audio": "Audio Steganography", "evidence_integrity": "Evidence Integrity",
+    "correlation": "Multi-source Correlation", "pdf_analysis": "PDF Document",
 }
 
 def get_category(f_type: str) -> str:
-    if f_type in ("disk", "evtx", "registry", "prefetch", "lnk_shortcut"):
+    if f_type in ("disk", "evtx", "registry", "prefetch", "lnk_shortcut", "log_analysis", "evidence_integrity"):
         return "system"
-    elif f_type in ("pcap", "firefox_history", "firefox_cookies", "chromium_artifacts"):
+    elif f_type in ("pcap", "firefox_history", "firefox_places", "firefox_cookies", "chromium_artifacts",
+                    "network_recon", "ids_alerts"):
         return "network"
-    elif f_type in ("pe_analysis", "yara", "ioc", "stego", "carving", "strings"):
+    elif f_type in ("pe_analysis", "malware_analysis", "elf_analysis", "webshell_analysis", "yara", "ioc",
+                    "stego", "stego_audio", "carving", "strings", "correlation"):
         return "malware"
-    elif f_type in ("pdf", "image", "gps"):
+    elif f_type in ("pdf", "pdf_analysis", "image", "gps"):
         return "files"
     elif f_type in ("memory", "linux_artifacts"):
         return "memory_linux"
@@ -74,9 +80,9 @@ def _finding_card(f: FindingModel, is_inverse: bool = False) -> str:
         extra_rows += section_header("Chaînes (Top 100)")
         for i, s in enumerate(ext["strings"], 1):
             extra_rows += render_row(f"#{i}", s)
-    elif f.type == "firefox_history" and "entries" in ext:
+    elif f.type in ("firefox_history", "firefox_places") and (ext.get("history") or ext.get("entries")):
         extra_rows += section_header("Historique")
-        for e in ext["entries"]:
+        for e in ext.get("history") or ext.get("entries"):
             extra_rows += render_row(e.get('date') or '-', e.get('url','')[:80])
     elif f.type == "firefox_cookies" and "entries" in ext:
         extra_rows += section_header("Cookies")

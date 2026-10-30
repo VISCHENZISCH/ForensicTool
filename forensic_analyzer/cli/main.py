@@ -47,6 +47,9 @@ Exemples :
     g2.add_argument("--pcap",    metavar="PCAP",    help="Analyse réseau PCAP/PCAPNG")
     g2.add_argument("--pe",      metavar="EXE",     help="Triage Malware (PE/Entropie)")
     g2.add_argument("--elf",     metavar="BINAIRE", help="Analyse statique d'un binaire Linux (ELF)")
+    g2.add_argument("--logs",    metavar="JOURNAL", help="Journaux web / système (access, error, syslog, auth, wp-debug)")
+    g2.add_argument("--webshell", metavar="SCRIPT", help="Détection de webshell (PHP...)")
+    g2.add_argument("--nmap",    metavar="XML",     help="Rapport nmap (-oX)")
 
     # Analyse système
     g3 = p.add_argument_group("Analyse système")
@@ -115,6 +118,9 @@ def cli_dispatch():
     from forensic_analyzer.analyzers.windows_execution import \
         WindowsExecutionAnalyzer
     from forensic_analyzer.analyzers.yara import YARAAnalyzer
+    from forensic_analyzer.analyzers.log_analyzer import LogAnalyzer
+    from forensic_analyzer.analyzers.nmap import NmapAnalyzer
+    from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
     from forensic_analyzer.core.correlation import correlate
     from forensic_analyzer.core.scanner import auto_scan, default_registry, files_for
     from forensic_analyzer.models.finding import ReportModel
@@ -138,7 +144,8 @@ def cli_dispatch():
         set_export_root(args.export_dir)
     else:
         target = next((v for v in (args.scan, args.linux, args.disk, args.mem, args.pcap, args.pe, args.elf,
-                                   args.evtx, args.registry, args.pdf, args.image, args.ioc) if v), "analyse")
+                                   args.evtx, args.registry, args.pdf, args.image, args.ioc, args.logs,
+                                   args.webshell, args.nmap) if v), "analyse")
         new_case_dir(target)
 
     if getattr(args, 'update', False):
@@ -182,6 +189,9 @@ def cli_dispatch():
         (args.elf,     ELFAnalyzer),
         (args.chromium, ChromiumAnalyzer),
         (args.winexec, WindowsExecutionAnalyzer),
+        (args.logs,    LogAnalyzer),
+        (args.webshell, WebshellAnalyzer),
+        (args.nmap,    NmapAnalyzer),
     ]
 
     def run(analyzer, path: str, **kwargs) -> None:

@@ -40,6 +40,9 @@ _MENU_DISPATCH = {
     "18": ("Scan YARA",           "yara:YARAAnalyzer",                       None),
     "19": ("Extraction IOC",      "ioc:IOCAnalyzer",                         "Fichier ou dossier"),
     "20": ("Timeline DFIR",       "timeline:TimelineAnalyzer",               None),
+    "21": ("Journaux Web / Système", "log_analyzer:LogAnalyzer",             "Journal (access.log, error.log, syslog, auth.log, wp-debug.log, .gz) ou dossier"),
+    "22": ("Détection Webshell",  "webshell:WebshellAnalyzer",               "Script (.php, .phtml...) ou dossier"),
+    "23": ("Rapport Nmap (XML)",  "nmap:NmapAnalyzer",                       "Rapport nmap -oX ou dossier"),
 }
 
 # Classes chargées par _boot_sequence ; une option absente est indisponible
@@ -294,6 +297,7 @@ def interactive_loop() -> None:
 
         if choice not in _MENU_DISPATCH:
             ui.error("Option invalide. Veuillez choisir un numéro du menu.")
+            ui.wait_for_key()
             continue
 
         if choice in unavailable:
@@ -306,15 +310,23 @@ def interactive_loop() -> None:
 
         if choice == "20":
             if not session_findings:
-                ui.warning("Aucun résultat en mémoire pour construire la timeline.")
+                ui.warning("Aucun résultat en mémoire pour construire la timeline : "
+                           "lancez d'abord une analyse (option 1 à 23 ou scan automatique 88).")
+                ui.wait_for_key()
                 continue
             ui.status("Corrélation et construction de la timeline unifiée...")
+            # Une seule vue transverse à jour : les précédentes ne nourrissent pas la nouvelle
+            session_findings[:] = [f for f in session_findings if f.type not in ("correlation", "timeline")]
+            correlation = correlate(session_findings)
+            if correlation:
+                ui.render_finding(correlation)
+                session_findings.append(correlation)
             result = cls().build_from_report(ReportModel.from_findings(session_findings))
-            if result:
+            if result.extra.get("events"):
                 ui.render_finding(result)
                 session_findings.append(result)
             else:
-                ui.warning("Aucun événement temporel trouvé dans les résultats.")
+                ui.warning("Aucun événement daté dans les résultats en mémoire.")
             ui.wait_for_key()
             continue
 
