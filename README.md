@@ -1,84 +1,79 @@
-# Forensic Analyzer
+<p align="center">
+  <img src="assets/logo.svg" alt="Forensic Analyzer" width="560">
+</p>
 
-Une plateforme d'investigation numérique. Elle collecte, parse, corrèle et génère une timeline de bout-en-bout à partir de disques, mémoire, journaux systèmes et captures réseau.
+<p align="center">
+  Triage DFIR de bout en bout : disques, mémoire, réseau, journaux et binaires,<br>
+  corrélés dans une chronologie unique.
+</p>
 
----
-
-## Installation (Linux)
-
-Le script principal fait également office d'installeur interactif pour résoudre les dépendances systèmes (comme `tshark` pour les PCAP et `ssdeep` pour les hashes).
-
-```bash
-git clone https://github.com/VISCHENZISCH/ForensicTool
-cd ForensicTool
-chmod +x run.sh
-./run.sh --install
-```
-
-
-### Lancement Interactif
-```bash
-./run.sh
-```
-
-### Scan Automatisé (Triage rapide)
-Idéal pour ingérer directement un dump disque, un dossier réseau ou une collection d'artefacts KAPE/Triage.
-```bash
-./run.sh --scan /chemin/vers/dossier_evidence --export-html rapport_forensic.html
-```
-
-### Réponse à incident complète en une commande
-Placez les preuves dans un dossier (image disque, dump mémoire, manifeste `.sha256`, dossier `symbols/` pour Volatility) :
-```bash
-./run.sh --scan ./preuves --export-html rapport.html --export-csv timeline.csv \
-         --export-graph chaine.html --export-rules
-```
-- **Intégrité** : le manifeste d'empreintes est vérifié automatiquement (`--verify-hashes` le refait avant et après l'analyse).
-- **Image disque lue directement** (pytsk3, sans montage ni `tsk_recover`) : partitions GPT/MBR, systèmes de fichiers, métadonnées d'origine (propriétaires, liens, dates de création), puis triage des artefacts dans `export/extractions/` (jamais dans le dossier des preuves) :
-  - *Linux* : unités systemd suspectes, `ld.so.preload`, cron, clés SSH, intégrité des paquets (`dpkg -V` hors ligne, hachage dans l'image), fichiers hors paquet, hors root ou cachés, `audit.log`, `wtmp`/`lastlog`, journald, puis analyse des binaires suspects ;
-  - *Windows* : journaux EVTX, ruches du registre, Prefetch, LNK, historiques Chrome/Edge/Brave/Firefox.
-- **Mémoire** : OS détecté automatiquement (bannière du noyau), symboles ISF du dossier `symbols/` voisin ; processus cachés (pslist/psscan), processus lancés depuis un répertoire caché, connexions distantes, appels système détournés, modules cachés, injections.
-- **Binaires ELF et PE** : désassemblage (capstone) des appels sensibles — destination de `connect()` (IP et port), intervalle de `sleep()`, fichiers ouverts, commandes exécutées — et capacités [capa](https://github.com/mandiant/capa) si l'outil est installé.
-- **Corrélation** : indicateurs partagés entre sources (ex : un chemin vu sur le disque, dans un processus en mémoire et dans un binaire), graphe interactif de la chaîne de compromission (`--export-graph`).
-- **Chronologie consolidée** : événements concordants fusionnés, confiance *élevée* (≥ 2 sources), *moyenne* (1 source) ou *faible* (horodatage falsifiable).
-- **Détection et partage** (`--export-rules`, dans `export/rules/`) : règles YARA (par binaire suspect + empreintes), Suricata (IP/port, domaines, URL, JA3), Sigma (Linux et Windows) et bundle STIX 2.1 (indicateurs, malware, techniques ATT&CK).
-
-Analyses ciblées : `--disk`, `--mem` (`--mem-os`, `--mem-symbols`), `--elf`, `--pe`, `--linux RACINE --bodyfile FICHIER` pour une copie déjà extraite.
-
-### Services en ligne (désactivés par défaut)
-Interroger un service tiers divulgue des éléments de l'enquête (hashes, coordonnées GPS). Le graphe de corrélation embarque son JavaScript et ne contacte aucun CDN. L'outil fonctionne donc hors-ligne par défaut. Pour activer MalwareBazaar, VirusTotal et le géocodage OpenStreetMap :
-```bash
-export ABUSECH_AUTH_KEY=...   # MalwareBazaar
-export VT_API_KEY=...         # VirusTotal
-./run.sh --scan ./evidence_dir/ --online
-```
-En mode interactif, utiliser `FORENSIC_ONLINE=1 ./run.sh`.
-
-### Tests
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white" alt="Python 3.13+">
+  <img src="https://img.shields.io/badge/Linux-support%C3%A9-FCC624?logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/Windows-support%C3%A9-0078D6" alt="Windows">
+  <img src="https://img.shields.io/badge/R%C3%A9seau-hors%20ligne%20par%20d%C3%A9faut-0d9488" alt="Hors ligne par défaut">
+  <img src="https://img.shields.io/badge/tests-pytest-0A9EDC?logo=pytest&logoColor=white" alt="pytest">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-22c55e" alt="Licence MIT"></a>
+</p>
 
 ---
 
-## Scénarios Pratiques de Test
+## Ce qui est analysé
 
-### 1. Triage d'un Malware
-Soumettez un exécutable potentiellement malveillant au moteur :
+| Source | Points clés |
+|---|---|
+| **Images disque** | GPT/MBR, NTFS et ext4 lus avec pytsk3, sans montage ; triage Linux et Windows |
+| **Mémoire** | Volatility 3 : processus cachés, injections, appels système détournés, connexions |
+| **Réseau** | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3 |
+| **Windows** | EVTX, registre, Prefetch, LNK |
+| **Linux** | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne) |
+| **Binaires** | PE et ELF : désassemblage des appels sensibles, YARA, capa |
+| **Fichiers** | PDF, EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox |
+
+Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance.
+
+## Installation
+
 ```bash
-./run.sh --scan malware_sample.exe
+git clone https://github.com/VISCHENZISCH/ForensicTool && cd ForensicTool
+./run.sh --install          # Windows : .\run.ps1 --install
 ```
 
+## Utilisation
 
-### 2. Investigation Système & Timeline
-Placez un fichier `NTUSER.DAT`, un fichier `.evtx` et un fichier `.pf` dans un dossier `evidence_dir`.
 ```bash
-./run.sh --scan ./evidence_dir/ --export-csv timeline.csv
+./run.sh                                          # menu interactif
+./run.sh --scan ./preuves --export-html rapport.html
+./run.sh --pe ./preuves                           # uniquement les exécutables PE du dossier
 ```
-*Ouvrez le fichier `timeline.csv` généré avec **Timeline Explorer** : vous verrez les accès fichiers croisés avec l'historique de lancement Prefetch et les logs d'authentification.*
 
+Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls les fichiers du type choisi sont analysés.
 
+| Export | Contenu |
+|---|---|
+| `--export-html` / `--export-pdf` | Rapport complet |
+| `--export-csv` | Chronologie (Timeline Explorer, Excel) |
+| `--export-graph` | Graphe interactif de la chaîne de compromission |
+| `--export-rules` | Règles YARA, Suricata, Sigma et bundle STIX 2.1 |
+| `--verify-hashes MANIFESTE` | Contrôle d'intégrité des preuves avant et après l'analyse |
 
-## Avertissement Légal
-Cet outil automatise des procédures extrêmement poussées d'investigation. À utiliser strictement dans un cadre légal (Réponse à Incident, CTF, Lab SOC).
+Tout est écrit dans `export/`, jamais dans le dossier des preuves.
+
+## Hors ligne par défaut
+
+Aucun service tiers n'est contacté sans `--online` (MalwareBazaar, VirusTotal, géocodage OSM), car une requête divulguerait des éléments de l'enquête.
+
+```bash
+export ABUSECH_AUTH_KEY=...  VT_API_KEY=...
+./run.sh --scan ./preuves --online          # menu : FORENSIC_ONLINE=1 ./run.sh
+```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt && pytest
+```
+
+## Cadre d'utilisation
+
+À utiliser uniquement dans un cadre légal : réponse à incident, laboratoire SOC, CTF. Licence [MIT](LICENSE).

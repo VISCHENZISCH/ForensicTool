@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="140" viewBox="0 0 600 140" role="img" aria-labelledby="title desc">
+  <title id="title">Forensic Analyzer</title>
+  <desc id="desc">Loupe posée sur une trame de données : plateforme d'investigation numérique</desc>
+  <style>
+    .name { fill: #0f172a; font: 700 40px 'Segoe UI', system-ui, -apple-system, sans-serif; letter-spacing: -0.5px; }
+    .tag  { fill: #475569; font: 500 16px 'Segoe UI', system-ui, -apple-system, sans-serif; letter-spacing: 2px; }
+    .grid { stroke: #0d9488; opacity: 0.35; }
+    @media (prefers-color-scheme: dark) {
+      .name { fill: #f1f5f9; }
+      .tag  { fill: #94a3b8; }
+      .grid { opacity: 0.5; }
+    }
+  </style>
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Trame de données (octets d'une image disque) -->
+  <g class="grid" stroke-width="2" stroke-linecap="round">
+    <line x1="18" y1="34" x2="70" y2="34"/>
+    <line x1="18" y1="50" x2="54" y2="50"/>
+    <line x1="18" y1="66" x2="62" y2="66"/>
+    <line x1="18" y1="82" x2="46" y2="82"/>
+    <line x1="18" y1="98" x2="58" y2="98"/>
+  </g>
+
+  <!-- Loupe -->
+  <circle cx="72" cy="66" r="34" fill="none" stroke="url(#accent)" stroke-width="8"/>
+  <line x1="97" y1="91" x2="124" y2="118" stroke="url(#accent)" stroke-width="11" stroke-linecap="round"/>
+  <!-- Pic de signal détecté dans la lentille -->
+  <polyline points="50,70 60,70 66,54 74,84 80,62 86,70 94,70" fill="none" stroke="#2dd4bf"
+            stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="148" y="76" class="name">Forensic Analyzer</text>
+  <text x="150" y="104" class="tag">INVESTIGATION NUMÉRIQUE · DFIR</text>
+</svg>
