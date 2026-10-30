@@ -31,8 +31,11 @@ class PDFExporter:
                 build_interactive_html
             html_content = build_interactive_html(report)
 
-            # Générer le PDF directement à partir du contenu HTML
-            weasyprint.HTML(string=html_content).write_pdf(target_path)
+            # Aucune ressource chargée (ni réseau ni fichier local) : le rapport est autonome
+            def refuse(url, *args, **kwargs):
+                raise ValueError(f"ressource externe refusée : {url}")
+
+            weasyprint.HTML(string=html_content, url_fetcher=refuse).write_pdf(target_path)
             log.info("Rapport PDF exporté -> %s", target_path)
         except Exception as exc:
             log.error("Erreur d'export PDF via WeasyPrint : %s", exc)

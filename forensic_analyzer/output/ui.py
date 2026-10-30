@@ -337,7 +337,8 @@ def kv(key: str, value, indent: int = 3) -> None:
     if wrap_width < 10:
         wrap_width = 50
 
-    lines = textwrap.wrap(val_str, width=wrap_width)
+    # Empreintes, URL et chemins jamais coupés : ils doivent rester copiables d'un bloc
+    lines = textwrap.wrap(val_str, width=wrap_width, break_long_words=False, break_on_hyphens=False)
     if not lines:
         lines = [""]
 

@@ -45,6 +45,9 @@ _MENU_DISPATCH = {
     "23": ("Rapport Nmap (XML)",  "nmap:NmapAnalyzer",                       "Rapport nmap -oX ou dossier"),
 }
 
+# Fichiers que le scan automatique n'a pu attribuer à aucun module pendant la session
+_SESSION_SKIPPED: list[str] = []
+
 # Classes chargées par _boot_sequence ; une option absente est indisponible
 _LOADED: dict[str, type] = {}
 
@@ -130,7 +133,7 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(enriched))
     if timeline.extra.get("events"):
         enriched.append(timeline)
-    report = ReportModel.from_findings(enriched)
+    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED))
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -285,6 +288,7 @@ def interactive_loop() -> None:
             for finding in report.findings:
                 ui.render_finding(finding)
                 session_findings.append(finding)
+            _SESSION_SKIPPED.extend(f for f in report.skipped_files if f not in _SESSION_SKIPPED)
 
             ui.render_summary(report)
             ui.wait_for_key()
