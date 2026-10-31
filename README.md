@@ -16,18 +16,18 @@
 
 ## Ce qui est analysé
 
-| Source            | Points clés                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| **Images disque** | GPT/MBR, NTFS et ext4 lus avec pytsk3, sans montage ; triage Linux et Windows        |
-| **Mémoire**       | Volatility 3 : processus cachés, injections, appels système détournés, connexions    |
-| **Réseau**        | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3               |
-| **Windows**       | EVTX, registre, Prefetch, LNK                                                        |
-| **Linux**         | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne) |
-| **Journaux**      | nginx/Apache, syslog, auth, WordPress : brute-force, webshell, exfiltration, sudo    |
-| **Web**           | Webshells PHP, rapports nmap (`-oX`)                                                 |
-| **Binaires**      | PE et ELF : désassemblage des appels sensibles, YARA, capa                           |
+| Source            | Points clés                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| **Images disque** | GPT/MBR, NTFS et ext4 lus avec pytsk3, sans montage ; triage Linux et Windows         |
+| **Mémoire**       | Volatility 3 : processus cachés, injections, appels système détournés, connexions     |
+| **Réseau**        | PCAP : identifiants, balises C2, exfiltration DNS/HTTP, empreintes JA3                |
+| **Windows**       | EVTX, registre, Prefetch, LNK                                                         |
+| **Linux**         | systemd, cron, SSH, `auth.log`, auditd, intégrité des paquets (`dpkg -V` hors ligne)  |
+| **Journaux**      | nginx/Apache, syslog, auth, WordPress : brute-force, webshell, exfiltration, sudo     |
+| **Web**           | Webshells PHP, rapports nmap (`-oX`)                                                  |
+| **Binaires**      | PE et ELF : désassemblage des appels sensibles, YARA, capa                            |
 | **Documents**     | PDF (déclencheurs suivis jusqu'au JavaScript), Office : macros, DDE, modèles distants |
-| **Fichiers**      | EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox                   |
+| **Fichiers**      | EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox                    |
 
 Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance. Un décalage d'horloge entre capture réseau et journaux est détecté et recalé, l'heure d'origine restant conservée.
 
@@ -47,6 +47,10 @@ git clone https://github.com/VISCHENZISCH/ForensicTool && cd ForensicTool
 ./run.sh --logs /var/log/nginx                    # journaux web et système
 ```
 
+<p align="center">
+  <img src="docs/images/menu.png" width="70%" alt="Menu interactif de Forensic Analyzer">
+</p>
+
 Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls les fichiers du type choisi sont analysés.
 
 | Export                           | Contenu                                                   |
@@ -61,38 +65,32 @@ Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls
 
 Chaque analyse écrit dans son propre dossier, `export/FT-AAAAMMJJ-HHMMSS-<PREUVES>/` (FT : Forensic Tool) (ou `--export-dir`), jamais dans le dossier des preuves.
 
-Extrait de la conclusion affichée en fin de scan :
+Chaque constat indique sa gravité et ses empreintes ; la conclusion de fin de scan regroupe les résultats par gravité, les indicateurs vus par plusieurs sources et la chaîne d'attaque datée :
 
-```text
-CONCLUSION DE L'ANALYSE
-  Gravité critique     : 1 : Détection Webshell (x.php)
-  Gravité élevée       : 10 : Journaux Web / Système (nginx-access.log), Analyse réseau PCAP (traffic.pcap), ...
-  Corroboré : 203.0.113.42 (ipv4) : IDS, Artefacts Linux, Journaux, Réseau (PCAP)
-  Horloge              : 5 j 7 h 20 min entre le PCAP et les journaux hôtes (PCAP en avance)
-  Empreintes           : 49 preuve(s) hachée(s) à la collecte (SHA-256, UTC), inchangées après analyse
-Chaîne d'attaque (faits confirmés par plusieurs sources)
-  2026-10-25 06:48:00  pcap + web_access + web_error
-    Début du brute-force web depuis 203.0.113.42 (2401 tentatives)
-```
+<p align="center">
+  <img src="docs/images/constat.png" width="49%" alt="Constat d'artefacts Linux : gravité, empreintes, commandes suspectes et mot de passe en clair">
+  <img src="docs/images/conclusion.png" width="49%" alt="Conclusion de l'analyse : gravités, indicateurs corroborés, décalage d'horloge et chaîne d'attaque">
+</p>
 
 ## Codes de sortie
 
-| Code | Signification                                                                  |
-| ---- | ------------------------------------------------------------------------------ |
-| `0`  | Rien à signaler : tout a été analysé et vérifié                                |
+| Code | Signification                                                                       |
+| ---- | ----------------------------------------------------------------------------------- |
+| `0`  | Rien à signaler : tout a été analysé et vérifié                                     |
 | `1`  | Analyse incomplète : preuve introuvable, fichier chiffré, module ou export en échec |
-| `2`  | Preuve altérée : empreinte différente du manifeste, ou modifiée pendant l'analyse |
-| `3`  | Menace de gravité élevée ou critique                                           |
+| `2`  | Preuve altérée : empreinte différente du manifeste, ou modifiée pendant l'analyse   |
+| `3`  | Menace de gravité élevée ou critique                                                |
 
 ## Limites connues
 
-| Cas                                  | Comportement                                                          |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| PCAP de plus de 512 Mo               | Signalé « non analysé » (chargé en mémoire) : utiliser tshark ou Zeek, ou `FORENSIC_PCAP_MAX_MB` |
-| PDF ou document Office chiffré       | Signalé « analyse partielle » ; relu si le mot de passe utilisateur est vide |
-| Archives (`.zip`, `.tar.*`)          | Un seul niveau extrait ; au-delà de 200 Mo ou 10 000 fichiers, non extraites ; images de conteneur ignorées |
-| Mémoire                              | Requiert les symboles Volatility du noyau analysé                     |
-| Failles de format (exploit Word, PDF) | Non détectées sans règle YARA dédiée                                 |
+| Cas                                   | Comportement                                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| PCAP de plus de 64 Mo                 | Lu en flux depuis le disque : mémoire constante, mais analyse environ 7 fois plus lente                     |
+| PCAP de plus de 4 Go                  | Signalé « non analysé » : utiliser tshark ou Zeek, ou relever `FORENSIC_PCAP_MAX_MB`                        |
+| PDF ou document Office chiffré        | Signalé « analyse partielle » ; relu si le mot de passe utilisateur est vide                                |
+| Archives (`.zip`, `.tar.*`)           | Un seul niveau extrait ; au-delà de 200 Mo ou 10 000 fichiers, non extraites ; images de conteneur ignorées |
+| Mémoire                               | Requiert les symboles Volatility du noyau analysé                                                           |
+| Failles de format (exploit Word, PDF) | Non détectées sans règle YARA dédiée                                                                        |
 
 ## Hors ligne par défaut
 
