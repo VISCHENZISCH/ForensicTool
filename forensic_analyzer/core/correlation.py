@@ -3,6 +3,7 @@
 Un indicateur vu par au moins deux sources indépendantes (ex : un chemin trouvé sur le
 disque et dans un processus en mémoire) relie ces artefacts dans la chaîne de compromission.
 """
+
 from __future__ import annotations
 
 from forensic_analyzer.core import iocs as ioc_mod
@@ -11,15 +12,29 @@ from forensic_analyzer.models.finding import FindingModel
 
 # Libellés lisibles des sources
 SOURCE_LABELS = {
-    "disk": "Disque", "linux_artifacts": "Artefacts Linux", "memory": "Mémoire", "elf_analysis": "Binaire ELF",
-    "malware_analysis": "Binaire PE", "pdf_analysis": "PDF", "office_analysis": "Office", "pcap": "Réseau (PCAP)", "evtx": "Journaux Windows",
-    "registry": "Registre", "chromium_artifacts": "Navigateur Chromium", "firefox_places": "Navigateur Firefox",
-    "prefetch": "Prefetch", "lnk_shortcut": "Raccourci LNK", "ids_alerts": "IDS", "ioc": "Extraction IOC",
-    "log_analysis": "Journaux", "webshell_analysis": "Webshell", "network_recon": "Nmap", "yara": "YARA",
+    "disk": "Disque",
+    "linux_artifacts": "Artefacts Linux",
+    "memory": "Mémoire",
+    "elf_analysis": "Binaire ELF",
+    "malware_analysis": "Binaire PE",
+    "pdf_analysis": "PDF",
+    "office_analysis": "Office",
+    "pcap": "Réseau (PCAP)",
+    "evtx": "Journaux Windows",
+    "registry": "Registre",
+    "chromium_artifacts": "Navigateur Chromium",
+    "firefox_places": "Navigateur Firefox",
+    "prefetch": "Prefetch",
+    "lnk_shortcut": "Raccourci LNK",
+    "ids_alerts": "IDS",
+    "ioc": "Extraction IOC",
+    "log_analysis": "Journaux",
+    "webshell_analysis": "Webshell",
+    "network_recon": "Nmap",
+    "yara": "YARA",
 }
 # Poids des types d'indicateurs pour classer les corrélations
-_KIND_WEIGHT = {"sha256": 5, "md5": 5, "ipv4": 4, "domain": 4, "url": 4, "ja3": 4,
-                "path": 3, "service": 3, "filename": 2}
+_KIND_WEIGHT = {"sha256": 5, "md5": 5, "ipv4": 4, "domain": 4, "url": 4, "ja3": 4, "path": 3, "service": 3, "filename": 2}
 
 
 def correlate(findings: list[FindingModel]) -> FindingModel | None:
@@ -29,8 +44,7 @@ def correlate(findings: list[FindingModel]) -> FindingModel | None:
     shared = [i for i in all_iocs if len(i.sources) >= 2]
     # Un chemin implique son nom de fichier : on n'affiche pas les doublons nom/chemin
     shared_paths = {i.value.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower() for i in shared if i.kind == "path"}
-    shared = [i for i in shared if not (i.kind == "filename" and i.value in shared_paths
-                                        and _same_sources(i, shared))]
+    shared = [i for i in shared if not (i.kind == "filename" and i.value in shared_paths and _same_sources(i, shared))]
     shared.sort(key=lambda i: (-len(i.sources), -_KIND_WEIGHT.get(i.kind, 1), i.value))
 
     techniques = set()
@@ -70,12 +84,25 @@ def build_graph(findings: list[FindingModel], shared: list[ioc_mod.IOC]) -> dict
     nodes, edges = {}, []
     for i in shared:
         ioc_id = f"ioc:{i.kind}:{i.value}"
-        nodes[ioc_id] = {"id": ioc_id, "label": i.value if len(i.value) < 48 else "…" + i.value[-45:],
-                         "group": "ioc", "kind": i.kind, "title": f"{i.kind} : {i.value}"}
+        nodes[ioc_id] = {
+            "id": ioc_id,
+            "label": i.value if len(i.value) < 48 else "…" + i.value[-45:],
+            "group": "ioc",
+            "kind": i.kind,
+            "title": f"{i.kind} : {i.value}",
+        }
         for obs in i.observations:
             art_id = f"art:{obs.source}:{obs.artifact}"
-            nodes.setdefault(art_id, {"id": art_id, "label": f"{SOURCE_LABELS.get(obs.source, obs.source)}\n{obs.artifact[-40:]}",
-                                      "group": obs.source, "kind": "artifact", "title": obs.artifact})
+            nodes.setdefault(
+                art_id,
+                {
+                    "id": art_id,
+                    "label": f"{SOURCE_LABELS.get(obs.source, obs.source)}\n{obs.artifact[-40:]}",
+                    "group": obs.source,
+                    "kind": "artifact",
+                    "title": obs.artifact,
+                },
+            )
             edge = {"from": art_id, "to": ioc_id, "title": obs.context}
             if edge not in edges:
                 edges.append(edge)
@@ -83,8 +110,9 @@ def build_graph(findings: list[FindingModel], shared: list[ioc_mod.IOC]) -> dict
 
 
 def _same_sources(filename_ioc, shared) -> bool:
-    return any(i.kind == "path" and i.value.lower().endswith(filename_ioc.value) and i.sources >= filename_ioc.sources
-               for i in shared)
+    return any(
+        i.kind == "path" and i.value.lower().endswith(filename_ioc.value) and i.sources >= filename_ioc.sources for i in shared
+    )
 
 
 def _count_by_kind(all_iocs) -> str:
@@ -95,6 +123,9 @@ def _count_by_kind(all_iocs) -> str:
 
 
 def _ioc_dict(i: ioc_mod.IOC) -> dict:
-    return {"kind": i.kind, "value": i.value, "sources": sorted(i.sources),
-            "observations": [{"source": o.source, "artifact": o.artifact, "context": o.context}
-                             for o in i.observations]}
+    return {
+        "kind": i.kind,
+        "value": i.value,
+        "sources": sorted(i.sources),
+        "observations": [{"source": o.source, "artifact": o.artifact, "context": o.context} for o in i.observations],
+    }

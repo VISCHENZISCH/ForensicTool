@@ -1,2 +1,3 @@
 from .analyzer import ELFAnalyzer
-__all__ = ['ELFAnalyzer']
+
+__all__ = ["ELFAnalyzer"]

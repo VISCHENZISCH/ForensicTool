@@ -1,4 +1,5 @@
 """Aiguillage disque / mémoire des fichiers .raw, structure de disque et détection d'OS."""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,15 +16,15 @@ EXT_START = 2048
 def _disk_image(path):
     """Image MBR avec une partition Linux (0x83) contenant un superbloc ext4."""
     img = bytearray(EXT_START * 512 + 8192)
-    img[450] = 0x83                                                # entrée 1 : type Linux
+    img[450] = 0x83  # entrée 1 : type Linux
     struct.pack_into("<II", img, 454, EXT_START, 16)
     img[510:512] = b"\x55\xaa"
     sb = EXT_START * 512 + 1024
-    struct.pack_into("<II", img, sb, 128, 1024)                   # inodes, blocs
+    struct.pack_into("<II", img, sb, 128, 1024)  # inodes, blocs
     struct.pack_into("<IIH", img, sb + 44, 1792573198, 1792571933, 9)  # montage, écriture
-    struct.pack_into("<HH", img, sb + 56, 0xEF53, 1)               # magic, état propre
-    struct.pack_into("<I", img, sb + 96, 0x40)                     # extents → ext4
-    img[sb + 136:sb + 137] = b"/"
+    struct.pack_into("<HH", img, sb + 56, 0xEF53, 1)  # magic, état propre
+    struct.pack_into("<I", img, sb + 96, 0x40)  # extents → ext4
+    img[sb + 136 : sb + 137] = b"/"
     path.write_bytes(bytes(img))
     return str(path)
 
@@ -31,7 +32,7 @@ def _disk_image(path):
 def _memory_dump(path, offset):
     data = bytearray(offset + 4096)
     banner = b"Linux version 6.1.0-54-amd64 (debian-kernel@lists.debian.org) (gcc-12) #1 SMP"
-    data[offset:offset + len(banner)] = banner
+    data[offset : offset + len(banner)] = banner
     path.write_bytes(bytes(data))
     return str(path)
 

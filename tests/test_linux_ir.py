@@ -1,4 +1,5 @@
 """Tests de la chaîne de réponse à incident Linux (bodyfile, persistance, paquets, journaux)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -53,11 +54,13 @@ def _fake_debian(root):
     _write(root, "/usr/bin/ls", ls_content)
     _write(root, "/etc/ssh/sshd_config", "PermitRootLogin no\n")
     _write(root, "/var/lib/dpkg/info/coreutils.list", "/bin/ls\n/etc/cron.d/.placeholder\n")
-    _write(root, "/var/lib/dpkg/info/coreutils.md5sums",
-           f"{hashlib.md5(ls_content).hexdigest()}  bin/ls\n")
+    _write(root, "/var/lib/dpkg/info/coreutils.md5sums", f"{hashlib.md5(ls_content).hexdigest()}  bin/ls\n")
     _write(root, "/var/lib/dpkg/info/openssh-server.list", "/etc/ssh/sshd_config\n")
-    _write(root, "/var/lib/dpkg/status",
-           "Package: openssh-server\nConffiles:\n /etc/ssh/sshd_config 00000000000000000000000000000000\n")
+    _write(
+        root,
+        "/var/lib/dpkg/status",
+        "Package: openssh-server\nConffiles:\n /etc/ssh/sshd_config 00000000000000000000000000000000\n",
+    )
     _write(root, UNIT, UNIT_TEXT)
     _write(root, IMPLANT, b"\x7fELF implant")
     # tsk_recover restaure les liens symboliques en fichiers contenant la cible
@@ -100,8 +103,7 @@ def test_systemd_detection_without_bodyfile_ignores_restored_links(tmp_path):
 
 def test_legitimate_unit_is_not_suspicious(tmp_path):
     root = str(tmp_path)
-    _write(root, "/etc/systemd/system/backup.service",
-           "[Service]\nExecStart=/usr/bin/rsync -a /srv /backup\nUser=backup\n")
+    _write(root, "/etc/systemd/system/backup.service", "[Service]\nExecStart=/usr/bin/rsync -a /srv /backup\nUser=backup\n")
     [unit] = persistence.analyze_systemd(root)["units"]
     assert not unit["suspicious"]
 
@@ -132,13 +134,17 @@ def test_dpkg_verification_and_files_outside_packages(tmp_path):
 
 
 def test_audit_log_parsing(tmp_path):
-    audit = _write(str(tmp_path), "audit.log", (
-        "type=USER_AUTH msg=audit(1792572691.140:35): pid=317 uid=0 msg='op=PAM:authentication "
-        "grantors=pam_permit acct=\"root\" exe=\"/usr/bin/login\" terminal=/dev/ttyS0 res=success'\n"
-        "type=USER_AUTH msg=audit(1792572692.000:36): pid=318 uid=0 msg='op=PAM:authentication "
-        "acct=\"bob\" exe=\"/usr/sbin/sshd\" res=failed'\n"
-        "type=SERVICE_START msg=audit(1792572877.824:9): pid=1 msg='unit=systemd-sysupdate res=success'\n"
-    ))
+    audit = _write(
+        str(tmp_path),
+        "audit.log",
+        (
+            "type=USER_AUTH msg=audit(1792572691.140:35): pid=317 uid=0 msg='op=PAM:authentication "
+            'grantors=pam_permit acct="root" exe="/usr/bin/login" terminal=/dev/ttyS0 res=success\'\n'
+            "type=USER_AUTH msg=audit(1792572692.000:36): pid=318 uid=0 msg='op=PAM:authentication "
+            'acct="bob" exe="/usr/sbin/sshd" res=failed\'\n'
+            "type=SERVICE_START msg=audit(1792572877.824:9): pid=1 msg='unit=systemd-sysupdate res=success'\n"
+        ),
+    )
     result = logs.parse_audit_log(audit)
     assert result["auth"][0]["acct"] == "root" and result["auth"][0]["terminal"] == "/dev/ttyS0"
     assert result["auth"][0]["time"] == "2026-10-21T08:51:31.140000+00:00"
@@ -150,15 +156,16 @@ def test_audit_log_parsing(tmp_path):
 def _utmp(kind: int, line: str, user: str, ts: int) -> bytes:
     rec = bytearray(384)
     struct.pack_into("<h", rec, 0, kind)
-    rec[8:8 + len(line)] = line.encode()
-    rec[44:44 + len(user)] = user.encode()
+    rec[8 : 8 + len(line)] = line.encode()
+    rec[44 : 44 + len(user)] = user.encode()
     struct.pack_into("<i", rec, 340, ts)
     return bytes(rec)
 
 
 def test_wtmp_and_lastlog_parsing(tmp_path):
-    wtmp = _write(str(tmp_path), "wtmp",
-                  _utmp(2, "~", "reboot", 1792571581) + _utmp(8, "", "", 1) + _utmp(7, "ttyS0", "root", 1792572691))
+    wtmp = _write(
+        str(tmp_path), "wtmp", _utmp(2, "~", "reboot", 1792571581) + _utmp(8, "", "", 1) + _utmp(7, "ttyS0", "root", 1792572691)
+    )
     records = logs.parse_wtmp(wtmp)
     assert [(r["type"], r["user"]) for r in records] == [("BOOT", "reboot"), ("USER", "root")]
     assert records[1]["time"] == "2026-10-21T08:51:31+00:00"

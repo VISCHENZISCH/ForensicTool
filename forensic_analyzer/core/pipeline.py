@@ -1,4 +1,5 @@
 """AnalyzerRegistry et run_pipeline - orchestration centrale du pipeline."""
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -61,7 +62,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
     Args:
         paths (list[str]): Liste de chemins absolus à analyser.
         registry (AnalyzerRegistry): Registre des analyzers disponibles.
-        
+
     Returns:
         ReportModel: Modèle consolidé avec tous les résultats.
     """
@@ -88,7 +89,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
                         res = analyzer.analyze(path, **analyze_kwargs)
                 else:
                     res = analyzer.analyze(path, **analyze_kwargs)
-            except Exception as exc:   # un module en échec ne doit ni arrêter le scan ni disparaître du rapport
+            except Exception as exc:  # un module en échec ne doit ni arrêter le scan ni disparaître du rapport
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
                 errors.append(AnalysisError.of(analyzer.name, path, exc))
                 continue
@@ -114,8 +115,11 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
             supported_paths.append(path)
 
     if skipped:
-        log.warning("%d fichier(s) ignoré(s) (aucun module adapté) : %s",
-                    len(skipped), ", ".join(os.path.basename(f) for f in skipped[:15]))
+        log.warning(
+            "%d fichier(s) ignoré(s) (aucun module adapté) : %s",
+            len(skipped),
+            ", ".join(os.path.basename(f) for f in skipped[:15]),
+        )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
         # Empreinte de chaque preuve collectée AVANT toute analyse (traçabilité), analysée ou non

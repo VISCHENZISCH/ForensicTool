@@ -2,6 +2,7 @@
 Menu interactif principal pour Forensic Analyzer.
 Style : ASCII art, codes couleur ANSI, sans rich.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -20,36 +21,40 @@ from forensic_analyzer.utils.exports import export_root, new_case_dir
 # Option -> (libelle, "module:Classe" ou action spéciale, invite)
 # Les modules d'analyse sont chargés à l'écran de démarrage, pas à l'import du menu.
 _MENU_DISPATCH = {
-    "1":  ("PDF - Métadonnées",   "pdf:PDFAnalyzer",                         "Fichier PDF ou dossier"),
-    "2":  ("Image / EXIF",        "image:ImageAnalyzer",                     "Image ou dossier"),
-    "3":  ("Coordonnées GPS",     "gps:GPSAnalyzer",                         "Image ou dossier"),
-    "4":  ("Extraction Strings",  "strings:StringsAnalyzer",                 "Fichier binaire ou dossier"),
-    "5":  ("Historique Firefox",  "firefox:FirefoxHistoryAnalyzer",          "places.sqlite ou dossier de profil"),
-    "6":  ("Cookies Firefox",     "firefox:FirefoxCookiesAnalyzer",          "cookies.sqlite ou dossier de profil"),
-    "7":  ("Artefacts Chromium",  "chromium:ChromiumAnalyzer",               "Base Chromium (History, Cookies...) ou dossier de profil"),
-    "8":  ("Stéganographie",      "stego:StegoAnalyzer",                     "Image / WAV ou dossier"),
-    "9":  ("File Carving",        "carving:CarvingAnalyzer",                 "Fichier (.dd, .img, .bin, .raw...) ou dossier"),
-    "10": ("Analyse PCAP",        "pcap:PCAPAnalyzer",                       "Capture (.pcap, .pcapng, .cap) ou dossier"),
-    "11": ("Triage Malware (PE)", "malware:MalwareAnalyzer",                 "Exécutable (.exe, .dll, .sys) ou dossier"),
-    "12": ("Windows Event Logs",  "evtx:EVTXAnalyzer",                       "Fichier .evtx ou dossier"),
-    "13": ("Registre Windows",    "registry:RegistryAnalyzer",               "Ruche (SAM, SYSTEM, NTUSER.DAT) ou dossier"),
-    "14": ("Artefacts Linux",     "linux:LinuxArtifactsAnalyzer",            "Racine du système ou fichier (bash_history, auth.log)"),
-    "15": ("Analyse mémoire RAM", "memory:MemoryAnalyzer",                   "Dump mémoire ou dossier"),
-    "16": ("Forensique disque",   "disk:DiskAnalyzer",                       "Image disque ou dossier"),
-    "17": ("Exécution Windows",   "windows_execution:WindowsExecutionAnalyzer", "Prefetch (.pf) / LNK ou dossier"),
-    "18": ("Scan YARA",           "yara:YARAAnalyzer",                       None),
-    "19": ("Extraction IOC",      "ioc:IOCAnalyzer",                         "Fichier ou dossier"),
-    "20": ("Timeline DFIR",       "timeline:TimelineAnalyzer",               None),
-    "21": ("Journaux Web / Système", "log_analyzer:LogAnalyzer",             "Journal (access.log, error.log, syslog, auth.log, wp-debug.log, .gz) ou dossier"),
-    "22": ("Détection Webshell",  "webshell:WebshellAnalyzer",               "Script (.php, .phtml...) ou dossier"),
-    "23": ("Rapport Nmap (XML)",  "nmap:NmapAnalyzer",                       "Rapport nmap -oX ou dossier"),
+    "1": ("PDF - Métadonnées", "pdf:PDFAnalyzer", "Fichier PDF ou dossier"),
+    "2": ("Image / EXIF", "image:ImageAnalyzer", "Image ou dossier"),
+    "3": ("Coordonnées GPS", "gps:GPSAnalyzer", "Image ou dossier"),
+    "4": ("Extraction Strings", "strings:StringsAnalyzer", "Fichier binaire ou dossier"),
+    "5": ("Historique Firefox", "firefox:FirefoxHistoryAnalyzer", "places.sqlite ou dossier de profil"),
+    "6": ("Cookies Firefox", "firefox:FirefoxCookiesAnalyzer", "cookies.sqlite ou dossier de profil"),
+    "7": ("Artefacts Chromium", "chromium:ChromiumAnalyzer", "Base Chromium (History, Cookies...) ou dossier de profil"),
+    "8": ("Stéganographie", "stego:StegoAnalyzer", "Image / WAV ou dossier"),
+    "9": ("File Carving", "carving:CarvingAnalyzer", "Fichier (.dd, .img, .bin, .raw...) ou dossier"),
+    "10": ("Analyse PCAP", "pcap:PCAPAnalyzer", "Capture (.pcap, .pcapng, .cap) ou dossier"),
+    "11": ("Triage Malware (PE)", "malware:MalwareAnalyzer", "Exécutable (.exe, .dll, .sys) ou dossier"),
+    "12": ("Windows Event Logs", "evtx:EVTXAnalyzer", "Fichier .evtx ou dossier"),
+    "13": ("Registre Windows", "registry:RegistryAnalyzer", "Ruche (SAM, SYSTEM, NTUSER.DAT) ou dossier"),
+    "14": ("Artefacts Linux", "linux:LinuxArtifactsAnalyzer", "Racine du système ou fichier (bash_history, auth.log)"),
+    "15": ("Analyse mémoire RAM", "memory:MemoryAnalyzer", "Dump mémoire ou dossier"),
+    "16": ("Forensique disque", "disk:DiskAnalyzer", "Image disque ou dossier"),
+    "17": ("Exécution Windows", "windows_execution:WindowsExecutionAnalyzer", "Prefetch (.pf) / LNK ou dossier"),
+    "18": ("Scan YARA", "yara:YARAAnalyzer", None),
+    "19": ("Extraction IOC", "ioc:IOCAnalyzer", "Fichier ou dossier"),
+    "20": ("Timeline DFIR", "timeline:TimelineAnalyzer", None),
+    "21": (
+        "Journaux Web / Système",
+        "log_analyzer:LogAnalyzer",
+        "Journal (access.log, error.log, syslog, auth.log, wp-debug.log, .gz) ou dossier",
+    ),
+    "22": ("Détection Webshell", "webshell:WebshellAnalyzer", "Script (.php, .phtml...) ou dossier"),
+    "23": ("Rapport Nmap (XML)", "nmap:NmapAnalyzer", "Rapport nmap -oX ou dossier"),
 }
 
 # Fichiers que le scan automatique n'a pu attribuer à aucun module pendant la session
 _SESSION_SKIPPED: list[str] = []
 _SESSION_NOTES: list[str] = []
 _SESSION_ERRORS: list = []
-_SESSION_EVIDENCE: dict = {}   # chemin -> empreinte prise à la collecte
+_SESSION_EVIDENCE: dict = {}  # chemin -> empreinte prise à la collecte
 
 # Classes chargées par _boot_sequence ; une option absente est indisponible
 _LOADED: dict[str, type] = {}
@@ -136,8 +141,13 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(enriched))
     if timeline.extra.get("events"):
         enriched.append(timeline)
-    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED), scan_notes=list(_SESSION_NOTES),
-                                       analysis_errors=list(_SESSION_ERRORS), evidence=list(_SESSION_EVIDENCE.values()))
+    report = ReportModel.from_findings(
+        enriched,
+        skipped_files=list(_SESSION_SKIPPED),
+        scan_notes=list(_SESSION_NOTES),
+        analysis_errors=list(_SESSION_ERRORS),
+        evidence=list(_SESSION_EVIDENCE.values()),
+    )
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -149,6 +159,12 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         "J": ("forensic_analyzer.output.json_exporter", "JSONExporter", "JSON de sortie (.json)", "Rapport JSON"),
         "H": ("forensic_analyzer.output.html_exporter", "HTMLExporter", "HTML de sortie (.html)", "Rapport HTML interactif"),
         "C": ("forensic_analyzer.output.csv_exporter", "CSVExporter", "CSV de sortie (.csv)", "Timeline CSV"),
+        "T": (
+            "forensic_analyzer.output.timesketch_exporter",
+            "TimesketchExporter",
+            "JSONL de sortie (.jsonl)",
+            "Chronologie Timesketch",
+        ),
         "P": ("forensic_analyzer.output.pdf_exporter", "PDFExporter", "PDF de sortie (.pdf)", "Rapport PDF"),
     }
     if choice in exporters:
@@ -158,13 +174,14 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
             try:
                 target = getattr(importlib.import_module(module), cls)().export(report, path)
                 ui.success(f"{label} exporté dans : {target}")
-            except Exception as exc:   # le menu reste utilisable après un export raté
+            except Exception as exc:  # le menu reste utilisable après un export raté
                 ui.error(f"{label} non exporté : {type(exc).__name__} : {exc}")
 
     elif choice == "G":
         path = ui.prompt_input("Entrez le chemin du graphe HTML de sortie (.html)")
         if path and correlation:
             from forensic_analyzer.output.graph_renderer import render_correlation_graph
+
             os.makedirs(export_root(), exist_ok=True)
             target_path = os.path.join(export_root(), os.path.basename(path))
             if render_correlation_graph(correlation, target_path):
@@ -176,6 +193,7 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
 
     elif choice == "S":
         from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
+
         outputs = DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_root(), "rules"))
         if outputs:
             ui.success(f"{len(outputs)} fichier(s) de règles et STIX exportés dans {os.path.join(export_root(), 'rules')}")
@@ -216,8 +234,12 @@ def _boot_sequence() -> dict[str, str]:
     ui.boot_section("Outils externes (optionnels)")
     for label, names, role, options in _TOOLS:
         path = next((p for p in map(shutil.which, names) if p), None)
-        ui.boot_item(bool(path), label, path or ("absent" if options else "absent : repli interne"),
-                     role if path or not options else f"{role} : {_disabled_label(options)}")
+        ui.boot_item(
+            bool(path),
+            label,
+            path or ("absent" if options else "absent : repli interne"),
+            role if path or not options else f"{role} : {_disabled_label(options)}",
+        )
         if not path:
             disabled.update(dict.fromkeys(options, f"outil {label} introuvable dans le PATH"))
             warnings += bool(options)
@@ -303,6 +325,7 @@ def interactive_loop() -> None:
             ui.render_summary(report)
             # Vue transverse de la session : corrélation puis chronologie, reprises dans les exports
             from forensic_analyzer.analyzers.timeline import TimelineAnalyzer
+
             session_findings[:] = [f for f in session_findings if f.type not in ("correlation", "timeline")]
             correlation = correlate(session_findings)
             if correlation:
@@ -310,10 +333,15 @@ def interactive_loop() -> None:
             timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(session_findings))
             if timeline.extra.get("events"):
                 session_findings.append(timeline)
-            ui.render_conclusion(ReportModel.from_findings(session_findings, skipped_files=list(_SESSION_SKIPPED),
-                                                           scan_notes=list(_SESSION_NOTES),
-                                                           analysis_errors=list(_SESSION_ERRORS),
-                                                           evidence=list(_SESSION_EVIDENCE.values())))
+            ui.render_conclusion(
+                ReportModel.from_findings(
+                    session_findings,
+                    skipped_files=list(_SESSION_SKIPPED),
+                    scan_notes=list(_SESSION_NOTES),
+                    analysis_errors=list(_SESSION_ERRORS),
+                    evidence=list(_SESSION_EVIDENCE.values()),
+                )
+            )
             ui.wait_for_key()
             continue
 
@@ -337,8 +365,10 @@ def interactive_loop() -> None:
 
         if choice == "20":
             if not session_findings:
-                ui.warning("Aucun résultat en mémoire pour construire la timeline : "
-                           "lancez d'abord une analyse (option 1 à 23 ou scan automatique 88).")
+                ui.warning(
+                    "Aucun résultat en mémoire pour construire la timeline : "
+                    "lancez d'abord une analyse (option 1 à 23 ou scan automatique 88)."
+                )
                 ui.wait_for_key()
                 continue
             ui.status("Corrélation et construction de la timeline unifiée...")
@@ -379,8 +409,7 @@ def interactive_loop() -> None:
             symbols = None
             if os_type == "linux":
                 symbols = ui.prompt_input("Dossier des symboles ISF (optionnel)", required=False) or None
-            kwargs = {"plugins": plugins_str.split(",") if plugins_str else None,
-                      "os_type": os_type, "symbols_dir": symbols}
+            kwargs = {"plugins": plugins_str.split(",") if plugins_str else None, "os_type": os_type, "symbols_dir": symbols}
         elif choice == "14" and os.path.isdir(path):
             kwargs["bodyfile"] = ui.prompt_input("Bodyfile TSK de l'image (optionnel, fls -r -m /)", required=False) or None
 

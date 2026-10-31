@@ -2,6 +2,7 @@
 
 Équivalent en Python pur de `mmls` (MBR / GPT) et d'un `fsstat` réduit pour ext2/3/4.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -23,9 +24,18 @@ _GPT_TYPES = {
     "e3c9e316-0b5c-4db8-817d-f92df00215ae": "Microsoft reserved",
     "de94bba4-06d1-4d40-a16a-bfd50179d6ac": "Windows recovery",
 }
-_MBR_TYPES = {0x07: "NTFS / exFAT", 0x0B: "FAT32", 0x0C: "FAT32 (LBA)", 0x83: "Linux",
-              0x82: "Linux swap", 0x8E: "Linux LVM", 0xEE: "GPT protective", 0xEF: "EFI System",
-              0x05: "Étendue", 0x0F: "Étendue (LBA)"}
+_MBR_TYPES = {
+    0x07: "NTFS / exFAT",
+    0x0B: "FAT32",
+    0x0C: "FAT32 (LBA)",
+    0x83: "Linux",
+    0x82: "Linux swap",
+    0x8E: "Linux LVM",
+    0xEE: "GPT protective",
+    0xEF: "EFI System",
+    0x05: "Étendue",
+    0x0F: "Étendue (LBA)",
+}
 
 
 def _read(f, offset: int, size: int) -> bytes:
@@ -57,7 +67,7 @@ def detect_filesystem(f, offset: int) -> str:
     if len(boot) >= 1082 and struct.unpack_from("<H", boot, 1080)[0] == 0xEF53:
         incompat = struct.unpack_from("<I", boot, 1024 + 96)[0]
         compat = struct.unpack_from("<I", boot, 1024 + 92)[0]
-        if incompat & 0x40:      # extents
+        if incompat & 0x40:  # extents
             return "ext4"
         return "ext3" if compat & 0x4 else "ext2"
     if _read(f, offset + 0x10040, 8) == b"_BHRfS_M":
@@ -107,26 +117,39 @@ def read_partitions(f) -> tuple[str, list[dict]]:
         table = _read(f, entries_lba * SECTOR, count * size)
         parts = []
         for i in range(count):
-            e = table[i * size:(i + 1) * size]
+            e = table[i * size : (i + 1) * size]
             if len(e) < 128 or e[:16] == b"\0" * 16:
                 continue
             type_guid = str(uuid.UUID(bytes_le=e[:16]))
             first, last = struct.unpack_from("<QQ", e, 32)
-            parts.append({
-                "index": i, "start": first, "end": last, "sectors": last - first + 1,
-                "type": _GPT_TYPES.get(type_guid, type_guid),
-                "name": e[56:128].decode("utf-16le", "replace").rstrip("\0"),
-            })
+            parts.append(
+                {
+                    "index": i,
+                    "start": first,
+                    "end": last,
+                    "sectors": last - first + 1,
+                    "type": _GPT_TYPES.get(type_guid, type_guid),
+                    "name": e[56:128].decode("utf-16le", "replace").rstrip("\0"),
+                }
+            )
         return "GPT", sorted(parts, key=lambda p: p["start"])
 
     parts = []
     for i in range(4):
-        e = mbr[446 + i * 16:446 + (i + 1) * 16]
+        e = mbr[446 + i * 16 : 446 + (i + 1) * 16]
         ptype = e[4]
         start, sectors = struct.unpack_from("<II", e, 8)
         if ptype and sectors:
-            parts.append({"index": i, "start": start, "end": start + sectors - 1, "sectors": sectors,
-                          "type": _MBR_TYPES.get(ptype, hex(ptype)), "name": ""})
+            parts.append(
+                {
+                    "index": i,
+                    "start": start,
+                    "end": start + sectors - 1,
+                    "sectors": sectors,
+                    "type": _MBR_TYPES.get(ptype, hex(ptype)),
+                    "name": "",
+                }
+            )
     return "MBR", parts
 
 

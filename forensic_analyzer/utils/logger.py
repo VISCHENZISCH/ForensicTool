@@ -1,4 +1,5 @@
 """Logging structuré et coloré en ANSI pour Forensic Analyzer."""
+
 import logging
 import re
 import sys
@@ -8,7 +9,7 @@ from forensic_analyzer.utils.terminal import neutralize
 # Couleurs ANSI 256
 MG1 = "\033[38;5;28m"  # Vert sombre (Hacker)
 MG2 = "\033[38;5;34m"  # Vert moyen (Hacker)
-MG3 = "\033[38;5;75m"   # Bleu ciel / Cyan
+MG3 = "\033[38;5;75m"  # Bleu ciel / Cyan
 MG4 = "\033[38;5;141m"  # Violet clair
 MG5 = "\033[38;5;46m"  # Vert vif (Hacker)
 MG6 = "\033[38;5;220m"  # Or / Jaune
@@ -18,7 +19,7 @@ COLOR_RESET = "\033[0m"
 HR = "\033[38;5;196m"  # Hacker Red / Alert
 HY = "\033[38;5;220m"  # Gold
 
-PURPLE = MG4  
+PURPLE = MG4
 COLOR_TIME = MG2
 COLOR_MUTED = MG1
 COLOR_CYAN = MG3
@@ -34,6 +35,7 @@ LEVEL_COLORS = {
 }
 
 TAG_RE = re.compile(r"^\[([A-Z0-9_ -]+)\]")
+
 
 class ColoredFormatter(logging.Formatter):
     """Formatter logging personnalisé colorant chaque élément du log."""
@@ -65,6 +67,7 @@ class ColoredFormatter(logging.Formatter):
 
 class DynamicStreamHandler(logging.StreamHandler):
     """Handler qui résout sys.stdout de manière dynamique au moment du log."""
+
     def __init__(self):
         super().__init__()
 

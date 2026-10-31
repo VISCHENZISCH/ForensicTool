@@ -53,6 +53,7 @@ Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls
 | -------------------------------- | --------------------------------------------------------- |
 | `--export-html` / `--export-pdf` | Rapport complet                                           |
 | `--export-csv`                   | Chronologie (Timeline Explorer, Excel)                    |
+| `--export-timesketch`            | Chronologie JSONL importable dans Timesketch              |
 | `--export-graph`                 | Graphe interactif de la chaîne de compromission           |
 | `--export-rules`                 | Règles YARA, Suricata, Sigma et bundle STIX 2.1           |
 | `--verify-hashes MANIFESTE`      | Contrôle d'intégrité des preuves avant et après l'analyse |

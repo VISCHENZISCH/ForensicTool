@@ -1,4 +1,5 @@
 """Classe de base abstraite pour tous les analyzers."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -31,6 +32,7 @@ class BaseAnalyzer(ABC):
     def can_handle(self, path: str) -> bool:
         """Retourne True si ce module peut traiter le fichier `path`."""
         from forensic_analyzer.utils.magic import get_file_magic_extension
+
         extensions = tuple(ext.lower() for ext in self.supported_extensions)
         if not extensions:
             return False

@@ -1,4 +1,5 @@
 """Échecs d'analyse visibles dans le rapport, exports à l'endroit demandé, code de sortie."""
+
 from __future__ import annotations
 
 import hashlib
@@ -30,13 +31,14 @@ def test_module_failure_is_reported_not_hidden(tmp_path):
     evidence = tmp_path / "preuve.bin"
     evidence.write_bytes(b"x")
     report = run_pipeline([str(evidence)], AnalyzerRegistry().register_all(_Crashing(), _Working()))
-    assert report.total == 1                                       # l'autre module a tourné
-    err, = report.analysis_errors
+    assert report.total == 1  # l'autre module a tourné
+    (err,) = report.analysis_errors
     assert (err.module, err.file, err.error, err.message) == ("plante", str(evidence), "ValueError", "structure inattendue")
 
 
 def test_report_timestamp_is_utc():
     from forensic_analyzer.models.finding import ReportModel
+
     assert ReportModel.from_findings([]).timestamp.endswith("+00:00")
 
 
@@ -51,9 +53,13 @@ def test_export_path_with_folder_is_respected(tmp_path, monkeypatch):
 
 
 def _cli(tmp_path, *args):
-    return subprocess.run([sys.executable, "-m", "forensic_analyzer.cli.main", *args, "--export-dir", str(tmp_path / "out")],
-                          capture_output=True, text=True, cwd=tmp_path,
-                          env={"PYTHONPATH": str(__import__("pathlib").Path(__file__).parents[1]), "PATH": "/usr/bin:/bin"})
+    return subprocess.run(
+        [sys.executable, "-m", "forensic_analyzer.cli.main", *args, "--export-dir", str(tmp_path / "out")],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"PYTHONPATH": str(__import__("pathlib").Path(__file__).parents[1]), "PATH": "/usr/bin:/bin"},
+    )
 
 
 def test_exit_code_signals_altered_evidence(tmp_path):
@@ -75,8 +81,7 @@ def test_exit_code_ignores_wording():
     from forensic_analyzer.cli.main import exit_code
     from forensic_analyzer.models.finding import ReportModel
 
-    renamed = FindingModel(type="evidence_integrity", file="/m", metadata={"Verdict": "libellé reformulé"},
-                           severity="critique")
+    renamed = FindingModel(type="evidence_integrity", file="/m", metadata={"Verdict": "libellé reformulé"}, severity="critique")
     assert exit_code(ReportModel.from_findings([renamed])) == 2
     partial = FindingModel(type="pdf_analysis", file="/p", metadata={}, incomplete=["PDF chiffré"])
     assert exit_code(ReportModel.from_findings([partial])) == 1
@@ -106,7 +111,7 @@ def test_every_alerting_module_sets_a_severity(tmp_path):
 def test_evidence_is_hashed_before_analysis_and_rechecked(tmp_path):
     from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
 
-    class _Tampering(BaseAnalyzer):   # module défectueux qui écrit dans la preuve
+    class _Tampering(BaseAnalyzer):  # module défectueux qui écrit dans la preuve
         name = "modifie"
         supported_extensions = (".bin",)
 
@@ -118,11 +123,12 @@ def test_evidence_is_hashed_before_analysis_and_rechecked(tmp_path):
     evidence = tmp_path / "preuve.bin"
     evidence.write_bytes(b"original")
     report = run_pipeline([str(evidence)], AnalyzerRegistry().register(_Tampering()))
-    record, = report.evidence
+    (record,) = report.evidence
     assert record.sha256 == hashlib.sha256(b"original").hexdigest() and record.hashed_at.endswith("+00:00")
     assert record.changed_during_analysis
 
     from forensic_analyzer.cli.main import exit_code
+
     assert exit_code(report) == 2
 
 
@@ -143,6 +149,7 @@ def test_file_type_is_detected_once_per_file(tmp_path, monkeypatch):
 
 def test_oversized_pcap_is_reported_not_loaded(tmp_path, monkeypatch):
     import pytest
+
     pcap_mod = pytest.importorskip("forensic_analyzer.analyzers.pcap.analyzer")
     monkeypatch.setattr(pcap_mod, "MAX_PCAP_BYTES", 10)
     capture = tmp_path / "gros.pcap"
@@ -157,8 +164,10 @@ def test_every_analyzer_sets_a_severity():
     import os
 
     root = os.path.join(os.path.dirname(__file__), "..", "forensic_analyzer", "analyzers")
-    sources = {os.path.basename(os.path.dirname(p)): open(p, encoding="utf-8").read()
-               for p in glob.glob(os.path.join(root, "*", "analyzer.py"))}
+    sources = {
+        os.path.basename(os.path.dirname(p)): open(p, encoding="utf-8").read()
+        for p in glob.glob(os.path.join(root, "*", "analyzer.py"))
+    }
     assert sources and not [name for name, code in sources.items() if "severity" not in code]
 
 
@@ -167,3 +176,32 @@ def test_report_names_the_exact_tool_version():
     from forensic_analyzer.models.finding import ReportModel
 
     assert ReportModel.from_findings([]).tool.startswith(f"Forensic Analyzer {__version__}")
+
+
+def test_timesketch_export_is_valid_jsonl(tmp_path):
+    import json
+    from forensic_analyzer.models.finding import ReportModel
+    from forensic_analyzer.output.timesketch_exporter import TimesketchExporter
+
+    log = FindingModel(
+        type="log_analysis",
+        file="/p/nginx-access.log",
+        metadata={},
+        extra={
+            "timeline_events": [
+                {
+                    "timestamp": "2026-10-25T06:48:00",
+                    "source": "web_access",
+                    "event_type": "brute_force",
+                    "ip": "203.0.113.42",
+                    "description": "Début du brute-force web",
+                }
+            ]
+        },
+    )
+    path = TimesketchExporter().export(ReportModel.from_findings([log]), str(tmp_path / "t.jsonl"))
+    events = [json.loads(line) for line in open(path, encoding="utf-8")]
+    assert events and all({"message", "datetime", "timestamp_desc"} <= set(e) for e in events)
+    first = events[0]
+    assert first["datetime"] == "2026-10-25T06:48:00+00:00" and first["timestamp"] == 1792910880000000
+    assert first["message"] == "Début du brute-force web" and first["ip"] == "203.0.113.42"

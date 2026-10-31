@@ -1,4 +1,5 @@
 """Exporteur CSV - timeline Plaso-compatible."""
+
 from __future__ import annotations
 
 import csv
@@ -13,8 +14,17 @@ from forensic_analyzer.utils.spreadsheet import neutralize_formula
 
 log = get_logger("csv_exporter")
 
-_FIELDNAMES = ["timestamp", "source", "event_type", "description", "file", "details",
-               "confidence", "corroborating_sources", "timestamp_origine"]
+_FIELDNAMES = [
+    "timestamp",
+    "source",
+    "event_type",
+    "description",
+    "file",
+    "details",
+    "confidence",
+    "corroborating_sources",
+    "timestamp_origine",
+]
 
 
 class CSVExporter:

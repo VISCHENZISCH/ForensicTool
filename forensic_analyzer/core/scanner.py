@@ -1,4 +1,5 @@
 """Logique de collecte des fichiers cibles et d'auto-scan."""
+
 from __future__ import annotations
 
 import os
@@ -84,7 +85,7 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         return ReportModel(total=0, findings=[])
 
     log.info("%d fichier(s) collecté(s) depuis '%s'", len(targets), path)
-    archives = [r for r in map(fingerprint, (t for t in targets if is_archive(t))) if r]   # avant extraction
+    archives = [r for r in map(fingerprint, (t for t in targets if is_archive(t))) if r]  # avant extraction
     targets, origins, notes = expand_archives(targets)
     report = run_pipeline(targets, registry)
     for record in report.evidence:
@@ -95,7 +96,7 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         if f.file in origins:
             f.metadata = {"Origine (archive)": origins[f.file], **f.metadata}
     report.skipped_files = [origins.get(s, s) for s in report.skipped_files]
-    for err in report.analysis_errors:   # fichier extrait : citer l'archive d'origine
+    for err in report.analysis_errors:  # fichier extrait : citer l'archive d'origine
         err.file = origins.get(err.file, err.file)
     return report
 
@@ -126,11 +127,25 @@ def default_registry() -> AnalyzerRegistry:
 
     return AnalyzerRegistry().register_all(
         IntegrityAnalyzer(),
-        PDFAnalyzer(), OfficeAnalyzer(), ImageAnalyzer(), GPSAnalyzer(), StegoAnalyzer(),
-        PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
-        MemoryAnalyzer(), DiskAnalyzer(), MalwareAnalyzer(), ELFAnalyzer(),
-        ChromiumAnalyzer(), FirefoxHistoryAnalyzer(), FirefoxCookiesAnalyzer(),
-        WindowsExecutionAnalyzer(), IDSAnalyzer(),
-        LinuxArtifactsAnalyzer(), LogAnalyzer(), WebshellAnalyzer(), NmapAnalyzer(),
+        PDFAnalyzer(),
+        OfficeAnalyzer(),
+        ImageAnalyzer(),
+        GPSAnalyzer(),
+        StegoAnalyzer(),
+        PCAPAnalyzer(),
+        EVTXAnalyzer(),
+        RegistryAnalyzer(),
+        MemoryAnalyzer(),
+        DiskAnalyzer(),
+        MalwareAnalyzer(),
+        ELFAnalyzer(),
+        ChromiumAnalyzer(),
+        FirefoxHistoryAnalyzer(),
+        FirefoxCookiesAnalyzer(),
+        WindowsExecutionAnalyzer(),
+        IDSAnalyzer(),
+        LinuxArtifactsAnalyzer(),
+        LogAnalyzer(),
+        WebshellAnalyzer(),
+        NmapAnalyzer(),
     )
-

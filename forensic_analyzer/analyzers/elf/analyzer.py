@@ -1,4 +1,5 @@
 """Analyse statique de binaires ELF (Linux), sans exécution."""
+
 from __future__ import annotations
 
 import os
@@ -31,12 +32,31 @@ _BENIGN_TEMP = re.compile(r"^\.(?:X(?:%d|\d+)-lock|X11-unix|ICE-unix|XIM-unix|fo
 _BENIGN_IPS = {"0.0.0.0", "127.0.0.1", "255.255.255.255"}
 # Domaines/URL courants dans les binaires légitimes (licences, code source, doc)
 _BENIGN_URL_DOMAINS = {
-    "github.com", "www.github.com", "gitlab.com", "www.gnu.org", "gnu.org",
-    "www.debian.org", "debian.org", "www.kernel.org", "kernel.org",
-    "www.w3.org", "w3.org", "schemas.microsoft.com", "example.com",
-    "www.example.com", "sourceware.org", "busybox.net", "www.busybox.net",
-    "uclibc.org", "musl.libc.org", "www.openssl.org", "openssl.org",
-    "creativecommons.org", "spdx.org", "fsf.org", "www.fsf.org",
+    "github.com",
+    "www.github.com",
+    "gitlab.com",
+    "www.gnu.org",
+    "gnu.org",
+    "www.debian.org",
+    "debian.org",
+    "www.kernel.org",
+    "kernel.org",
+    "www.w3.org",
+    "w3.org",
+    "schemas.microsoft.com",
+    "example.com",
+    "www.example.com",
+    "sourceware.org",
+    "busybox.net",
+    "www.busybox.net",
+    "uclibc.org",
+    "musl.libc.org",
+    "www.openssl.org",
+    "openssl.org",
+    "creativecommons.org",
+    "spdx.org",
+    "fsf.org",
+    "www.fsf.org",
 }
 # Signatures de logiciels connus dans les chaînes (nom, regex version)
 _KNOWN_SOFTWARE = [
@@ -55,13 +75,20 @@ _KNOWN_SOFTWARE = [
 def _is_benign_ip(ip_str: str) -> bool:
     """IP privée, de documentation, link-local ou multicast : pas un indicateur dans un binaire."""
     import ipaddress as _ipa
+
     try:
         ip = _ipa.ip_address(ip_str)
     except ValueError:
         return True
-    return (ip.is_private or ip.is_reserved or ip.is_loopback
-            or ip.is_link_local or ip.is_multicast or ip.is_unspecified
-            or ip_str in _BENIGN_IPS)
+    return (
+        ip.is_private
+        or ip.is_reserved
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+        or ip_str in _BENIGN_IPS
+    )
 
 
 def _is_benign_url(url: str) -> bool:
@@ -112,6 +139,7 @@ def _hidden_system_paths(strings: list[str]) -> list[str]:
 
 class ELFAnalyzer(BaseAnalyzer):
     """Binaires Linux : liaison, symboles, capacités, IOC et YARA."""
+
     name = "binaire_elf"
     supported_extensions = (".elf",)
 
@@ -147,8 +175,9 @@ class ELFAnalyzer(BaseAnalyzer):
         ips = sorted(ip for ip in all_ips if not _is_benign_ip(ip))
         # Internes / réservées : trop banales pour une alerte (adresses par défaut de BusyBox...),
         # mais gardées : la corrélation les fait ressortir si une autre source les voit aussi
-        internal_ips = sorted(ip for ip in all_ips if _is_benign_ip(ip) and ip not in _BENIGN_IPS
-                              and not ip.startswith(("0.", "127.", "255.")))
+        internal_ips = sorted(
+            ip for ip in all_ips if _is_benign_ip(ip) and ip not in _BENIGN_IPS and not ip.startswith(("0.", "127.", "255."))
+        )
         urls = sorted({u for s in strings for u in _URL.findall(s) if not _is_benign_url(u)})
         paths = _hidden_system_paths(strings)
         if ips:
@@ -163,8 +192,7 @@ class ELFAnalyzer(BaseAnalyzer):
         if info["linking"] == "statique" and not info["stripped"] and (ips or paths):
             meta["Verdict"] = "Binaire statique autonome avec indicateurs réseau / fichiers cachés : à investiguer"
 
-        behaviour = disasm.describe(disasm.analyze_elf(data) if info["machine"] in ("x86-64", "x86") else None,
-                                    meta, techniques)
+        behaviour = disasm.describe(disasm.analyze_elf(data) if info["machine"] in ("x86-64", "x86") else None, meta, techniques)
 
         capa = run_capa(path)
         if capa:

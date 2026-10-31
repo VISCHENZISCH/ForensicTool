@@ -6,4 +6,4 @@ warnings.filterwarnings("ignore", message="Diffie-Hellman over finite fields", m
 
 from .analyzer import PCAPAnalyzer  # noqa: E402
 
-__all__ = ['PCAPAnalyzer']
+__all__ = ["PCAPAnalyzer"]

@@ -1,4 +1,5 @@
 """Logique avancée de scan YARA avec Result Pattern."""
+
 from __future__ import annotations
 
 import os
@@ -9,49 +10,62 @@ from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("yara")
 
-T = TypeVar('T')
-E = TypeVar('E')
+T = TypeVar("T")
+E = TypeVar("E")
+
 
 @dataclass(frozen=True)
 class Ok(Generic[T]):
     value: T
     ok: bool = True
 
+
 @dataclass(frozen=True)
 class Err(Generic[E]):
     error: E
     ok: bool = False
 
+
 Result = Ok[T] | Err[E]
+
 
 class DummyYaraSyntaxError(Exception):
     pass
 
+
 try:
     import yara
+
     HAS_YARA = True
 except ImportError:
     HAS_YARA = False
+
     class yara:
         SyntaxError = DummyYaraSyntaxError
+
         @staticmethod
-        def compile(*args, **kwargs): return None
+        def compile(*args, **kwargs):
+            return None
+
 
 class YaraScanner:
     """Scanner YARA avec encapsulation ."""
+
     def __init__(self, rules_path: str):
         self.rules_path = rules_path
         self._compiled = self._compile_rules()
 
     def _compile_rules(self) -> object | None:
-        if not HAS_YARA: return None
+        if not HAS_YARA:
+            return None
         try:
             if os.path.isfile(self.rules_path):
                 return yara.compile(filepath=self.rules_path)
             elif os.path.isdir(self.rules_path):
                 rule_files = {
                     os.path.splitext(f)[0]: os.path.join(self.rules_path, f)
-                    for f in os.listdir(self.rules_path) if f.endswith(('.yar', '.yara'))
+                    for f in os.listdir(self.rules_path)
+                    if f.endswith((".yar", ".yara"))
                 }
                 return yara.compile(filepaths=rule_files) if rule_files else None
             return None
@@ -79,15 +93,17 @@ class YaraScanner:
                     "tags": list(match.tags),
                     "meta": dict(match.meta) if match.meta else {},
                     "strings": [],
-                    "file": file_path
+                    "file": file_path,
                 }
                 for s in match.strings:
                     for instance in s.instances:
-                        match_info["strings"].append({
-                            "offset": instance.offset,
-                            "identifier": s.identifier,
-                            "data": instance.matched_data[:64].hex(),
-                        })
+                        match_info["strings"].append(
+                            {
+                                "offset": instance.offset,
+                                "identifier": s.identifier,
+                                "data": instance.matched_data[:64].hex(),
+                            }
+                        )
                 results.append(match_info)
             return Ok(results)
         except Exception as exc:

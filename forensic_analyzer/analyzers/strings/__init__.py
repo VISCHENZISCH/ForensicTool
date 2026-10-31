@@ -1,2 +1,3 @@
 from .analyzer import StringsAnalyzer
-__all__ = ['StringsAnalyzer']
+
+__all__ = ["StringsAnalyzer"]

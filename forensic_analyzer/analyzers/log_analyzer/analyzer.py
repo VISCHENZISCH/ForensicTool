@@ -1,4 +1,5 @@
 """Analyzer pour les journaux texte Linux et Web (Nginx, Apache, Syslog, Auth, WordPress)."""
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ log = get_logger("log_analyzer")
 
 class LogAnalyzer(BaseAnalyzer):
     """Analyse des journaux texte système et applicatifs (Web, Syslog, Auth, WP)."""
+
     name = "log_analyzer"
     supported_extensions = (".log", ".txt", ".gz")
 
@@ -31,8 +33,18 @@ class LogAnalyzer(BaseAnalyzer):
         if basename in ("eve.json", "fast.log"):
             return False
 
-        known_names = ("syslog", "messages", "auth.log", "secure", "nginx-access.log",
-                       "nginx-error.log", "access.log", "error.log", "wp-debug.log", "debug.log")
+        known_names = (
+            "syslog",
+            "messages",
+            "auth.log",
+            "secure",
+            "nginx-access.log",
+            "nginx-error.log",
+            "access.log",
+            "error.log",
+            "wp-debug.log",
+            "debug.log",
+        )
         if any(k in basename for k in known_names):
             return True
 
@@ -66,22 +78,26 @@ class LogAnalyzer(BaseAnalyzer):
                 if res["top_ips"]:
                     meta["Top IP sources"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["top_ips"][:5])
                 if res["suspicious_requests"]:
-                    meta["[ALERTE] Attaques web détectées"] = f"{len(res['suspicious_requests'])} (ex: {res['suspicious_requests'][0]['attack']})"
+                    meta["[ALERTE] Attaques web détectées"] = (
+                        f"{len(res['suspicious_requests'])} (ex: {res['suspicious_requests'][0]['attack']})"
+                    )
                 if res["webshell_hits"]:
                     meta["[ALERTE] Accès Webshell"] = f"{len(res['webshell_hits'])} requête(s) vers un webshell !"
                 if res["scanners"]:
                     meta["[ALERTE] Scanners automatisés"] = ", ".join(res["scanners"][:5])
                 for bf in res["brute_force"]:
                     outcome = "RÉUSSI (HTTP 302)" if bf["succeeded"] else "sans succès"
-                    meta[f"[ALERTE] Brute-force {bf['ip']}"] = (f"{bf['attempts']} tentatives "
-                                                               f"({bf['first'][11:19]} → {bf['last'][11:19]}), {outcome}")
+                    meta[f"[ALERTE] Brute-force {bf['ip']}"] = (
+                        f"{bf['attempts']} tentatives ({bf['first'][11:19]} → {bf['last'][11:19]}), {outcome}"
+                    )
                 if res["uploads"]:
                     meta["[ALERTE] Téléversements"] = ", ".join(f"{u['ip']} → {u['uri']}" for u in res["uploads"][:3])
                 if res["webshell_commands"]:
                     meta["[ALERTE] Commandes via webshell"] = " ; ".join(c["command"] for c in res["webshell_commands"][:8])
                 for ex in res["exfiltration"]:
                     meta[f"[ALERTE] Exfiltration {ex['uri'].rsplit('/', 1)[-1]}"] = (
-                        f"téléchargé par {ex['ip']} ({ex['bytes'] / 1024 / 1024:.1f} Mo)")
+                        f"téléchargé par {ex['ip']} ({ex['bytes'] / 1024 / 1024:.1f} Mo)"
+                    )
                 if res["attackers"]:
                     meta["IP offensives"] = ", ".join(res["attackers"])
 
@@ -97,7 +113,9 @@ class LogAnalyzer(BaseAnalyzer):
                     meta["Niveaux d'erreur"] = ", ".join(f"{lvl}: {cnt}" for lvl, cnt in res["error_levels"].items())
                 for i, err in enumerate(res["suspicious_errors"][:8], 1):
                     client = f" (client {err['client']})" if err.get("client") else ""
-                    meta[f"[ALERTE] Erreur serveur #{i}"] = f"{str(err['timestamp'])[:19]} [{err['level']}] {err['message']}{client}"
+                    meta[f"[ALERTE] Erreur serveur #{i}"] = (
+                        f"{str(err['timestamp'])[:19]} [{err['level']}] {err['message']}{client}"
+                    )
                 if res["client_errors"]:
                     meta["Top clients en erreur"] = ", ".join(f"{ip} ({cnt})" for ip, cnt in res["client_errors"][:5])
 
@@ -118,7 +136,8 @@ class LogAnalyzer(BaseAnalyzer):
                 if res["sudo_commands"]:
                     meta["Commandes sudo"] = " ; ".join(
                         f"{c['user']} : {c['command'][:80]} ({'REFUSÉE' if c['denied'] else 'exécutée'})"
-                        for c in res["sudo_commands"][:5])
+                        for c in res["sudo_commands"][:5]
+                    )
                 for i, n in enumerate([n for n in res["notable"] if n["alert"]][:8], 1):
                     meta[f"[ALERTE] Événement #{i}"] = f"{n['timestamp'][:19]} {n['description']}"
 

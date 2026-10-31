@@ -1,4 +1,5 @@
 """Exporteur PDF - export de rapports de qualité DFIR via weasyprint."""
+
 from __future__ import annotations
 
 from forensic_analyzer.models.finding import ReportModel
@@ -6,6 +7,7 @@ from forensic_analyzer.utils.logger import get_logger
 from forensic_analyzer.utils.exports import output_path as resolve_output
 
 log = get_logger("pdf_exporter")
+
 
 class PDFExporter:
     """Exporte un rapport au format PDF via WeasyPrint (chargé à l'export : ~0,3 s d'import)."""
@@ -15,10 +17,10 @@ class PDFExporter:
         try:
             import weasyprint
         except (ImportError, OSError) as exc:
-            raise RuntimeError("weasyprint absent (pip install weasyprint ; requiert Pango) : "
-                               "export PDF impossible") from exc
+            raise RuntimeError("weasyprint absent (pip install weasyprint ; requiert Pango) : export PDF impossible") from exc
 
         from forensic_analyzer.output.html_exporter import build_interactive_html
+
         target_path = resolve_output(output_path)
 
         # Aucune ressource chargée (ni réseau ni fichier local) : seules les polices embarquées

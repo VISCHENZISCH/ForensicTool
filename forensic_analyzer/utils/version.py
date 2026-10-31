@@ -3,6 +3,7 @@
 Le commit est lu dans .git sans lancer git : un dépôt git présent parmi les preuves ne doit
 jamais faire exécuter quoi que ce soit (voir core/updater.py).
 """
+
 from __future__ import annotations
 
 import os
@@ -21,7 +22,7 @@ def git_commit() -> str | None:
         with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as fh:
             head = fh.read().strip()
         if not head.startswith("ref: "):
-            return head[:7] or None          # HEAD détachée
+            return head[:7] or None  # HEAD détachée
         ref = head[5:]
         ref_file = os.path.join(git_dir, *ref.split("/"))
         if os.path.isfile(ref_file):

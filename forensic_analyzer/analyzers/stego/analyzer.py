@@ -1,4 +1,5 @@
 """Analyzer stéganographie - LSB, DCT, canal alpha, détection chi-square."""
+
 from __future__ import annotations
 
 import math
@@ -39,8 +40,7 @@ def _chi_square_test(data: bytes) -> dict:
         "score": round(chi2, 2),
         "critical_value": critical,
         "p_value_approx": round(p_approx, 4),
-        "detail": "Anomalie LSB détectée (distribution trop uniforme)" if detected
-                  else "Distribution LSB normale"
+        "detail": "Anomalie LSB détectée (distribution trop uniforme)" if detected else "Distribution LSB normale",
     }
 
 
@@ -70,7 +70,7 @@ def _extract_lsb(img, bits: int = 1, channels: str = "RGB") -> bytes:
     else:
         samples = bytearray(len(raw) // stride * len(selected))
         for i, ch in enumerate(selected):
-            samples[i::len(selected)] = raw[ch::stride]
+            samples[i :: len(selected)] = raw[ch::stride]
 
     bitstring = "".join(map(_LSB_TABLES[bits].__getitem__, samples))
     usable = len(bitstring) - len(bitstring) % 8
@@ -97,8 +97,7 @@ def _analyze_alpha_channel(img) -> dict:
         "suspicious_alpha_pixels": non_0_non_255,
         "alpha_lsb_entropy": round(entropy, 4),
         "suspicious": suspicious,
-        "detail": "Canal alpha suspect - payload possible" if suspicious
-                  else "Canal alpha normal"
+        "detail": "Canal alpha suspect - payload possible" if suspicious else "Canal alpha normal",
     }
 
 
@@ -109,16 +108,16 @@ def _analyze_dct_jpeg(path: str) -> dict:
             data = f.read()
 
         # Recherche des marqueurs JPEG DHT / DQT
-        dqt_count = data.count(b'\xFF\xDB')
-        dht_count = data.count(b'\xFF\xC4')
+        dqt_count = data.count(b"\xff\xdb")
+        dht_count = data.count(b"\xff\xc4")
 
         # Analyse de la distribution des octets dans les segments SOS
-        sos_marker = data.find(b'\xFF\xDA')
+        sos_marker = data.find(b"\xff\xda")
         if sos_marker == -1:
             return {"analyzed": False, "detail": "Pas de segment SOS trouvé"}
 
-        sos_data = data[sos_marker + 2:]
-        eoi = sos_data.find(b'\xFF\xD9')
+        sos_data = data[sos_marker + 2 :]
+        eoi = sos_data.find(b"\xff\xd9")
         if eoi > 0:
             sos_data = sos_data[:eoi]
 
@@ -135,11 +134,11 @@ def _analyze_dct_jpeg(path: str) -> dict:
             "sos_size": len(sos_data),
             "sos_entropy": round(entropy, 4),
             "chi_square": chi_result,
-            "detail": "Coefficients DCT suspects" if chi_result["detected"]
-                      else "Coefficients DCT normaux"
+            "detail": "Coefficients DCT suspects" if chi_result["detected"] else "Coefficients DCT normaux",
         }
     except Exception as exc:
         return {"analyzed": False, "detail": str(exc)}
+
 
 def _extract_jpeg_comments(path: str) -> list[str]:
     """Extrait les segments COM (Commentaires) d'un JPEG."""
@@ -149,16 +148,17 @@ def _extract_jpeg_comments(path: str) -> list[str]:
             data = f.read()
         idx = 0
         while idx < len(data) - 1:
-            if data[idx] == 0xFF and data[idx+1] == 0xFE: # COM marker
-                length = int.from_bytes(data[idx+2:idx+4], 'big')
-                comment = data[idx+4:idx+2+length]
-                comments.append(comment.decode('utf-8', 'ignore'))
+            if data[idx] == 0xFF and data[idx + 1] == 0xFE:  # COM marker
+                length = int.from_bytes(data[idx + 2 : idx + 4], "big")
+                comment = data[idx + 4 : idx + 2 + length]
+                comments.append(comment.decode("utf-8", "ignore"))
                 idx += 2 + length
             else:
                 idx += 1
     except Exception as exc:
         log.debug("Commentaires JPEG illisibles dans %s : %s", path, exc)
     return comments
+
 
 def _check_stego_signatures(path: str) -> list[str]:
     """Vérifie la présence d'outils connus via signatures."""
@@ -198,20 +198,22 @@ def _byte_entropy(data: bytes) -> float:
 
 class StegoAnalyzer(BaseAnalyzer):
     """Détecte et extrait la stéganographie dans les images et audios."""
+
     name = "stego"
-    supported_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.wav')
+    supported_extensions = (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".wav")
 
     def analyze(self, path: str) -> FindingModel | None:
         try:
             results: dict = {"file": os.path.basename(path)}
             flat_meta: dict = {}
             suspicion_score = 0
-            
+
             from forensic_analyzer.utils.strings_extractor import extract_strings_with_offsets, categorize_strings
-            
+
             # --- ANALYSE AUDIO (WAV) ---
-            if path.lower().endswith('.wav'):
+            if path.lower().endswith(".wav"):
                 import wave
+
                 try:
                     with wave.open(path, "rb") as w:
                         width = w.getsampwidth()
@@ -219,13 +221,12 @@ class StegoAnalyzer(BaseAnalyzer):
                         if frames:
                             # LSB de l'octet de poids faible de chaque échantillon (PCM little-endian), 8 par octet
                             bits = [b & 1 for b in frames[::width]]
-                            lsb_audio = bytes(int("".join(map(str, bits[i:i + 8])), 2)
-                                              for i in range(0, len(bits) - 7, 8))
+                            lsb_audio = bytes(int("".join(map(str, bits[i : i + 8])), 2) for i in range(0, len(bits) - 7, 8))
                             cat_strs = categorize_strings(extract_strings_with_offsets(lsb_audio, min_length=5))
-                            
+
                             flat_meta["Audio LSB"] = "Analysé"
                             flat_meta["Spectrogramme"] = "Vérifier avec Audacity pour patterns visuels"
-                            
+
                             total_iocs = sum(len(items) for items in cat_strs.values())
                             if total_iocs > 0:
                                 flat_meta["Strings Audio (LSB)"] = f"{total_iocs} IOCs cachés"
@@ -236,12 +237,22 @@ class StegoAnalyzer(BaseAnalyzer):
                                 suspicion_score += 5
                 except Exception as e:
                     flat_meta["Audio LSB"] = f"Erreur: {e}"
-                    
-                proven = "Message LSB (audio)" in flat_meta   # message lisible extrait : preuve
-                flat_meta["Verdict"] = ("STEGO CONFIRMÉE (message lisible extrait)" if proven else
-                                        "STEGO PROBABLE (indices statistiques seuls)" if suspicion_score >= 3 else "CLEAN")
-                return FindingModel(type="stego_audio", file=os.path.abspath(path), metadata=flat_meta, extra={},
-                                    severity="élevé" if proven else "moyen" if suspicion_score >= 3 else "info")
+
+                proven = "Message LSB (audio)" in flat_meta  # message lisible extrait : preuve
+                flat_meta["Verdict"] = (
+                    "STEGO CONFIRMÉE (message lisible extrait)"
+                    if proven
+                    else "STEGO PROBABLE (indices statistiques seuls)"
+                    if suspicion_score >= 3
+                    else "CLEAN"
+                )
+                return FindingModel(
+                    type="stego_audio",
+                    file=os.path.abspath(path),
+                    metadata=flat_meta,
+                    extra={},
+                    severity="élevé" if proven else "moyen" if suspicion_score >= 3 else "info",
+                )
 
             # --- ANALYSE IMAGE ---
             if not HAS_PIL:
@@ -257,17 +268,18 @@ class StegoAnalyzer(BaseAnalyzer):
                 # 1. Analyse LSB Séparée (zsteg-like)
                 lsb_strings_found = {}
                 for ch in ("R", "G", "B", "A"):
-                    if ch == "A" and img.mode != "RGBA": continue
+                    if ch == "A" and img.mode != "RGBA":
+                        continue
                     ch_data = _extract_lsb(img, bits=1, channels=ch)
                     ch_strs = extract_strings_with_offsets(ch_data, min_length=6)
                     if len(ch_strs) > 10:
                         lsb_strings_found[ch] = len(ch_strs)
                         suspicion_score += 1
-                        
+
                 if lsb_strings_found:
                     flat_meta["Strings LSB (Plans de bits)"] = str(lsb_strings_found)
                     suspicion_score += 3
-                    
+
                 lsb_data = _extract_lsb(img, bits=1, channels="RGB")
                 # Message entrelace sur R, G et B : invisible canal par canal.
                 # 16 caractères imprimables d'affilée n'arrivent pas par hasard (~1e-7 par position)
@@ -306,28 +318,26 @@ class StegoAnalyzer(BaseAnalyzer):
                     }
 
             # 4. DCT pour JPEG & Commentaires
-            if path.lower().endswith(('.jpg', '.jpeg')):
+            if path.lower().endswith((".jpg", ".jpeg")):
                 results["dct_analysis"] = _analyze_dct_jpeg(path)
                 coms = _extract_jpeg_comments(path)
                 if coms:
                     flat_meta["JPEG Commentaires (COM)"] = " | ".join(coms)
                     suspicion_score += 1
-                
+
             # 5. Steghide Brute Force & Outils Connus
             sigs = _check_stego_signatures(path)
             if sigs:
                 flat_meta["Signatures d'Outils (Clair)"] = ", ".join(sigs)
                 suspicion_score += 5
-                
-            if path.lower().endswith(('.jpg', '.jpeg', '.bmp', '.wav')):
+
+            if path.lower().endswith((".jpg", ".jpeg", ".bmp", ".wav")):
                 import subprocess
+
                 wordlist = ["", "password", "123456", "admin", "steghide", "secret", "hidden"]
                 for w in wordlist:
                     try:
-                        proc = subprocess.run(
-                            ["steghide", "info", "-p", w, path], 
-                            capture_output=True, text=True, timeout=2
-                        )
+                        proc = subprocess.run(["steghide", "info", "-p", w, path], capture_output=True, text=True, timeout=2)
                         if "format:" in proc.stdout:
                             flat_meta["Outil Détecté"] = f"Steghide (Mot de passe: '{w}') (CRITIQUE)"
                             suspicion_score += 10
@@ -341,14 +351,24 @@ class StegoAnalyzer(BaseAnalyzer):
                         log.debug("steghide en erreur : %s", exc)
 
             # Verdict global
-            if chi_lsb.get("detected"): suspicion_score += 3
-            if results.get("alpha_analysis", {}).get("suspicious"): suspicion_score += 2
-            if results.get("dct_analysis", {}).get("chi_square", {}).get("detected"): suspicion_score += 3
+            if chi_lsb.get("detected"):
+                suspicion_score += 3
+            if results.get("alpha_analysis", {}).get("suspicious"):
+                suspicion_score += 2
+            if results.get("dct_analysis", {}).get("chi_square", {}).get("detected"):
+                suspicion_score += 3
 
             # Preuve : message lisible extrait, outil identifié (steghide ouvert, signature en clair).
             # Les statistiques (chi², alpha, DCT) ne donnent qu'une présomption, quel que soit le score
-            proof = [label for label, hit in (("message lisible extrait", rgb_strs), ("signature d'outil", sigs),
-                                              ("steghide ouvert", "Outil Détecté" in flat_meta)) if hit]
+            proof = [
+                label
+                for label, hit in (
+                    ("message lisible extrait", rgb_strs),
+                    ("signature d'outil", sigs),
+                    ("steghide ouvert", "Outil Détecté" in flat_meta),
+                )
+                if hit
+            ]
             if proof:
                 verdict, severity = f"STEGO CONFIRMÉE ({', '.join(proof)})", "élevé"
             elif suspicion_score >= 3:
@@ -358,15 +378,17 @@ class StegoAnalyzer(BaseAnalyzer):
             else:
                 verdict, severity = "CLEAN", "info"
 
-            flat_meta.update({
-                "Format": results.get("format", "?"),
-                "Dimensions": results.get("dimensions", "?"),
-                "Mode": results.get("mode", "?"),
-                "Verdict": verdict,
-                "Score suspicion": str(suspicion_score),
-                "LSB Entropy": str(results.get("lsb_analysis", {}).get("entropy", "0")),
-                "LSB Chi2 Detect": str(chi_lsb.get("detected", False)),
-            })
+            flat_meta.update(
+                {
+                    "Format": results.get("format", "?"),
+                    "Dimensions": results.get("dimensions", "?"),
+                    "Mode": results.get("mode", "?"),
+                    "Verdict": verdict,
+                    "Score suspicion": str(suspicion_score),
+                    "LSB Entropy": str(results.get("lsb_analysis", {}).get("entropy", "0")),
+                    "LSB Chi2 Detect": str(chi_lsb.get("detected", False)),
+                }
+            )
 
             if "alpha_analysis" in results:
                 flat_meta["Alpha Suspect"] = str(results["alpha_analysis"].get("suspicious", False))

@@ -1,4 +1,5 @@
 """Analyzer artefacts Linux - bash_history, cron, auth.log, SSH, /proc, persistance, paquets et journaux."""
+
 from __future__ import annotations
 
 import datetime
@@ -17,74 +18,74 @@ log = get_logger("linux_artifacts")
 
 # Patterns pour auth.log : horodatage syslog classique ou RFC 3339 (rsyslog recent)
 _AUTH_FAILED = re.compile(
-    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+'
-    r'Failed password for (?:invalid user )?(\S+)\s+from\s+(\S+)',
+    r"(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+"
+    r"Failed password for (?:invalid user )?(\S+)\s+from\s+(\S+)",
 )
 _AUTH_SUCCESS = re.compile(
-    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+'
-    r'Accepted (?:password|publickey) for (\S+)\s+from\s+(\S+)',
+    r"(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sshd\[\d+\]:\s+"
+    r"Accepted (?:password|publickey) for (\S+)\s+from\s+(\S+)",
 )
 _SUDO = re.compile(
-    r'(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sudo:\s+(\S+)\s+:.*COMMAND=(.*)',
+    r"(\w{3}\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+\S+\s+sudo:\s+(\S+)\s+:.*COMMAND=(.*)",
 )
 
 # Mots de passe passés en clair sur la ligne de commande (mysql -pX, smbclient -U u%X, --password=X...)
 _CLEARTEXT_PASSWORDS = [
-    re.compile(r'\b(?:mysql|mysqldump|mysqladmin)\b.*?\s-p(?!\s)(\S+)'),
-    re.compile(r'\s-U\s+\S+?%(\S+)'),
-    re.compile(r'--password[= ](\S+)'),
-    re.compile(r'\bsshpass\s+-p\s*(\S+)'),
-    re.compile(r'(?i)://[^/:\s]+:([^@/\s]+)@'),
+    re.compile(r"\b(?:mysql|mysqldump|mysqladmin)\b.*?\s-p(?!\s)(\S+)"),
+    re.compile(r"\s-U\s+\S+?%(\S+)"),
+    re.compile(r"--password[= ](\S+)"),
+    re.compile(r"\bsshpass\s+-p\s*(\S+)"),
+    re.compile(r"(?i)://[^/:\s]+:([^@/\s]+)@"),
 ]
 
 # Commandes suspectes dans bash_history
 _SUSPICIOUS_CMDS = [
-    r'wget\s+http',
-    r'curl\s+.*\|\s*(?:bash|sh)',
-    r'nc\s+-[le]',
-    r'ncat\s+',
-    r'python\s+-c.*socket',
-    r'python3?\s+-m\s+http\.server',
-    r'base64\s+-d',
-    r'chmod\s+[0-7]*[7][0-7]*\s',
-    r'chmod\s+\+s\s',
-    r'chown\s+root',
-    r'crontab\s+-[re]',
-    r'iptables\s+-[FX]',
-    r'rm\s+-rf\s+/',
-    r'rm\s+.*\.(?:log|conf)',
-    r'rm\s+.*/var/log/',
-    r'smbclient',
-    r'mysql\s+.*-p',
-    r'mysqldump\s+',
-    r'pg_dump\s+',
-    r'(?:cat|less|more|head|tail|grep)\s+.*(?:wp-config\.php|/etc/shadow|\.env\b|config\.php|id_rsa|\.pgpass|\.my\.cnf)',
-    r'(?:curl|wget|nc)\s+.*(?:10\.\d+|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d+\.\d+',
-    r'>\s*/etc/cron',
-    r'mount\s+.*-t\s+cifs',
-    r'ssh\s+.*@',
-    r'/dev/tcp/',
-    r'/dev/udp/',
-    r'mkfifo',
-    r'\.ssh/authorized_keys',
-    r'passwd\s+',
-    r'useradd\s+',
-    r'usermod\s+-aG\s+sudo',
-    r'export\s+HISTSIZE=0',
-    r'unset\s+HISTFILE',
-    r'history\s+-c',
-    r'shred\s+',
-    r'dd\s+if=/dev/',
-    r'tcpdump\s+',
-    r'nmap\s+',
-    r'masscan\s+',
-    r'hydra\s+',
-    r'john\s+',
-    r'hashcat\s+',
-    r'mimikatz',
-    r'linpeas',
-    r'linenum',
-    r'pspy',
+    r"wget\s+http",
+    r"curl\s+.*\|\s*(?:bash|sh)",
+    r"nc\s+-[le]",
+    r"ncat\s+",
+    r"python\s+-c.*socket",
+    r"python3?\s+-m\s+http\.server",
+    r"base64\s+-d",
+    r"chmod\s+[0-7]*[7][0-7]*\s",
+    r"chmod\s+\+s\s",
+    r"chown\s+root",
+    r"crontab\s+-[re]",
+    r"iptables\s+-[FX]",
+    r"rm\s+-rf\s+/",
+    r"rm\s+.*\.(?:log|conf)",
+    r"rm\s+.*/var/log/",
+    r"smbclient",
+    r"mysql\s+.*-p",
+    r"mysqldump\s+",
+    r"pg_dump\s+",
+    r"(?:cat|less|more|head|tail|grep)\s+.*(?:wp-config\.php|/etc/shadow|\.env\b|config\.php|id_rsa|\.pgpass|\.my\.cnf)",
+    r"(?:curl|wget|nc)\s+.*(?:10\.\d+|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d+\.\d+",
+    r">\s*/etc/cron",
+    r"mount\s+.*-t\s+cifs",
+    r"ssh\s+.*@",
+    r"/dev/tcp/",
+    r"/dev/udp/",
+    r"mkfifo",
+    r"\.ssh/authorized_keys",
+    r"passwd\s+",
+    r"useradd\s+",
+    r"usermod\s+-aG\s+sudo",
+    r"export\s+HISTSIZE=0",
+    r"unset\s+HISTFILE",
+    r"history\s+-c",
+    r"shred\s+",
+    r"dd\s+if=/dev/",
+    r"tcpdump\s+",
+    r"nmap\s+",
+    r"masscan\s+",
+    r"hydra\s+",
+    r"john\s+",
+    r"hashcat\s+",
+    r"mimikatz",
+    r"linpeas",
+    r"linenum",
+    r"pspy",
 ]
 
 
@@ -98,13 +99,15 @@ def parse_bash_history(path: str) -> dict:
         last_ts = ""
         for line in lines:
             line = line.strip()
-            if not line: continue
-            if line.startswith('#') and line[1:].isdigit():
+            if not line:
+                continue
+            if line.startswith("#") and line[1:].isdigit():
                 try:
                     last_ts = datetime.datetime.fromtimestamp(int(line[1:]), tz=datetime.timezone.utc).isoformat()
-                except Exception: pass
+                except Exception:
+                    pass
                 continue
-            
+
             if last_ts:
                 commands.append(f"[{last_ts}] {line}")
                 last_ts = ""
@@ -117,11 +120,13 @@ def parse_bash_history(path: str) -> dict:
         for i, cmd in enumerate(commands):
             for pattern, raw_pattern in compiled:
                 if pattern.search(cmd):
-                    suspicious.append({
-                        "line": i + 1,
-                        "command": cmd[:200],
-                        "pattern": raw_pattern,
-                    })
+                    suspicious.append(
+                        {
+                            "line": i + 1,
+                            "command": cmd[:200],
+                            "pattern": raw_pattern,
+                        }
+                    )
                     break
 
         cleartext = []
@@ -168,30 +173,37 @@ def parse_auth_log(path: str) -> dict:
 
         failed = []
         for match in _AUTH_FAILED.finditer(content):
-            failed.append({
-                "timestamp": _syslog_iso(match.group(1), ref),
-                "user": match.group(2),
-                "source_ip": match.group(3),
-            })
+            failed.append(
+                {
+                    "timestamp": _syslog_iso(match.group(1), ref),
+                    "user": match.group(2),
+                    "source_ip": match.group(3),
+                }
+            )
 
         success = []
         for match in _AUTH_SUCCESS.finditer(content):
-            success.append({
-                "timestamp": _syslog_iso(match.group(1), ref),
-                "user": match.group(2),
-                "source_ip": match.group(3),
-            })
+            success.append(
+                {
+                    "timestamp": _syslog_iso(match.group(1), ref),
+                    "user": match.group(2),
+                    "source_ip": match.group(3),
+                }
+            )
 
         sudo_cmds = []
         for match in _SUDO.finditer(content):
-            sudo_cmds.append({
-                "timestamp": _syslog_iso(match.group(1), ref),
-                "user": match.group(2),
-                "command": match.group(3)[:200],
-            })
+            sudo_cmds.append(
+                {
+                    "timestamp": _syslog_iso(match.group(1), ref),
+                    "user": match.group(2),
+                    "command": match.group(3)[:200],
+                }
+            )
 
         # Brute force détection : > 10 fails depuis la même IP
         from collections import Counter
+
         ip_fails = Counter(f["source_ip"] for f in failed)
         brute_force_ips = {ip: count for ip, count in ip_fails.items() if count > 10}
 
@@ -224,7 +236,7 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                 with open(cpath, "r", errors="replace") as f:
                     for line in f:
                         line = line.strip()
-                        if line and not line.startswith('#'):
+                        if line and not line.startswith("#"):
                             crons.append({"source": cpath, "entry": line})
             except OSError as exc:
                 log.debug("Crontab illisible '%s' : %s", cpath, exc)
@@ -237,7 +249,7 @@ def parse_crontabs(root_path: str = "/") -> list[dict]:
                         with open(fpath, "r", errors="replace") as f:
                             for line in f:
                                 line = line.strip()
-                                if line and not line.startswith('#'):
+                                if line and not line.startswith("#"):
                                     crons.append({"source": fpath, "entry": line})
                     except OSError as exc:
                         log.debug("Crontab illisible '%s' : %s", fpath, exc)
@@ -252,7 +264,7 @@ def parse_cron_file(path: str) -> list[dict]:
         with open(path, "r", errors="replace") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
+                if line and not line.startswith("#"):
                     entries.append({"source": path, "entry": line})
     except OSError as exc:
         log.debug("Fichier cron illisible '%s' : %s", path, exc)
@@ -282,9 +294,7 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
                         "file": fpath,
                         "size": stat.st_size,
                         "permissions": oct(stat.st_mode)[-3:],
-                        "modified": datetime.datetime.fromtimestamp(
-                            stat.st_mtime, tz=datetime.timezone.utc
-                        ).isoformat(),
+                        "modified": datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.timezone.utc).isoformat(),
                     }
 
                     if fname == "known_hosts":
@@ -294,7 +304,7 @@ def parse_ssh_artifacts(root_path: str = "/") -> dict:
                         results["known_hosts"].append(info)
                     elif fname == "authorized_keys":
                         with open(fpath, "r", errors="replace") as f:
-                            keys = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+                            keys = [l.strip() for l in f if l.strip() and not l.startswith("#")]
                         info["keys_count"] = len(keys)
                         info["keys_preview"] = [k[:80] for k in keys[:10]]
                         results["authorized_keys"].append(info)
@@ -332,7 +342,7 @@ def parse_proc_maps(root_path: str = "/") -> list[dict]:
             cmdline = ""
             if os.path.isfile(cmdline_path):
                 with open(cmdline_path, "r", errors="replace") as f:
-                    cmdline = f.read().replace('\x00', ' ').strip()
+                    cmdline = f.read().replace("\x00", " ").strip()
 
             status_path = os.path.join(pid_path, "status")
             name = ""
@@ -345,22 +355,25 @@ def parse_proc_maps(root_path: str = "/") -> list[dict]:
                         elif line.startswith("Uid:"):
                             uid = line.split(":", 1)[1].strip().split()[0]
 
-            proc_info.append({
-                "pid": pid,
-                "name": name,
-                "cmdline": cmdline[:200],
-                "uid": uid,
-            })
+            proc_info.append(
+                {
+                    "pid": pid,
+                    "name": name,
+                    "cmdline": cmdline[:200],
+                    "uid": uid,
+                }
+            )
         except (PermissionError, FileNotFoundError):
             continue
 
     proc_info.sort(key=lambda x: x["pid"])
     return proc_info
 
+
 def parse_passwd_shadow(root_path: str = "/") -> dict:
     """Parse /etc/passwd et /etc/shadow."""
     res = {"passwd": [], "shadow": [], "uid_0": []}
-    
+
     passwd_path = os.path.join(root_path, "etc/passwd")
     if os.path.isfile(passwd_path):
         with open(passwd_path, "r", errors="replace") as f:
@@ -371,7 +384,7 @@ def parse_passwd_shadow(root_path: str = "/") -> dict:
                     res["passwd"].append({"user": user, "uid": uid, "shell": shell})
                     if uid == "0":
                         res["uid_0"].append(user)
-                        
+
     shadow_path = os.path.join(root_path, "etc/shadow")
     if os.path.isfile(shadow_path):
         try:
@@ -384,8 +397,9 @@ def parse_passwd_shadow(root_path: str = "/") -> dict:
                             res["shadow"].append({"user": user, "has_hash": True})
         except PermissionError:
             res["shadow_error"] = "Permission Denied"
-            
+
     return res
+
 
 def parse_syslog(root_path: str = "/") -> dict:
     """Parse syslog/messages pour anomalies (segfault, usb, etc)."""
@@ -398,6 +412,7 @@ def parse_syslog(root_path: str = "/") -> dict:
                     if "segfault" in line or "usb" in line.lower() or "promiscuous" in line:
                         logs.append(line.strip()[:200])
     return {"anomalies": logs}
+
 
 def find_suid_sgid(root_path: str = "/") -> list:
     """Trouve les binaires SUID/SGID."""
@@ -417,8 +432,10 @@ def find_suid_sgid(root_path: str = "/") -> list:
                         log.debug("stat impossible sur %s : %s", fp, exc)
     return targets
 
-def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, extra: dict,
-                                entries: list | None = None, file_hasher=None) -> None:
+
+def _analyze_incident_artifacts(
+    root: str, bodyfile: str | None, meta: dict, extra: dict, entries: list | None = None, file_hasher=None
+) -> None:
     """Persistance, intégrité des paquets, anomalies de fichiers et journaux (enrichit meta/extra)."""
     techniques: set[str] = set()
     events: list[dict] = []
@@ -460,8 +477,10 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     # Intégrité des paquets Debian
     if debian:
         dpkg = packages.verify_dpkg(root, body, hasher=file_hasher)
-        meta["Intégrité paquets (dpkg)"] = (f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
-                                            f"{len(dpkg['modified'])} modifiés, {len(dpkg['missing'])} absents")
+        meta["Intégrité paquets (dpkg)"] = (
+            f"{dpkg['checked']} fichiers ({dpkg['conffiles']} conffiles) : "
+            f"{len(dpkg['modified'])} modifiés, {len(dpkg['missing'])} absents"
+        )
         if dpkg["modified"]:
             meta["[ALERTE] Fichiers de paquets modifiés"] = ", ".join(m["path"] for m in dpkg["modified"][:15])
         extra["dpkg"] = dpkg
@@ -486,12 +505,19 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     audit_path = os.path.join(log_dir, "audit/audit.log")
     if os.path.isfile(audit_path):
         audit = logs.parse_audit_log(audit_path)
-        meta["audit.log"] = (f"{len(audit['auth'])} authentifications, {len(audit['auth_failures'])} échecs, "
-                             f"{audit['execve_events']} EXECVE")
+        meta["audit.log"] = (
+            f"{len(audit['auth'])} authentifications, {len(audit['auth_failures'])} échecs, {audit['execve_events']} EXECVE"
+        )
         units = {os.path.basename(u["unit"]).rsplit(".", 1)[0] for u in suspicious}
         for a in audit["auth"]:
-            events.append(_event(a["time"], "audit.log", "auth",
-                                 f"Authentification {a.get('acct', '?')} via {a.get('exe', '?')} ({a.get('terminal', '?')})"))
+            events.append(
+                _event(
+                    a["time"],
+                    "audit.log",
+                    "auth",
+                    f"Authentification {a.get('acct', '?')} via {a.get('exe', '?')} ({a.get('terminal', '?')})",
+                )
+            )
         for svc in audit["services"]:
             if svc.get("unit") in units:
                 events.append(_event(svc["time"], "audit.log", svc["type"].lower(), f"{svc['type']} {svc['unit']}"))
@@ -502,12 +528,18 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
     wtmp_path = os.path.join(log_dir, "wtmp")
     if os.path.isfile(wtmp_path):
         wtmp = logs.parse_wtmp(wtmp_path)
-        meta["wtmp"] = (f"{sum(r['type'] == 'BOOT' for r in wtmp)} démarrages, "
-                        f"{sum(r['type'] == 'USER' for r in wtmp)} sessions")
+        meta["wtmp"] = f"{sum(r['type'] == 'BOOT' for r in wtmp)} démarrages, {sum(r['type'] == 'USER' for r in wtmp)} sessions"
         for r in wtmp:
             if r["type"] in ("BOOT", "USER"):
                 desc = "Démarrage" if r["type"] == "BOOT" else f"Session {r['user']} sur {r['line']}"
-                events.append(_event(r["time"], "wtmp", r["type"].lower(), desc + (f" depuis {r['host']}" if r["host"] and r["type"] == "USER" else "")))
+                events.append(
+                    _event(
+                        r["time"],
+                        "wtmp",
+                        r["type"].lower(),
+                        desc + (f" depuis {r['host']}" if r["host"] and r["type"] == "USER" else ""),
+                    )
+                )
         extra["wtmp"] = wtmp
     lastlog_path = os.path.join(log_dir, "lastlog")
     if os.path.isfile(lastlog_path):
@@ -531,13 +563,19 @@ def _analyze_incident_artifacts(root: str, bodyfile: str | None, meta: dict, ext
 
 
 def _event(ts: str, source: str, event_type: str, description: str) -> dict:
-    return {"timestamp": ts, "source": source, "event_type": event_type,
-            "description": description, "file": "", "details": ""}
+    return {"timestamp": ts, "source": source, "event_type": event_type, "description": description, "file": "", "details": ""}
 
 
 def _entry_dict(e: bf.BodyEntry) -> dict:
-    return {"path": e.path, "uid": e.uid, "mode": e.mode, "size": e.size,
-            "created": bf.utc(e.crtime), "modified": bf.utc(e.mtime), "accessed": bf.utc(e.atime)}
+    return {
+        "path": e.path,
+        "uid": e.uid,
+        "mode": e.mode,
+        "size": e.size,
+        "created": bf.utc(e.crtime),
+        "modified": bf.utc(e.mtime),
+        "accessed": bf.utc(e.atime),
+    }
 
 
 _CRON_DIRS = {"cron.d", "cron.daily", "cron.hourly", "cron.weekly", "cron.monthly", "crontabs"}
@@ -555,6 +593,7 @@ def _is_cron_file(path: str) -> bool:
 
 class LinuxArtifactsAnalyzer(BaseAnalyzer):
     """Analyse des artefacts forensiques Linux."""
+
     name = "linux_artifacts"
     supported_extensions = ()
     takes_directory = True
@@ -570,8 +609,9 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
             )
         return False
 
-    def analyze(self, path: str, bodyfile: str | None = None,
-                entries: list | None = None, file_hasher=None) -> FindingModel | None:
+    def analyze(
+        self, path: str, bodyfile: str | None = None, entries: list | None = None, file_hasher=None
+    ) -> FindingModel | None:
         """
         Analyse un chemin racine (/ ou un montage forensique).
         Le path peut être :
@@ -595,7 +635,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     meta["Total commandes"] = str(result.get("total_commands", 0))
                     meta["Commandes suspectes"] = str(result.get("suspicious_commands", 0))
                     for i, s in enumerate(result.get("suspicious", [])[:15]):
-                        meta[f"Suspect #{i+1}"] = s["command"][:100]
+                        meta[f"Suspect #{i + 1}"] = s["command"][:100]
                     secrets = sorted({c["password"] for c in result.get("cleartext_passwords", [])})
                     if secrets:
                         meta["[ALERTE] Mots de passe en clair"] = ", ".join(secrets)
@@ -619,7 +659,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     meta["Type"] = "crontab / cron.d"
                     meta["Entrées cron"] = str(len(crons))
                     for i, c in enumerate(crons[:5]):
-                        meta[f"Entrée #{i+1}"] = c["entry"][:80]
+                        meta[f"Entrée #{i + 1}"] = c["entry"][:80]
                     extra["crontabs"] = crons
 
                 else:
@@ -634,8 +674,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 all_history: dict = {}
                 for hf in history_files:
                     all_history[hf] = parse_bash_history(hf)
-                total_suspicious = sum(h.get("suspicious_commands", 0)
-                                      for h in all_history.values())
+                total_suspicious = sum(h.get("suspicious_commands", 0) for h in all_history.values())
                 meta["Fichiers bash_history"] = str(len(history_files))
                 meta["Total commandes suspectes"] = str(total_suspicious)
                 extra["bash_histories"] = all_history
@@ -668,7 +707,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     procs = parse_proc_maps(path)
                     meta["Processus actifs"] = str(len(procs))
                     extra["processes"] = procs[:200]
-                    
+
                 accts = parse_passwd_shadow(path)
                 # Sans /etc/passwd dans la copie, ne rien affirmer sur les comptes
                 if accts["passwd"]:
@@ -680,16 +719,16 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 if accts["shadow"]:
                     meta["Comptes avec mot de passe"] = str(len(accts["shadow"]))
                 extra["accounts"] = accts
-                
+
                 syslog = parse_syslog(path)
                 if syslog["anomalies"]:
                     meta["Syslog Anomalies"] = f"{len(syslog['anomalies'])} (ex: {syslog['anomalies'][0]})"
                 extra["syslog_anomalies"] = syslog["anomalies"]
-                
+
                 suid = find_suid_sgid(path)
                 meta["Fichiers SUID/SGID"] = str(len(suid))
                 extra["suid_sgid"] = suid
-                
+
                 _analyze_incident_artifacts(path, bodyfile, meta, extra, entries, file_hasher)
 
             return FindingModel(

@@ -1,4 +1,5 @@
 """Parseur ELF en Python pur : en-tête, liaison, symboles et BuildID (lecture seule)."""
+
 from __future__ import annotations
 
 import struct
@@ -32,11 +33,37 @@ def parse_elf(data: bytes) -> dict:
     end = "<" if data[5] == 1 else ">"
 
     if is64:
-        (e_type, e_machine, _ver, e_entry, e_phoff, e_shoff, _flags, _ehsize,
-         e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx) = struct.unpack_from(end + "HHIQQQIHHHHHH", data, 16)
+        (
+            e_type,
+            e_machine,
+            _ver,
+            e_entry,
+            e_phoff,
+            e_shoff,
+            _flags,
+            _ehsize,
+            e_phentsize,
+            e_phnum,
+            e_shentsize,
+            e_shnum,
+            e_shstrndx,
+        ) = struct.unpack_from(end + "HHIQQQIHHHHHH", data, 16)
     else:
-        (e_type, e_machine, _ver, e_entry, e_phoff, e_shoff, _flags, _ehsize,
-         e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx) = struct.unpack_from(end + "HHIIIIIHHHHHH", data, 16)
+        (
+            e_type,
+            e_machine,
+            _ver,
+            e_entry,
+            e_phoff,
+            e_shoff,
+            _flags,
+            _ehsize,
+            e_phentsize,
+            e_phnum,
+            e_shentsize,
+            e_shnum,
+            e_shstrndx,
+        ) = struct.unpack_from(end + "HHIIIIIHHHHHH", data, 16)
 
     # Segments : PT_INTERP / PT_DYNAMIC déterminent la liaison dynamique
     interpreter, dynamic = "", False
@@ -49,7 +76,7 @@ def parse_elf(data: bytes) -> dict:
         else:
             p_type, p_offset, _va, _pa, p_filesz = struct.unpack_from(end + "IIIII", data, off)
         if p_type == _PT_INTERP:
-            interpreter = data[p_offset:p_offset + p_filesz].rstrip(b"\0").decode("utf-8", "replace")
+            interpreter = data[p_offset : p_offset + p_filesz].rstrip(b"\0").decode("utf-8", "replace")
         elif p_type == _PT_DYNAMIC:
             dynamic = True
 
@@ -91,8 +118,18 @@ def _read_sections(data, is64, end, shoff, shentsize, shnum, shstrndx) -> list[d
             name, typ, _fl, addr, offset, size, link, _info, _al, entsize = struct.unpack_from(end + "IIQQQQIIQQ", data, off)
         else:
             name, typ, _fl, addr, offset, size, link, _info, _al, entsize = struct.unpack_from(end + "IIIIIIIIII", data, off)
-        sections.append({"name_off": name, "type": typ, "addr": addr, "offset": offset, "size": size,
-                         "link": link, "entsize": entsize, "name": ""})
+        sections.append(
+            {
+                "name_off": name,
+                "type": typ,
+                "addr": addr,
+                "offset": offset,
+                "size": size,
+                "link": link,
+                "entsize": entsize,
+                "name": "",
+            }
+        )
     if 0 <= shstrndx < len(sections):
         strtab = sections[shstrndx]
         for s in sections:
@@ -132,12 +169,12 @@ def elf_layout(data: bytes) -> dict:
     is64 = data[4] == 2
     end = "<" if data[5] == 1 else ">"
     if is64:
-        e_machine, = struct.unpack_from(end + "H", data, 18)
-        e_shoff, = struct.unpack_from(end + "Q", data, 40)
+        (e_machine,) = struct.unpack_from(end + "H", data, 18)
+        (e_shoff,) = struct.unpack_from(end + "Q", data, 40)
         e_shentsize, e_shnum, e_shstrndx = struct.unpack_from(end + "HHH", data, 58)
     else:
-        e_machine, = struct.unpack_from(end + "H", data, 18)
-        e_shoff, = struct.unpack_from(end + "I", data, 32)
+        (e_machine,) = struct.unpack_from(end + "H", data, 18)
+        (e_shoff,) = struct.unpack_from(end + "I", data, 32)
         e_shentsize, e_shnum, e_shstrndx = struct.unpack_from(end + "HHH", data, 46)
     sections = _read_sections(data, is64, end, e_shoff, e_shentsize, e_shnum, e_shstrndx)
 
@@ -157,7 +194,9 @@ def elf_layout(data: bytes) -> dict:
         if dynsym["type"] != _SHT_DYNSYM or not 0 <= dynsym["link"] < len(sections):
             continue
         names = [n for n, _v, _t in _iter_symbols(data, is64, end, dynsym, sections[dynsym["link"]])]
-        entsize = sec["entsize"] or ((24 if sec["type"] == _SHT_RELA else 16) if is64 else (12 if sec["type"] == _SHT_RELA else 8))
+        entsize = sec["entsize"] or (
+            (24 if sec["type"] == _SHT_RELA else 16) if is64 else (12 if sec["type"] == _SHT_RELA else 8)
+        )
         for off in range(sec["offset"], min(sec["offset"] + sec["size"], len(data) - entsize + 1), entsize):
             if is64:
                 r_offset, r_info = struct.unpack_from(end + "QQ", data, off)
@@ -183,9 +222,9 @@ def _read_build_id(data, end, note) -> str:
     if ntype != _NT_GNU_BUILD_ID:
         return ""
     desc = off + 12 + ((namesz + 3) & ~3)
-    return data[desc:desc + descsz].hex()
+    return data[desc : desc + descsz].hex()
 
 
 def _cstr(data: bytes, off: int) -> str:
     stop = data.find(b"\0", off)
-    return data[off:stop if stop != -1 else off + 256].decode("utf-8", "replace")
+    return data[off : stop if stop != -1 else off + 256].decode("utf-8", "replace")

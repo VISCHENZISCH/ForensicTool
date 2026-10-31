@@ -8,6 +8,7 @@ Premier vecteur d'infection en entreprise. Trois mécanismes sont cherchés :
   fait fuiter le hash NTLM T1187), elles aussi sans macro.
 Un document chiffré est signalé comme non analysé, jamais comme sain.
 """
+
 from __future__ import annotations
 
 import os
@@ -23,41 +24,86 @@ log = get_logger("office")
 try:
     from oletools import crypto, msodde
     from oletools.olevba import VBA_Parser
+
     HAS_OLETOOLS = True
 except ImportError:
     HAS_OLETOOLS = False
 
-_OFFICE_EXT = (".doc", ".dot", ".docx", ".docm", ".dotx", ".dotm", ".xls", ".xlt", ".xlsx", ".xlsm", ".xltm",
-               ".xlsb", ".xlam", ".ppt", ".pps", ".pptx", ".pptm", ".ppsm", ".potm")
+_OFFICE_EXT = (
+    ".doc",
+    ".dot",
+    ".docx",
+    ".docm",
+    ".dotx",
+    ".dotm",
+    ".xls",
+    ".xlt",
+    ".xlsx",
+    ".xlsm",
+    ".xltm",
+    ".xlsb",
+    ".xlam",
+    ".ppt",
+    ".pps",
+    ".pptx",
+    ".pptm",
+    ".ppsm",
+    ".potm",
+)
 _RELATIONSHIP = re.compile(rb"<Relationship\b[^>]*>")
 _ATTRIBUTE = re.compile(rb'(\w+)="([^"]*)"')
 # Relations externes chargées sans action de l'utilisateur ; les hyperliens, eux, demandent un clic
-_LOADED_AT_OPEN = {"attachedTemplate": "modèle distant (T1221)", "oleObject": "objet OLE externe",
-                   "frame": "cadre externe", "subDocument": "sous-document externe"}
+_LOADED_AT_OPEN = {
+    "attachedTemplate": "modèle distant (T1221)",
+    "oleObject": "objet OLE externe",
+    "frame": "cadre externe",
+    "subDocument": "sous-document externe",
+}
 _MAX_RELS_BYTES = 4 * 1024 * 1024
 _MAX_CODE_SHOWN = 20_000
 _LEVELS = ("info", "faible", "moyen", "élevé", "critique")
 # Mots-clés olevba qui exécutent ou téléchargent : seuls eux rendent une macro auto-exécutée critique
-_ACTIVE = ("shell", "wscript", "powershell", "createobject", "getobject", "urldownloadtofile", "xmlhttp",
-           "winhttp", "adodb.stream", "callbyname", "createprocess", "virtualalloc", "rtlmovememory",
-           "mshta", "rundll32", "regsvr32", "exec", "run")
+_ACTIVE = (
+    "shell",
+    "wscript",
+    "powershell",
+    "createobject",
+    "getobject",
+    "urldownloadtofile",
+    "xmlhttp",
+    "winhttp",
+    "adodb.stream",
+    "callbyname",
+    "createprocess",
+    "virtualalloc",
+    "rtlmovememory",
+    "mshta",
+    "rundll32",
+    "regsvr32",
+    "exec",
+    "run",
+)
 
 
 class OfficeAnalyzer(BaseAnalyzer):
     """Macros, DDE et relations externes des documents Office."""
+
     name = "office"
-    supported_extensions = (".ole", ".ooxml") + _OFFICE_EXT   # .ole / .ooxml : signatures (utils/magic.py)
+    supported_extensions = (".ole", ".ooxml") + _OFFICE_EXT  # .ole / .ooxml : signatures (utils/magic.py)
 
     def analyze(self, path: str) -> FindingModel | None:
         if not self.can_handle(path):
             return None
         if not HAS_OLETOOLS:
-            return FindingModel(type="office_analysis", file=os.path.abspath(path),
-                                metadata={"[ATTENTION] Non analysé": "oletools absent (pip install oletools)"},
-                                incomplete=["oletools absent : macros non analysées"])
+            return FindingModel(
+                type="office_analysis",
+                file=os.path.abspath(path),
+                metadata={"[ATTENTION] Non analysé": "oletools absent (pip install oletools)"},
+                incomplete=["oletools absent : macros non analysées"],
+            )
         office_named = path.lower().endswith(_OFFICE_EXT)
         meta: dict[str, str] = {}
-        reasons: list[tuple[str, str]] = []      # (sévérité, raison)
+        reasons: list[tuple[str, str]] = []  # (sévérité, raison)
         incomplete: list[str] = []
         extra: dict = {"office": {}}
 
@@ -69,7 +115,7 @@ class OfficeAnalyzer(BaseAnalyzer):
         self._external_relations(path, meta, reasons, extra["office"])
 
         if not (reasons or incomplete or office_named):
-            return None   # OLE2 sans rapport avec Office (MSI, Thumbs.db...) et sans macro
+            return None  # OLE2 sans rapport avec Office (MSI, Thumbs.db...) et sans macro
         severity = max((s for s, _ in reasons), key=_LEVELS.index, default="info")
         head = {"Format": _format(path)}
         if reasons and severity in ("élevé", "critique"):
@@ -81,21 +127,26 @@ class OfficeAnalyzer(BaseAnalyzer):
         urls = extra["office"].get("urls", [])
         if urls:
             extra["office_urls"] = urls
-        return FindingModel(type="office_analysis", file=os.path.abspath(path), metadata={**head, **meta},
-                            extra=extra, severity=severity, incomplete=incomplete)
+        return FindingModel(
+            type="office_analysis",
+            file=os.path.abspath(path),
+            metadata={**head, **meta},
+            extra=extra,
+            severity=severity,
+            incomplete=incomplete,
+        )
 
     @staticmethod
     def _macros(path: str, meta: dict, reasons: list, incomplete: list, out: dict) -> None:
         try:
             parser = VBA_Parser(path)
-        except Exception as exc:   # oletools lève des types variés sur un fichier corrompu
+        except Exception as exc:  # oletools lève des types variés sur un fichier corrompu
             incomplete.append(f"structure illisible par olevba ({type(exc).__name__} : {exc})")
             return
         try:
             if not parser.detect_vba_macros():
                 return
-            modules = [(vba_name, code) for _f, _s, vba_name, code in parser.extract_macros()
-                       if code and code.strip()]
+            modules = [(vba_name, code) for _f, _s, vba_name, code in parser.extract_macros() if code and code.strip()]
             keywords = [{"type": k, "keyword": w, "description": d} for k, w, d in parser.analyze_macros()]
             stomped = _safe(parser.detect_vba_stomping)
         finally:
@@ -119,8 +170,11 @@ class OfficeAnalyzer(BaseAnalyzer):
         if stomped:
             meta["VBA stomping"] = "DÉTECTÉ : le code source diffère du p-code réellement exécuté (CRITIQUE)"
         code = "\n\n".join(f"' ── {name}\n{text}" for name, text in modules)
-        meta["Code des macros"] = code if len(code) <= _MAX_CODE_SHOWN else \
-            code[:_MAX_CODE_SHOWN] + f"\n… ({len(code)} caractères au total, code complet dans le JSON)"
+        meta["Code des macros"] = (
+            code
+            if len(code) <= _MAX_CODE_SHOWN
+            else code[:_MAX_CODE_SHOWN] + f"\n… ({len(code)} caractères au total, code complet dans le JSON)"
+        )
 
         if stomped:
             reasons.append(("critique", "VBA stomping : le code exécuté n'est pas celui affiché"))
@@ -133,8 +187,11 @@ class OfficeAnalyzer(BaseAnalyzer):
             reasons.append(("élevé", "macros Excel 4.0 (XLM), rarement légitimes"))
         else:
             reasons.append(("moyen", f"{len(modules)} macro(s) VBA, déclenchées par l'utilisateur"))
-        out.update(macros=[{"module": n, "code": c} for n, c in modules], keywords=keywords,
-                   urls=[i for i in iocs if re.match(r"(?i)https?://", i)])
+        out.update(
+            macros=[{"module": n, "code": c} for n, c in modules],
+            keywords=keywords,
+            urls=[i for i in iocs if re.match(r"(?i)https?://", i)],
+        )
 
     @staticmethod
     def _dde(path: str, meta: dict, reasons: list, out: dict) -> None:
@@ -144,8 +201,12 @@ class OfficeAnalyzer(BaseAnalyzer):
         links = str(links).strip()
         meta["Champs DDE"] = links
         command = re.search(r"(?i)\b(cmd|powershell|mshta|wscript|cscript|rundll32|regsvr32)\b", links)
-        reasons.append(("critique" if command else "élevé",
-                        f"champ DDE{' qui lance ' + command.group(1) if command else ''} (exécution sans macro)"))
+        reasons.append(
+            (
+                "critique" if command else "élevé",
+                f"champ DDE{' qui lance ' + command.group(1) if command else ''} (exécution sans macro)",
+            )
+        )
         out["dde"] = links
 
     @staticmethod
@@ -171,8 +232,13 @@ class OfficeAnalyzer(BaseAnalyzer):
         meta["Relations externes"] = "\n".join(f"{_LOADED_AT_OPEN[k]} : {t} ({src})" for k, t, src in found)
         for kind, target, _src in found:
             unc = target.startswith("\\\\") or target.lower().startswith("file://")
-            reasons.append(("élevé", f"{_LOADED_AT_OPEN[kind]} chargé à l'ouverture : {target}"
-                                     + (" (chemin UNC : fuite du hash NTLM, T1187)" if unc else "")))
+            reasons.append(
+                (
+                    "élevé",
+                    f"{_LOADED_AT_OPEN[kind]} chargé à l'ouverture : {target}"
+                    + (" (chemin UNC : fuite du hash NTLM, T1187)" if unc else ""),
+                )
+            )
         out.setdefault("urls", []).extend(t for _k, t, _s in found if re.match(r"(?i)https?://", t))
         out["external"] = [{"type": k, "target": t, "part": s} for k, t, s in found]
 
@@ -180,7 +246,7 @@ class OfficeAnalyzer(BaseAnalyzer):
 def _safe(call):
     try:
         return call()
-    except Exception as exc:   # détection secondaire : son échec ne doit pas masquer le reste
+    except Exception as exc:  # détection secondaire : son échec ne doit pas masquer le reste
         log.debug("oletools : %s", exc)
         return None
 

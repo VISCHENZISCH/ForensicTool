@@ -1,4 +1,5 @@
 """Tests des hashes, de l'entropie et du matching IOC hors-ligne."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,7 +33,7 @@ def test_streaming_entropy_matches_one_shot():
     data = bytes(range(256)) * 3 + b"A" * 5000 + b"\x00" * 777
     stream = StreamingEntropy()
     for i in range(0, len(data), 1000):
-        stream.update(data[i:i + 1000])
+        stream.update(data[i : i + 1000])
     assert abs(stream.value() - calculate_entropy(data)) < 1e-12
 
 
@@ -101,4 +102,3 @@ def test_online_lookup_uses_verified_tls(monkeypatch):
     assert menaces == ["CLOUD INTEL (MalwareBazaar): Famille 'AgentTesla' | Tags: exe"]
     assert "context" not in captured["kwargs"]  # contexte TLS par défaut = vérifié
     assert captured["headers"].get("Auth-key") == "test-key"
-

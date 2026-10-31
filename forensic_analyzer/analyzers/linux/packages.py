@@ -3,6 +3,7 @@
 Travaille sur une copie extraite (tsk_recover). Les chemins /bin, /sbin, /lib* sont
 lus sous /usr (Debian 12 « merged-usr » : liens que tsk_recover ne restaure pas).
 """
+
 from __future__ import annotations
 
 import glob
@@ -66,7 +67,7 @@ def _expected_hashes(root: str) -> list[tuple[str, str, str, bool]]:
     """(paquet, chemin, md5 attendu, conffile) depuis *.md5sums et les Conffiles de status."""
     entries = []
     for md5sums in glob.glob(os.path.join(root, "var/lib/dpkg/info/*.md5sums")):
-        pkg = os.path.basename(md5sums)[:-len(".md5sums")]
+        pkg = os.path.basename(md5sums)[: -len(".md5sums")]
         with open(md5sums, errors="replace") as f:
             for line in f:
                 if "  " in line:
@@ -85,8 +86,9 @@ def _expected_hashes(root: str) -> list[tuple[str, str, str, bool]]:
     return entries
 
 
-def verify_dpkg(root: str, body_index: dict[str, BodyEntry] | None = None,
-                hasher: Callable[[str], str | None] | None = None) -> dict:
+def verify_dpkg(
+    root: str, body_index: dict[str, BodyEntry] | None = None, hasher: Callable[[str], str | None] | None = None
+) -> dict:
     """
     Compare les MD5 des paquets aux fichiers de la copie.
 
@@ -135,10 +137,15 @@ def verify_dpkg(root: str, body_index: dict[str, BodyEntry] | None = None,
     }
 
 
-def files_outside_packages(root: str, entries: list[BodyEntry],
-                           prefixes: tuple[str, ...]) -> list[BodyEntry]:
+def files_outside_packages(root: str, entries: list[BodyEntry], prefixes: tuple[str, ...]) -> list[BodyEntry]:
     """Fichiers réguliers sous `prefixes` qu'aucun paquet ne déclare (hors fichiers générés)."""
     owned = owned_paths(root)
-    return [e for e in entries
-            if e.is_file and not e.deleted and e.path.startswith(prefixes)
-            and normalize(e.path) not in owned and not _GENERATED.search(e.path)]
+    return [
+        e
+        for e in entries
+        if e.is_file
+        and not e.deleted
+        and e.path.startswith(prefixes)
+        and normalize(e.path) not in owned
+        and not _GENERATED.search(e.path)
+    ]

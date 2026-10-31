@@ -1,4 +1,5 @@
 """Analyzer Windows Registry hives (SYSTEM, SAM, NTUSER.DAT)."""
+
 from __future__ import annotations
 
 import os
@@ -11,11 +12,14 @@ log = get_logger("registry")
 
 try:
     from Registry import Registry as RegistryParser
+
     HAS_REGISTRY = True
 except ImportError:
     HAS_REGISTRY = False
+
     class DummyRegistry:
         pass
+
     RegistryParser = DummyRegistry
 
 # Clés d'intérêt forensique
@@ -58,7 +62,7 @@ _FORENSIC_KEYS = {
         r"Root\File",
         r"Root\Programs",
         r"Root\InventoryApplicationFile",
-    ]
+    ],
 }
 
 
@@ -67,41 +71,51 @@ def _walk_key(key, depth: int = 0, max_depth: int = 3) -> list[dict]:
     results = []
     try:
         try:
-            ts = key.timestamp().isoformat() if hasattr(key, 'timestamp') else ""
-        except Exception: ts = ""
-        
+            ts = key.timestamp().isoformat() if hasattr(key, "timestamp") else ""
+        except Exception:
+            ts = ""
+
         import codecs
+
         for value in key.values():
             try:
                 v_name = value.name()
-                
+
                 # ROT13 pour UserAssist
                 if "UserAssist" in key.path() and v_name:
-                    try: v_name = codecs.decode(v_name, 'rot_13')
-                    except Exception: pass
-                    
+                    try:
+                        v_name = codecs.decode(v_name, "rot_13")
+                    except Exception:
+                        pass
+
                 v_val = str(value.value())[:500]
-                
+
                 # Détection clés anormales
                 suspect = False
                 val_lower = v_val.lower()
-                if "\\appdata\\local\\temp\\" in val_lower or "\\programdata\\" in val_lower or "c:\\users\\public\\" in val_lower:
+                if (
+                    "\\appdata\\local\\temp\\" in val_lower
+                    or "\\programdata\\" in val_lower
+                    or "c:\\users\\public\\" in val_lower
+                ):
                     if ".exe" in val_lower or ".ps1" in val_lower or ".bat" in val_lower or ".dll" in val_lower:
                         suspect = True
                 if "powershell" in val_lower and ("-enc" in val_lower or "hidden" in val_lower or "bypass" in val_lower):
                     suspect = True
-                if len(v_name) > 30 and " " not in v_name: # Random encoded name
+                if len(v_name) > 30 and " " not in v_name:  # Random encoded name
                     suspect = True
-                    
-                results.append({
-                    "path": key.path(),
-                    "name": v_name,
-                    "type": str(value.value_type()),
-                    "value": v_val,
-                    "timestamp": ts,
-                    "depth": depth,
-                    "suspect": suspect
-                })
+
+                results.append(
+                    {
+                        "path": key.path(),
+                        "name": v_name,
+                        "type": str(value.value_type()),
+                        "value": v_val,
+                        "timestamp": ts,
+                        "depth": depth,
+                        "suspect": suspect,
+                    }
+                )
             except Exception as exc:
                 log.debug("Valeur illisible sous %s : %s", key.path(), exc)
                 continue
@@ -128,30 +142,35 @@ def _detect_persistence(entries: list[dict]) -> list[dict]:
         # Autorun keys
         for run_key in run_paths:
             if run_key in path_lower:
-                persistence.append({
-                    "type": "Autorun",
-                    "key": entry["path"],
-                    "name": entry.get("name", ""),
-                    "value": entry.get("value", "")[:200],
-                })
+                persistence.append(
+                    {
+                        "type": "Autorun",
+                        "key": entry["path"],
+                        "name": entry.get("name", ""),
+                        "value": entry.get("value", "")[:200],
+                    }
+                )
                 break
 
         # Services
         if "\\services\\" in path_lower and entry.get("name", "").lower() == "imagepath":
-            persistence.append({
-                "type": "Service",
-                "key": entry["path"],
-                "name": entry.get("name", ""),
-                "value": entry.get("value", "")[:200],
-            })
+            persistence.append(
+                {
+                    "type": "Service",
+                    "key": entry["path"],
+                    "name": entry.get("name", ""),
+                    "value": entry.get("value", "")[:200],
+                }
+            )
 
     return persistence
 
 
 class RegistryAnalyzer(BaseAnalyzer):
     """Analyse des ruches de registre Windows."""
+
     name = "registry"
-    supported_extensions = ('.dat', '.DAT')
+    supported_extensions = (".dat", ".DAT")
 
     def can_handle(self, path: str) -> bool:
         # Vérifier le nom du fichier (SAM, SYSTEM, NTUSER.DAT, SOFTWARE, AMCACHE)
@@ -194,13 +213,13 @@ class RegistryAnalyzer(BaseAnalyzer):
             if persistence:
                 meta["Mécanismes de persistance"] = str(len(persistence))
                 for i, p in enumerate(persistence[:5]):
-                    meta[f"Persistance #{i+1}"] = f"[{p['type']}] {p['name']}: {p['value'][:80]}"
+                    meta[f"Persistance #{i + 1}"] = f"[{p['type']}] {p['name']}: {p['value'][:80]}"
 
             suspects = [e for e in all_entries if e.get("suspect")]
             if suspects:
                 meta["[ALERTE] Clés Suspectes"] = f"{len(suspects)} détectées"
                 for i, s in enumerate(suspects[:3]):
-                    meta[f"Suspect #{i+1}"] = f"{s['name']} -> {s['value'][:50]} (Mis à jour: {s['timestamp']})"
+                    meta[f"Suspect #{i + 1}"] = f"{s['name']} -> {s['value'][:50]} (Mis à jour: {s['timestamp']})"
 
             meta["Total valeurs analysées"] = str(len(all_entries))
 

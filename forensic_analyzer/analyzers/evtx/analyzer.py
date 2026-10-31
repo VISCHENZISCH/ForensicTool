@@ -1,4 +1,5 @@
 """Analyzer Windows Event Logs (.evtx)."""
+
 from __future__ import annotations
 
 import os
@@ -17,6 +18,7 @@ log = get_logger("evtx")
 
 try:
     import Evtx.Evtx as evtx
+
     HAS_EVTX = True
 except ImportError:
     HAS_EVTX = False
@@ -80,8 +82,8 @@ def _parse_evtx_event(xml_str: str) -> dict | None:
         if data_section is None:
             data_section = root.find(f"{_NS}UserData")
             if data_section is not None and len(data_section) > 0:
-                data_section = data_section[0] # Usually wrapped in EventXML
-        
+                data_section = data_section[0]  # Usually wrapped in EventXML
+
         if data_section is not None:
             for data_el in data_section:
                 name = data_el.get("Name", "") or data_el.tag.replace(_NS, "")
@@ -104,8 +106,9 @@ def _parse_evtx_event(xml_str: str) -> dict | None:
 
 class EVTXAnalyzer(BaseAnalyzer):
     """Analyse des fichiers Windows Event Log (.evtx)."""
+
     name = "evtx"
-    supported_extensions = ('.evtx',)
+    supported_extensions = (".evtx",)
 
     def analyze(self, path: str) -> FindingModel | None:
         if not HAS_EVTX:
@@ -160,6 +163,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                 meta[label] = f"{count} occurrences"
 
             import csv
+
             anomalies = []
             # Dans export/, jamais à côté de la preuve
             csv_dir = os.path.join(export_root(), "timelines")
@@ -169,14 +173,14 @@ class EVTXAnalyzer(BaseAnalyzer):
                 with open(csv_path, "w", encoding="utf-8", newline="") as f_csv:
                     writer = csv.writer(f_csv)
                     writer.writerow(["Timestamp", "EventID", "Description", "User", "Computer", "Details"])
-                    
+
                     for e in security_events:
                         eid = e["event_id"]
                         ts = e.get("timestamp", "")
                         user = e["data"].get("TargetUserName", e["data"].get("SubjectUserName", ""))
                         if not user:
                             user = e["data"].get("UserID", "")
-                            
+
                         details = ""
                         if eid == 4688:
                             details = f"Proc: {e['data'].get('NewProcessName', '')} | Cmd: {e['data'].get('CommandLine', '')}"
@@ -184,19 +188,21 @@ class EVTXAnalyzer(BaseAnalyzer):
                             details = f"Script: {e['data'].get('ScriptBlockText', '')[:200]}"
                         elif eid in (4624, 4625):
                             details = f"IP: {e['data'].get('IpAddress', '')} | LogonType: {e['data'].get('LogonType', '')}"
-                            
+
                         # Détection Anomalies Heures (Nuit)
                         if eid in (4624, 4625, 4688):
                             try:
                                 if ts and "T" in ts:
                                     hour = int(ts.split("T")[1][:2])
-                                    if hour < 6 or hour > 22: # Entre 22h et 6h
-                                        if user and not user.endswith("$"): # Ignore system accounts
+                                    if hour < 6 or hour > 22:  # Entre 22h et 6h
+                                        if user and not user.endswith("$"):  # Ignore system accounts
                                             anomalies.append(f"Activité hors heures ({hour}h) par {user} (Event {eid})")
-                            except Exception: pass
-                            
-                        writer.writerow([neutralize_formula(v) for v in
-                                         (ts, eid, e["description"], user, e.get("computer", ""), details)])
+                            except Exception:
+                                pass
+
+                        writer.writerow(
+                            [neutralize_formula(v) for v in (ts, eid, e["description"], user, e.get("computer", ""), details)]
+                        )
             except Exception as e:
                 log.warning(f"Impossible de créer la timeline CSV: {e}")
 
@@ -211,7 +217,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                 meta["[ALERTE] Audit log effacé"] = str(audit_cleared)
             if new_services > 0:
                 meta["[ALERTE] Nouveaux services"] = str(new_services)
-                
+
             if anomalies:
                 meta["Anomalies Comportementales"] = f"{len(anomalies)} détectées (ex: {anomalies[0]})"
 
@@ -225,17 +231,23 @@ class EVTXAnalyzer(BaseAnalyzer):
                 meta[f"[ALERTE] #{i} ({a['severity']})"] = f"{a['timestamp'][:19]} {a['description'][:150]}"
             if detector.remote_logons:
                 meta["Connexions distantes (réseau / RDP)"] = ", ".join(
-                    f"{user} depuis {ip} (type {lt}, {n}x)"
-                    for (ip, user, lt), n in detector.remote_logons.most_common(5))
+                    f"{user} depuis {ip} (type {lt}, {n}x)" for (ip, user, lt), n in detector.remote_logons.most_common(5)
+                )
             if detector.techniques:
                 meta["MITRE ATT&CK"] = mitre.summary(detector.techniques)
-                
+
             meta["Timeline Exportée"] = csv_path
 
             # Détections classées par le moteur ; un journal d'audit effacé est critique en soi
             levels = {"critique": "critique", "haute": "élevé", "moyenne": "moyen"}
-            severity = max_severity("critique" if audit_cleared else None, "moyen" if failed_logons or new_services else None,
-                                    *(levels.get(a["severity"]) for a in detections)) or "info"
+            severity = (
+                max_severity(
+                    "critique" if audit_cleared else None,
+                    "moyen" if failed_logons or new_services else None,
+                    *(levels.get(a["severity"]) for a in detections),
+                )
+                or "info"
+            )
             return FindingModel(
                 type="evtx",
                 file=os.path.abspath(path),

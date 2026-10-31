@@ -4,6 +4,7 @@ Permet de parcourir les métadonnées (équivalent de `fls -m`), de hacher un fi
 dans l'image et d'extraire uniquement les artefacts utiles (triage) vers un dossier
 de travail situé hors du dossier des preuves.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -19,6 +20,7 @@ log = get_logger("tsk_image")
 
 try:
     import pytsk3
+
     HAS_PYTSK3 = True
 except ImportError:
     pytsk3 = None
@@ -35,26 +37,40 @@ def local_path(dest_root: str, path: str) -> str | None:
     dest = os.path.realpath(os.path.join(root, path.lstrip("/")))
     return dest if dest.startswith(root + os.sep) else None
 
+
 # Artefacts extraits pour le triage, par famille de système de fichiers
 LINUX_TRIAGE = (
-    "/etc/*", "/var/lib/dpkg/status", "/var/lib/dpkg/diversions", "/var/lib/dpkg/info/*",
-    "/var/log/*", "/var/spool/cron/*",
-    "/root/.*history", "/root/.ssh/*", "/root/.config/systemd/*",
-    "/home/*/.*history", "/home/*/.ssh/*", "/home/*/.config/systemd/*",
-    "/home/*/.mozilla/firefox/*/places.sqlite", "/home/*/.mozilla/firefox/*/cookies.sqlite",
-    "/home/*/.config/google-chrome/*/History", "/home/*/.config/chromium/*/History",
+    "/etc/*",
+    "/var/lib/dpkg/status",
+    "/var/lib/dpkg/diversions",
+    "/var/lib/dpkg/info/*",
+    "/var/log/*",
+    "/var/spool/cron/*",
+    "/root/.*history",
+    "/root/.ssh/*",
+    "/root/.config/systemd/*",
+    "/home/*/.*history",
+    "/home/*/.ssh/*",
+    "/home/*/.config/systemd/*",
+    "/home/*/.mozilla/firefox/*/places.sqlite",
+    "/home/*/.mozilla/firefox/*/cookies.sqlite",
+    "/home/*/.config/google-chrome/*/History",
+    "/home/*/.config/chromium/*/History",
 )
-WINDOWS_TRIAGE = tuple(re.compile(p, re.IGNORECASE) for p in (
-    r"^/windows/system32/winevt/logs/[^/]+\.evtx$",
-    r"^/windows/system32/config/(system|software|sam|security)$",
-    r"^/windows/appcompat/programs/amcache\.hve$",
-    r"^/users/[^/]+/ntuser\.dat$",
-    r"^/windows/prefetch/[^/]+\.pf$",
-    r"^/users/[^/]+/appdata/roaming/microsoft/windows/recent/[^/]+\.lnk$",
-    r"^/users/[^/]+/appdata/local/(google/chrome|microsoft/edge|bravesoftware/brave-browser)"
-    r"/user data/[^/]+/(network/)?(history|cookies|login data|web data|bookmarks)$",
-    r"^/users/[^/]+/appdata/roaming/mozilla/firefox/profiles/[^/]+/(places|cookies)\.sqlite$",
-))
+WINDOWS_TRIAGE = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"^/windows/system32/winevt/logs/[^/]+\.evtx$",
+        r"^/windows/system32/config/(system|software|sam|security)$",
+        r"^/windows/appcompat/programs/amcache\.hve$",
+        r"^/users/[^/]+/ntuser\.dat$",
+        r"^/windows/prefetch/[^/]+\.pf$",
+        r"^/users/[^/]+/appdata/roaming/microsoft/windows/recent/[^/]+\.lnk$",
+        r"^/users/[^/]+/appdata/local/(google/chrome|microsoft/edge|bravesoftware/brave-browser)"
+        r"/user data/[^/]+/(network/)?(history|cookies|login data|web data|bookmarks)$",
+        r"^/users/[^/]+/appdata/roaming/mozilla/firefox/profiles/[^/]+/(places|cookies)\.sqlite$",
+    )
+)
 
 
 class ImageFS:
@@ -85,16 +101,27 @@ class ImageFS:
                 continue
             m = e.info.meta
             path = f"{prefix}/{name}"
-            kind = {pytsk3.TSK_FS_META_TYPE_REG: "r", pytsk3.TSK_FS_META_TYPE_DIR: "d",
-                    pytsk3.TSK_FS_META_TYPE_LNK: "l"}.get(m.type, "-")
+            kind = {pytsk3.TSK_FS_META_TYPE_REG: "r", pytsk3.TSK_FS_META_TYPE_DIR: "d", pytsk3.TSK_FS_META_TYPE_LNK: "l"}.get(
+                m.type, "-"
+            )
             perms = stat.filemode(int(m.mode))[1:]
             link = m.link.decode("utf-8", "replace") if kind == "l" and m.link else ""
-            entries.append(BodyEntry(
-                path=path, inode=str(m.addr), mode=f"{kind}/{kind}{perms}", uid=int(m.uid), gid=int(m.gid),
-                size=int(m.size), atime=int(m.atime), mtime=int(m.mtime), ctime=int(m.ctime),
-                crtime=int(m.crtime), link_target=link,
-                deleted=bool(int(e.info.name.flags) & int(pytsk3.TSK_FS_NAME_FLAG_UNALLOC)),
-            ))
+            entries.append(
+                BodyEntry(
+                    path=path,
+                    inode=str(m.addr),
+                    mode=f"{kind}/{kind}{perms}",
+                    uid=int(m.uid),
+                    gid=int(m.gid),
+                    size=int(m.size),
+                    atime=int(m.atime),
+                    mtime=int(m.mtime),
+                    ctime=int(m.ctime),
+                    crtime=int(m.crtime),
+                    link_target=link,
+                    deleted=bool(int(e.info.name.flags) & int(pytsk3.TSK_FS_NAME_FLAG_UNALLOC)),
+                )
+            )
             if kind == "d" and depth < max_depth and name not in _SKIP_DIRS:
                 try:
                     self._walk(e.as_directory(), path, depth + 1, max_depth, entries)
@@ -172,8 +199,7 @@ def open_filesystems(path: str) -> list[ImageFS]:
     filesystems = []
     try:
         volume = pytsk3.Volume_Info(img)
-        candidates = [(int(p.start), f"part@{int(p.start)}") for p in volume
-                      if int(p.flags) & int(pytsk3.TSK_VS_PART_FLAG_ALLOC)]
+        candidates = [(int(p.start), f"part@{int(p.start)}") for p in volume if int(p.flags) & int(pytsk3.TSK_VS_PART_FLAG_ALLOC)]
     except OSError:
         candidates = [(0, "fs@0")]
     for start, label in candidates:

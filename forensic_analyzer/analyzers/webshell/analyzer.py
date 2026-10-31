@@ -1,4 +1,5 @@
 """Analyzer de scripts et webshells (PHP, scripts malveillants)."""
+
 from __future__ import annotations
 
 import os
@@ -13,36 +14,46 @@ log = get_logger("webshell")
 
 # Fonctions d'exécution de code ou commandes système
 _DANGEROUS_EXEC = [
-    (re.compile(r'\b(?:eval|assert|passthru|shell_exec|system|exec|popen|proc_open|pcntl_exec)\s*\(', re.IGNORECASE), "Exécution de code arbitraire"),
-    (re.compile(r'\bcreate_function\s*\(', re.IGNORECASE), "create_function dépréciée / injection"),
-    (re.compile(r'\$\w+\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)', re.IGNORECASE), "Appel de fonction variable directe depuis entrée HTTP"),
+    (
+        re.compile(r"\b(?:eval|assert|passthru|shell_exec|system|exec|popen|proc_open|pcntl_exec)\s*\(", re.IGNORECASE),
+        "Exécution de code arbitraire",
+    ),
+    (re.compile(r"\bcreate_function\s*\(", re.IGNORECASE), "create_function dépréciée / injection"),
+    (
+        re.compile(r"\$\w+\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)", re.IGNORECASE),
+        "Appel de fonction variable directe depuis entrée HTTP",
+    ),
 ]
 
 # Obfuscation et encodages suspects
 _OBFUSCATION = [
-    (re.compile(r'\bbase64_decode\s*\(', re.IGNORECASE), "Décodage Base64"),
-    (re.compile(r'\bgzinflate\s*\(', re.IGNORECASE), "Décompression Gzip/Inflate"),
-    (re.compile(r'\bstr_rot13\s*\(', re.IGNORECASE), "Chiffrement ROT13"),
-    (re.compile(r'\\x[0-9a-fA-F]{2}\\x[0-9a-fA-F]{2}', re.IGNORECASE), "Chaînes hexadécimales obfusquées"),
-    (re.compile(r'chr\s*\(\s*\d+\s*\)\s*\.\s*chr\s*\(', re.IGNORECASE), "Concaténation dynamique chr()"),
+    (re.compile(r"\bbase64_decode\s*\(", re.IGNORECASE), "Décodage Base64"),
+    (re.compile(r"\bgzinflate\s*\(", re.IGNORECASE), "Décompression Gzip/Inflate"),
+    (re.compile(r"\bstr_rot13\s*\(", re.IGNORECASE), "Chiffrement ROT13"),
+    (re.compile(r"\\x[0-9a-fA-F]{2}\\x[0-9a-fA-F]{2}", re.IGNORECASE), "Chaînes hexadécimales obfusquées"),
+    (re.compile(r"chr\s*\(\s*\d+\s*\)\s*\.\s*chr\s*\(", re.IGNORECASE), "Concaténation dynamique chr()"),
 ]
 
 # Vecteurs d'accès / backdoors
 _INPUT_VECTORS = [
-    (re.compile(r'\$_(?:POST|GET|COOKIE|REQUEST|SERVER)\s*\[', re.IGNORECASE), "Lecture d'entrées utilisateur HTTP"),
-    (re.compile(r'\bfile_put_contents\s*\(', re.IGNORECASE), "Écriture de fichier sur disque"),
-    (re.compile(r'\bmove_uploaded_file\s*\(', re.IGNORECASE), "Upload de fichier"),
+    (re.compile(r"\$_(?:POST|GET|COOKIE|REQUEST|SERVER)\s*\[", re.IGNORECASE), "Lecture d'entrées utilisateur HTTP"),
+    (re.compile(r"\bfile_put_contents\s*\(", re.IGNORECASE), "Écriture de fichier sur disque"),
+    (re.compile(r"\bmove_uploaded_file\s*\(", re.IGNORECASE), "Upload de fichier"),
 ]
 
 # Signatures connues de webshells
 _WEBSHELL_SIGNATURES = [
-    (re.compile(r'c99shell|r57shell|b374k|WSO\s+version|FilesMan|Weevely|China\s+Chopper', re.IGNORECASE), "Signature de webshell public connu"),
-    (re.compile(r'\b(?:cmd|shell|backdoor|rootkit)\b', re.IGNORECASE), "Mots-clés de contrôle à distance"),
+    (
+        re.compile(r"c99shell|r57shell|b374k|WSO\s+version|FilesMan|Weevely|China\s+Chopper", re.IGNORECASE),
+        "Signature de webshell public connu",
+    ),
+    (re.compile(r"\b(?:cmd|shell|backdoor|rootkit)\b", re.IGNORECASE), "Mots-clés de contrôle à distance"),
 ]
 
 
 class WebshellAnalyzer(BaseAnalyzer):
     """Détection et analyse de webshells PHP et scripts malveillants."""
+
     name = "webshell"
     supported_extensions = (".php", ".phtml", ".php5", ".php7", ".phps")
 
@@ -91,7 +102,11 @@ class WebshellAnalyzer(BaseAnalyzer):
                     signatures_hit.append(desc)
 
             # Évaluation du score de dangerosité
-            is_webshell = bool(findings_exec and findings_inputs) or bool(signatures_hit) or (bool(findings_exec) and bool(findings_obfuscation))
+            is_webshell = (
+                bool(findings_exec and findings_inputs)
+                or bool(signatures_hit)
+                or (bool(findings_exec) and bool(findings_obfuscation))
+            )
 
             meta: dict[str, Any] = {
                 "Taille": f"{file_size:,} octets",
@@ -112,7 +127,9 @@ class WebshellAnalyzer(BaseAnalyzer):
             if signatures_hit:
                 meta["[ALERTE] Signatures reconnues"] = ", ".join(signatures_hit)
 
-            severity = "critique" if is_webshell else ("élevé" if findings_exec else ("moyen" if findings_obfuscation else "info"))
+            severity = (
+                "critique" if is_webshell else ("élevé" if findings_exec else ("moyen" if findings_obfuscation else "info"))
+            )
             return FindingModel(
                 type="webshell_analysis",
                 file=os.path.abspath(path),

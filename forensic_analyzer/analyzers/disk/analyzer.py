@@ -1,4 +1,5 @@
 """Analyzer disque - partitions, systèmes de fichiers, MFT NTFS, ADS, ext via The Sleuth Kit."""
+
 from __future__ import annotations
 
 import datetime
@@ -35,22 +36,22 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
     """Parse un enregistrement MFT NTFS (1024 octets)."""
     if len(data) < 1024:
         return None
-    if data[0:4] != b'FILE':
+    if data[0:4] != b"FILE":
         return None
 
     try:
         record = {
-            "signature": data[0:4].decode('ascii', 'replace'),
-            "sequence_number": struct.unpack_from('<H', data, 16)[0],
-            "link_count": struct.unpack_from('<H', data, 18)[0],
-            "first_attribute_offset": struct.unpack_from('<H', data, 20)[0],
-            "flags": struct.unpack_from('<H', data, 22)[0],
-            "used_size": struct.unpack_from('<I', data, 24)[0],
-            "allocated_size": struct.unpack_from('<I', data, 28)[0],
-            "base_record": struct.unpack_from('<Q', data, 32)[0],
+            "signature": data[0:4].decode("ascii", "replace"),
+            "sequence_number": struct.unpack_from("<H", data, 16)[0],
+            "link_count": struct.unpack_from("<H", data, 18)[0],
+            "first_attribute_offset": struct.unpack_from("<H", data, 20)[0],
+            "flags": struct.unpack_from("<H", data, 22)[0],
+            "used_size": struct.unpack_from("<I", data, 24)[0],
+            "allocated_size": struct.unpack_from("<I", data, 28)[0],
+            "base_record": struct.unpack_from("<Q", data, 32)[0],
             "record_offset": offset,
         }
-        
+
         # Slack space (Espace vide à la fin de l'enregistrement MFT)
         record["mft_slack_space"] = max(0, record["allocated_size"] - record["used_size"])
 
@@ -61,10 +62,10 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
         attr_offset = record["first_attribute_offset"]
         attributes = []
         while attr_offset < min(record["used_size"], 1024) - 4:
-            attr_type = struct.unpack_from('<I', data, attr_offset)[0]
+            attr_type = struct.unpack_from("<I", data, attr_offset)[0]
             if attr_type == 0xFFFFFFFF:
                 break
-            attr_len = struct.unpack_from('<I', data, attr_offset + 4)[0]
+            attr_len = struct.unpack_from("<I", data, attr_offset + 4)[0]
             if attr_len == 0 or attr_len > 1024:
                 break
 
@@ -79,13 +80,13 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
             if attr_type == 0x10 and attr_len >= 72:
                 resident = data[attr_offset + 8]
                 if resident == 0:  # Résident
-                    content_offset = struct.unpack_from('<H', data, attr_offset + 20)[0]
+                    content_offset = struct.unpack_from("<H", data, attr_offset + 20)[0]
                     si_start = attr_offset + content_offset
                     if si_start + 32 <= len(data):
-                        created = struct.unpack_from('<Q', data, si_start)[0]
-                        modified = struct.unpack_from('<Q', data, si_start + 8)[0]
-                        mft_modified = struct.unpack_from('<Q', data, si_start + 16)[0]
-                        accessed = struct.unpack_from('<Q', data, si_start + 24)[0]
+                        created = struct.unpack_from("<Q", data, si_start)[0]
+                        modified = struct.unpack_from("<Q", data, si_start + 8)[0]
+                        mft_modified = struct.unpack_from("<Q", data, si_start + 16)[0]
+                        accessed = struct.unpack_from("<Q", data, si_start + 24)[0]
                         record["timestamps"] = {
                             "created": _windows_filetime_to_dt(created),
                             "modified": _windows_filetime_to_dt(modified),
@@ -97,19 +98,18 @@ def parse_mft_record(data: bytes, offset: int = 0) -> dict | None:
             if attr_type == 0x30:
                 resident = data[attr_offset + 8]
                 if resident == 0:
-                    content_offset = struct.unpack_from('<H', data, attr_offset + 20)[0]
+                    content_offset = struct.unpack_from("<H", data, attr_offset + 20)[0]
                     fn_start = attr_offset + content_offset
                     if fn_start + 66 <= len(data):
                         name_len = data[fn_start + 64]
                         name_ns = data[fn_start + 65]
                         name_start = fn_start + 66
                         if name_start + name_len * 2 <= len(data):
-                            filename = data[name_start:name_start + name_len * 2].decode(
-                                'utf-16-le', 'replace'
-                            )
+                            filename = data[name_start : name_start + name_len * 2].decode("utf-16-le", "replace")
                             record["filename"] = filename
-                            record["filename_namespace"] = {0: "POSIX", 1: "Win32",
-                                                            2: "DOS", 3: "Win32+DOS"}.get(name_ns, str(name_ns))
+                            record["filename_namespace"] = {0: "POSIX", 1: "Win32", 2: "DOS", 3: "Win32+DOS"}.get(
+                                name_ns, str(name_ns)
+                            )
 
             attributes.append(attr_info)
             attr_offset += attr_len
@@ -153,23 +153,24 @@ def detect_ads(path: str) -> list[dict]:
 
             offset = 0
             while True:
-                offset = data.find(b'FILE', offset)
+                offset = data.find(b"FILE", offset)
                 if offset == -1 or offset > len(data) - 1024:
                     break
-                    
-                record = parse_mft_record(data[offset:offset+1024], offset)
+
+                record = parse_mft_record(data[offset : offset + 1024], offset)
                 if record:
-                    data_attrs = [a for a in record.get("attributes", [])
-                                 if a["type"] == 0x80]
+                    data_attrs = [a for a in record.get("attributes", []) if a["type"] == 0x80]
                     if len(data_attrs) > 1:
-                        ads_found.append({
-                            "filename": record.get("filename", "?"),
-                            "record_offset": offset,
-                            "data_streams": len(data_attrs),
-                            "detail": f"ADS détecté : {len(data_attrs)} flux $DATA",
-                        })
+                        ads_found.append(
+                            {
+                                "filename": record.get("filename", "?"),
+                                "record_offset": offset,
+                                "data_streams": len(data_attrs),
+                                "detail": f"ADS détecté : {len(data_attrs)} flux $DATA",
+                            }
+                        )
                 offset += 1024
-                
+
             if isinstance(data, mmap.mmap):
                 data.close()
     except Exception as exc:
@@ -180,15 +181,15 @@ def detect_ads(path: str) -> list[dict]:
 def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
     """Heuristiques NTFS : records MFT, journaux, corbeille, LNK, Prefetch, VSS, ADS."""
     # LNK, Prefetch, VSS carving (signatures)
-    lnk_count = data.find(b'\x4c\x00\x00\x00\x01\x14\x02\x00') != -1
+    lnk_count = data.find(b"\x4c\x00\x00\x00\x01\x14\x02\x00") != -1
     if lnk_count:
         meta["Raccourcis LNK"] = "Détectés"
-        
-    prefetch_count = data.find(b'SCCA') != -1 or data.find(b'MAM\x04') != -1
+
+    prefetch_count = data.find(b"SCCA") != -1 or data.find(b"MAM\x04") != -1
     if prefetch_count:
         meta["Fichiers Prefetch"] = "Détectés"
-        
-    vss_count = data.find(b'\x38\xe2\x76\x16\x96\x65\x5f\x41') != -1
+
+    vss_count = data.find(b"\x38\xe2\x76\x16\x96\x65\x5f\x41") != -1
     if vss_count:
         meta["Shadow Copies (VSS)"] = "DÉTECTÉ"
 
@@ -197,45 +198,49 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
     logfile_found = False
     recycle_bin_items = 0
     total_mft_slack = 0
-    
+
     offset = 0
     while True:
-        offset = data.find(b'FILE', offset)
+        offset = data.find(b"FILE", offset)
         if offset == -1 or offset > len(data) - 1024:
             break
-            
-        record = parse_mft_record(data[offset:offset+1024], offset)
+
+        record = parse_mft_record(data[offset : offset + 1024], offset)
         if record:
             mft_records.append(record)
             total_mft_slack += record.get("mft_slack_space", 0)
             fname = record.get("filename", "")
-            if "$UsnJrnl" in fname: usnjrnl_found = True
-            if "$LogFile" in fname: logfile_found = True
-            if fname.startswith("$I") and len(fname) == 8: recycle_bin_items += 1
-            
+            if "$UsnJrnl" in fname:
+                usnjrnl_found = True
+            if "$LogFile" in fname:
+                logfile_found = True
+            if fname.startswith("$I") and len(fname) == 8:
+                recycle_bin_items += 1
+
         offset += 1024
 
     if mft_records:
         meta["Records MFT trouvés"] = str(len(mft_records))
         meta["Slack Space (MFT)"] = f"{total_mft_slack:,} octets (potentiel data cachée)"
-        
-        if usnjrnl_found: meta["Journal $UsnJrnl"] = "PRÉSENT"
-        if logfile_found: meta["Journal $LogFile"] = "PRÉSENT"
-        if recycle_bin_items > 0: meta["Fichiers Corbeille ($I)"] = str(recycle_bin_items)
-        
+
+        if usnjrnl_found:
+            meta["Journal $UsnJrnl"] = "PRÉSENT"
+        if logfile_found:
+            meta["Journal $LogFile"] = "PRÉSENT"
+        if recycle_bin_items > 0:
+            meta["Fichiers Corbeille ($I)"] = str(recycle_bin_items)
+
         deleted = [r for r in mft_records if not r.get("in_use")]
         meta["Fichiers supprimés (MFT)"] = str(len(deleted))
         extra["mft_records"] = mft_records[:200]
         extra["deleted_files"] = [
-            {"filename": r.get("filename", "?"),
-             "timestamps": r.get("timestamps", {})}
-            for r in deleted[:50]
+            {"filename": r.get("filename", "?"), "timestamps": r.get("timestamps", {})} for r in deleted[:50]
         ]
 
         for i, rec in enumerate(mft_records[:10]):
             fname = rec.get("filename", "?")
             status = "SUPPRIME" if not rec.get("in_use") else "actif"
-            meta[f"MFT #{i+1}"] = f"{fname} [{status}]"
+            meta[f"MFT #{i + 1}"] = f"{fname} [{status}]"
 
     ads = detect_ads(path)
     if ads:
@@ -243,17 +248,19 @@ def _scan_windows_artifacts(path: str, data, meta: dict, extra: dict) -> None:
         extra["ads"] = ads
 
 
-
 def _report_file_anomalies(entries: list, meta: dict, extra: dict, label: str) -> set[str]:
     """Fichiers système hors root et fichiers cachés ; retourne les techniques ATT&CK associées."""
     techniques: set[str] = set()
-    for title, found in (("Fichiers système hors root", bf.ownership_anomalies(entries)),
-                         ("Fichiers cachés (système / temporaires)", bf.hidden_entries(entries))):
+    for title, found in (
+        ("Fichiers système hors root", bf.ownership_anomalies(entries)),
+        ("Fichiers cachés (système / temporaires)", bf.hidden_entries(entries)),
+    ):
         if found:
             meta[f"[ALERTE] {label} : {title}"] = ", ".join(f"{e.path} (uid {e.uid})" for e in found[:15])
             extra.setdefault("file_anomalies", {})[title] = [
-                {"path": e.path, "uid": e.uid, "mode": e.mode, "created": bf.utc(e.crtime),
-                 "modified": bf.utc(e.mtime)} for e in found]
+                {"path": e.path, "uid": e.uid, "mode": e.mode, "created": bf.utc(e.crtime), "modified": bf.utc(e.mtime)}
+                for e in found
+            ]
             if title.startswith("Fichiers cachés"):
                 techniques.add("T1564.001")
     return techniques
@@ -267,8 +274,9 @@ def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, l
         meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; à générer avec : {command}"
         return set()
     try:
-        proc = subprocess.run([fls, "-r", "-m", "/", "-o", str(start_sector), path],
-                              capture_output=True, text=True, errors="replace", timeout=600)
+        proc = subprocess.run(
+            [fls, "-r", "-m", "/", "-o", str(start_sector), path], capture_output=True, text=True, errors="replace", timeout=600
+        )
     except subprocess.TimeoutExpired:
         log.warning("fls trop long sur '%s'", path)
         return set()
@@ -280,7 +288,8 @@ def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, l
     meta[f"{label} : entrées (fls)"] = f"{len(entries)} dont {sum(e.deleted for e in entries)} supprimées"
     meta[f"{label} : analyse complète"] = (
         f"installer pytsk3, ou : {command} > bodyfile.txt ; tsk_recover -a -o {start_sector} '{path}' ./root ; "
-        "puis --linux ./root --bodyfile bodyfile.txt")
+        "puis --linux ./root --bodyfile bodyfile.txt"
+    )
     return _report_file_anomalies(entries, meta, extra, label)
 
 
@@ -305,9 +314,10 @@ def _analyze_extracted(local_path: str, origin: str) -> list[FindingModel]:
 
 class DiskAnalyzer(BaseAnalyzer):
     """Analyse forensique de disque - partitions, systèmes de fichiers, MFT NTFS, ext via TSK."""
+
     name = "disk"
     heavy = True
-    supported_extensions = ('.raw', '.dd', '.img', '.001', '.E01', '.mft')
+    supported_extensions = (".raw", ".dd", ".img", ".001", ".E01", ".mft")
 
     def __init__(self, workdir: str | None = None) -> None:
         # Dossier des artefacts extraits : jamais dans le dossier des preuves
@@ -335,8 +345,7 @@ class DiskAnalyzer(BaseAnalyzer):
                 for p in structure["partitions"]:
                     fs = p["filesystem"] or "inconnu"
                     filesystems.append(fs)
-                    meta[f"Partition @{p['start']}"] = (f"{p['type']} - {fs} - "
-                                                        f"{p['sectors'] * layout.SECTOR / 2**20:,.0f} Mio")
+                    meta[f"Partition @{p['start']}"] = f"{p['type']} - {fs} - {p['sectors'] * layout.SECTOR / 2**20:,.0f} Mio"
             elif structure.get("bare_filesystem"):
                 filesystems.append(structure["bare_filesystem"])
                 meta["Système de fichiers"] = structure["bare_filesystem"] + " (sans table de partitions)"
@@ -350,7 +359,9 @@ class DiskAnalyzer(BaseAnalyzer):
                 if sb:
                     meta[f"{label} : UUID"] = sb["uuid"]
                     meta[f"{label} : dernière écriture du superbloc"] = sb["last_written"]
-                    meta[f"{label} : dernier montage"] = f"{sb['last_mounted']} sur {sb['last_mount_path'] or '?'} ({sb['state']})"
+                    meta[f"{label} : dernier montage"] = (
+                        f"{sb['last_mounted']} sur {sb['last_mount_path'] or '?'} ({sb['state']})"
+                    )
 
             techniques: set[str] = set()
             nested: list[FindingModel] = []

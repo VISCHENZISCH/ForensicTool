@@ -1,4 +1,5 @@
 """Renderer ANSI de secours utilisant le système de design pur ANSI style TheFatRat."""
+
 from __future__ import annotations
 
 from forensic_analyzer.models.finding import FindingModel, ReportModel

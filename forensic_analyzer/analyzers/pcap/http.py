@@ -4,6 +4,7 @@ La reconstruction par flux TCP fusionne les connexions qui réutilisent un port 
 ne sait pas apparier une réponse à sa requête. Ici, chaque requête est rattachée à la
 réponse suivante sur le même quadruplet IP/port, dans l'ordre du temps.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -23,7 +24,9 @@ _PASS_KEYS = ("pwd", "password", "passwd", "pass")
 _SENSITIVE_DOWNLOAD = re.compile(r"(?i)\.(sql|sql\.gz|gz|tgz|tar|zip|7z|rar|bak|dump|db|sqlite|csv|xlsx?)(\?|$)")
 _CMD_PARAMS = ("c", "cmd", "command", "exec", "e")
 _C2_PORTS = {4444, 5555, 1337, 31337, 6667, 8888, 9999, 1234, 4445, 7777}
-_AUTOMATION_UA = re.compile(r"(?i)^(axios|curl|wget|python-requests|python-urllib|go-http-client|libwww-perl|java/|okhttp|powershell|nmap|sqlmap|nikto|hydra|wpscan)")
+_AUTOMATION_UA = re.compile(
+    r"(?i)^(axios|curl|wget|python-requests|python-urllib|go-http-client|libwww-perl|java/|okhttp|powershell|nmap|sqlmap|nikto|hydra|wpscan)"
+)
 
 
 def _headers(block: bytes) -> dict[str, str]:
@@ -48,12 +51,19 @@ def extract_http_transactions(packets) -> list[dict]:
             parts = head.split(b"\r\n", 1)[0].split(b" ")
             hdr = _headers(head)
             tx = {
-                "time": float(pkt.time), "client": ip.src, "client_port": tcp.sport,
-                "server": ip.dst, "server_port": tcp.dport,
+                "time": float(pkt.time),
+                "client": ip.src,
+                "client_port": tcp.sport,
+                "server": ip.dst,
+                "server_port": tcp.dport,
                 "method": parts[0].decode("latin-1"),
                 "uri": parts[1].decode("latin-1", "replace") if len(parts) > 1 else "",
-                "host": hdr.get("host", ""), "user_agent": hdr.get("user-agent", ""),
-                "body": body[:4096], "status": None, "response_length": None, "location": "",
+                "host": hdr.get("host", ""),
+                "user_agent": hdr.get("user-agent", ""),
+                "body": body[:4096],
+                "status": None,
+                "response_length": None,
+                "location": "",
             }
             transactions.append(tx)
             pending[(ip.src, tcp.sport, ip.dst, tcp.dport)] = tx
@@ -108,44 +118,85 @@ def analyze_http_attack(transactions: list[dict]) -> dict:
             login_tries[tx["client"]].append(tx)
             # WordPress : 302 vers /wp-admin + cookie de session = mot de passe accepté
             if tx["status"] in (301, 302, 303) and (tx.get("sets_session") or "admin" in tx["location"]):
-                successes.append({"time": tx["time"], "client": tx["client"], "server": tx["server"],
-                                  "uri": path, "username": user, "password": pwd})
+                successes.append(
+                    {
+                        "time": tx["time"],
+                        "client": tx["client"],
+                        "server": tx["server"],
+                        "uri": path,
+                        "username": user,
+                        "password": pwd,
+                    }
+                )
 
         if tx["method"] in ("POST", "PUT") and b"filename=" in tx["body"]:
             name = re.search(rb'filename="([^"]+)"', tx["body"])
-            uploads.append({"time": tx["time"], "client": tx["client"], "server": tx["server"], "uri": path,
-                            "filename": name.group(1).decode("utf-8", "replace") if name else "?",
-                            "php": bool(re.search(rb"<\?php|system\(|exec\(|passthru\(|shell_exec\(", tx["body"]))})
+            uploads.append(
+                {
+                    "time": tx["time"],
+                    "client": tx["client"],
+                    "server": tx["server"],
+                    "uri": path,
+                    "filename": name.group(1).decode("utf-8", "replace") if name else "?",
+                    "php": bool(re.search(rb"<\?php|system\(|exec\(|passthru\(|shell_exec\(", tx["body"])),
+                }
+            )
 
         cmd_key = next((k for k in _CMD_PARAMS if k in query), None)
         if cmd_key and path.lower().endswith((".php", ".jsp", ".asp", ".aspx")):
-            webshell_cmds.append({"time": tx["time"], "client": tx["client"], "server": tx["server"],
-                                  "shell": path, "command": query[cmd_key][0]})
+            webshell_cmds.append(
+                {"time": tx["time"], "client": tx["client"], "server": tx["server"], "shell": path, "command": query[cmd_key][0]}
+            )
 
         if tx["method"] == "GET" and _SENSITIVE_DOWNLOAD.search(path) and tx["status"] in (200, 206, None):
-            exfiltration.append({"time": tx["time"], "client": tx["client"], "server": tx["server"],
-                                 "uri": path, "status": tx["status"], "bytes": tx["response_length"]})
+            exfiltration.append(
+                {
+                    "time": tx["time"],
+                    "client": tx["client"],
+                    "server": tx["server"],
+                    "uri": path,
+                    "status": tx["status"],
+                    "bytes": tx["response_length"],
+                }
+            )
 
         # Requête sortante d'un serveur vers une IP publique sur un port de C2 connu
         if tx["server_port"] in _C2_PORTS or re.search(r"(?i)/(beacon|checkin|gate|heartbeat)\b", path):
-            beacons.append({"time": tx["time"], "source": tx["client"], "destination": tx["server"],
-                            "port": tx["server_port"], "uri": uri[:120],
-                            "outbound": _is_public(tx["server"]) and not _is_public(tx["client"])
-                                        or tx["server_port"] in _C2_PORTS})
+            beacons.append(
+                {
+                    "time": tx["time"],
+                    "source": tx["client"],
+                    "destination": tx["server"],
+                    "port": tx["server_port"],
+                    "uri": uri[:120],
+                    "outbound": _is_public(tx["server"]) and not _is_public(tx["client"]) or tx["server_port"] in _C2_PORTS,
+                }
+            )
 
     brute_force = []
     for client, tries in login_tries.items():
         if len(tries) < 20:
             continue
         won = [s for s in successes if s["client"] == client]
-        brute_force.append({"client": client, "server": tries[0]["server"], "attempts": len(tries),
-                            "first": tries[0]["time"], "last": tries[-1]["time"],
-                            "succeeded": bool(won),
-                            "winning_credential": f"{won[0]['username']} / {won[0]['password']}" if won else ""})
+        brute_force.append(
+            {
+                "client": client,
+                "server": tries[0]["server"],
+                "attempts": len(tries),
+                "first": tries[0]["time"],
+                "last": tries[-1]["time"],
+                "succeeded": bool(won),
+                "winning_credential": f"{won[0]['username']} / {won[0]['password']}" if won else "",
+            }
+        )
 
     # Rôle des clients : un client lié à une action offensive est un attaquant, son UA aussi
-    attackers = {b["client"] for b in brute_force} | {u["client"] for u in uploads if u["php"]} | \
-                {w["client"] for w in webshell_cmds} | {e["client"] for e in exfiltration}
+    attackers = (
+        {b["client"] for b in brute_force}
+        | {u["client"] for u in uploads if u["php"]}
+        | {w["client"] for w in webshell_cmds}
+        | {e["client"] for e in exfiltration}
+    )
     user_agents: dict[str, dict] = {}
     for tx in transactions:
         ua = tx["user_agent"]
@@ -162,11 +213,24 @@ def analyze_http_attack(transactions: list[dict]) -> dict:
             verdict = "outil automatisé"
         else:
             verdict = "navigateur"
-        ua_list.append({"user_agent": entry["user_agent"], "verdict": verdict,
-                        "clients": sorted(entry["clients"])[:5], "requests": entry["requests"]})
+        ua_list.append(
+            {
+                "user_agent": entry["user_agent"],
+                "verdict": verdict,
+                "clients": sorted(entry["clients"])[:5],
+                "requests": entry["requests"],
+            }
+        )
     order = {"attaquant": 0, "outil automatisé": 1, "navigateur": 2}
     ua_list.sort(key=lambda u: (order[u["verdict"]], -u["requests"]))
 
-    return {"brute_force": brute_force, "successful_logins": successes, "uploads": uploads,
-            "webshell_commands": webshell_cmds, "exfiltration": exfiltration, "beacons": beacons,
-            "attackers": sorted(attackers), "user_agents": ua_list}
+    return {
+        "brute_force": brute_force,
+        "successful_logins": successes,
+        "uploads": uploads,
+        "webshell_commands": webshell_cmds,
+        "exfiltration": exfiltration,
+        "beacons": beacons,
+        "attackers": sorted(attackers),
+        "user_agents": ua_list,
+    }

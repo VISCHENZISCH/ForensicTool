@@ -1,4 +1,5 @@
 """Lecture directe d'image, corrélation, chronologie consolidée, désassemblage et règles."""
+
 from __future__ import annotations
 
 import json
@@ -20,6 +21,7 @@ IMPLANT = "/usr/lib/systemd/.cache/evil"
 
 # 1. Lecture directe d'une image disque (pytsk3)
 
+
 @pytest.fixture
 def ext4_image(tmp_path):
     pytest.importorskip("pytsk3")
@@ -28,8 +30,7 @@ def ext4_image(tmp_path):
     src = tmp_path / "src"
     files = {
         "etc/hostname": "victim\n",
-        "etc/systemd/system/systemd-evil.service":
-            f"[Service]\nExecStart={IMPLANT}\nRestart=always\n[Install]\nWantedBy=multi-user.target\n",
+        "etc/systemd/system/systemd-evil.service": f"[Service]\nExecStart={IMPLANT}\nRestart=always\n[Install]\nWantedBy=multi-user.target\n",
         IMPLANT.lstrip("/"): "\x7fELF not really\n",
         "var/lib/dpkg/info/base.list": "/etc/hostname\n",
         "var/lib/dpkg/info/base.md5sums": "",
@@ -111,16 +112,21 @@ def test_bare_ntfs_boot_sector_is_not_a_partition_table(tmp_path):
 
 # 2. Corrélation multi-sources
 
+
 def _finding(ftype, extra=None, **meta):
     return FindingModel(type=ftype, file=f"/case/{ftype}", metadata=meta, extra=extra or {})
 
 
 def test_correlation_links_disk_memory_and_binary():
     findings = [
-        _finding("elf_analysis", {"iocs": {"ips": ["203.0.113.50"], "paths": []}},
-                 **{"Origine (image)": f"disk.raw:{IMPLANT}"}),
-        _finding("memory", {"suspicious_processes": [{"pid": 315, "comm": "evil", "args": IMPLANT}],
-                            "remote_sockets": [{"dst": "203.0.113.50:4444", "process": "evil", "pid": 315}]}),
+        _finding("elf_analysis", {"iocs": {"ips": ["203.0.113.50"], "paths": []}}, **{"Origine (image)": f"disk.raw:{IMPLANT}"}),
+        _finding(
+            "memory",
+            {
+                "suspicious_processes": [{"pid": 315, "comm": "evil", "args": IMPLANT}],
+                "remote_sockets": [{"dst": "203.0.113.50:4444", "process": "evil", "pid": 315}],
+            },
+        ),
         _finding("linux_artifacts", {"file_anomalies": {"caches": [{"path": IMPLANT}]}}),
     ]
     corr = correlate(findings)
@@ -132,29 +138,38 @@ def test_correlation_links_disk_memory_and_binary():
 
 # 3. Chronologie consolidée
 
+
 def _ev(ts, source, desc, etype="x"):
     return {"timestamp": ts, "source": source, "event_type": etype, "description": desc}
 
 
 def test_consolidation_confidence_levels():
-    facts = consolidate([
-        _ev("2026-10-21T08:54:37.812+00:00", "journald", "Started systemd-sysupdate.service - System Update Helper."),
-        _ev("2026-10-21T08:54:37.824+00:00", "audit.log", "SERVICE_START systemd-sysupdate"),
-        _ev("2026-10-21T08:55:00+00:00", "bodyfile", "Modification de l'unité /etc/x.service", "unit_modified"),
-        _ev("2026-10-21T09:00:00+00:00", "journald", "System is powering down."),
-    ])
+    facts = consolidate(
+        [
+            _ev("2026-10-21T08:54:37.812+00:00", "journald", "Started systemd-sysupdate.service - System Update Helper."),
+            _ev("2026-10-21T08:54:37.824+00:00", "audit.log", "SERVICE_START systemd-sysupdate"),
+            _ev("2026-10-21T08:55:00+00:00", "bodyfile", "Modification de l'unité /etc/x.service", "unit_modified"),
+            _ev("2026-10-21T09:00:00+00:00", "journald", "System is powering down."),
+        ]
+    )
     assert [(f["confidence"], f["sources"]) for f in facts] == [
-        ("élevée", ["audit.log", "journald"]), ("faible", ["bodyfile"]), ("moyenne", ["journald"])]
+        ("élevée", ["audit.log", "journald"]),
+        ("faible", ["bodyfile"]),
+        ("moyenne", ["journald"]),
+    ]
 
 
 def test_consolidation_does_not_chain_beyond_window():
-    events = [_ev(f"2026-10-21T08:00:0{i}+00:00", src, "session root ttyS0")
-              for i, src in enumerate(("wtmp", "audit.log", "journald", "memory"))]
+    events = [
+        _ev(f"2026-10-21T08:00:0{i}+00:00", src, "session root ttyS0")
+        for i, src in enumerate(("wtmp", "audit.log", "journald", "memory"))
+    ]
     facts = consolidate(events, window=2.0)
     assert len(facts) == 2  # 0 s → 2 s, puis un nouveau fait à 3 s
 
 
 # 4. Désassemblage
+
 
 def _x86_beacon():
     """main() : inet_pton(AF_INET, "203.0.113.50", ...) ; sockaddr {AF_INET, 4444} ; connect ; sleep(300)."""
@@ -164,12 +179,12 @@ def _x86_beacon():
     def call(target):
         code.extend(b"\xe8" + struct.pack("<i", target - (base + len(code) + 5)))
 
-    code.extend(b"\xbd" + struct.pack("<I", 0x5C110002))                          # mov ebp, sockaddr
+    code.extend(b"\xbd" + struct.pack("<I", 0x5C110002))  # mov ebp, sockaddr
     code.extend(b"\x48\x8d\x35" + struct.pack("<i", string_at - (base + len(code) + 7)))  # lea rsi, [rip+str]
-    code.extend(b"\xbf\x02\x00\x00\x00")                                          # mov edi, 2
+    code.extend(b"\xbf\x02\x00\x00\x00")  # mov edi, 2
     call(inet_pton)
     call(connect)
-    code.extend(b"\xbf" + struct.pack("<I", 300))                                 # mov edi, 300
+    code.extend(b"\xbf" + struct.pack("<I", 300))  # mov edi, 300
     call(sleep)
     names = {inet_pton: "__inet_pton", connect: "__libc_connect", sleep: "sleep"}
     return base, bytes(code), names, string_at
@@ -196,15 +211,22 @@ def test_disassembly_recovers_beacon_parameters():
 
 # 5. Règles de détection et STIX
 
+
 def test_rules_generation_compiles_and_matches(tmp_path):
     yara = pytest.importorskip("yara")
-    elf = _finding("elf_analysis", {
-        "iocs": {"ips": ["203.0.113.50"], "paths": ["/tmp/.X11-unix/.lock"]},
-        "network": [{"host": "203.0.113.50", "port": 4444}],
-        "mitre": [{"id": "T1571", "name": "Non-Standard Port", "tactic": "C2"}],
-    }, **{"[ALERTE] Comportement": "Balise", "SHA-256": "a" * 64, "Origine (image)": f"disk.raw:{IMPLANT}"})
-    unit = _finding("linux_artifacts", {"systemd": {"units": [{
-        "suspicious": True, "unit": "/etc/systemd/system/systemd-evil.service", "binary": IMPLANT}]}})
+    elf = _finding(
+        "elf_analysis",
+        {
+            "iocs": {"ips": ["203.0.113.50"], "paths": ["/tmp/.X11-unix/.lock"]},
+            "network": [{"host": "203.0.113.50", "port": 4444}],
+            "mitre": [{"id": "T1571", "name": "Non-Standard Port", "tactic": "C2"}],
+        },
+        **{"[ALERTE] Comportement": "Balise", "SHA-256": "a" * 64, "Origine (image)": f"disk.raw:{IMPLANT}"},
+    )
+    unit = _finding(
+        "linux_artifacts",
+        {"systemd": {"units": [{"suspicious": True, "unit": "/etc/systemd/system/systemd-evil.service", "binary": IMPLANT}]}},
+    )
 
     out = DefenseRulesGenerator().generate(ReportModel.from_findings([elf, unit]), str(tmp_path))
 
@@ -217,6 +239,5 @@ def test_rules_generation_compiles_and_matches(tmp_path):
 
     bundle = json.load(open(out["stix"]))
     ids = {o["id"] for o in bundle["objects"]}
-    assert all(o["source_ref"] in ids and o["target_ref"] in ids
-               for o in bundle["objects"] if o["type"] == "relationship")
+    assert all(o["source_ref"] in ids and o["target_ref"] in ids for o in bundle["objects"] if o["type"] == "relationship")
     assert any("dst_port = 4444" in o.get("pattern", "") for o in bundle["objects"])

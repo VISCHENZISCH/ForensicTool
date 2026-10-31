@@ -2,6 +2,7 @@
 ui.py - Système de design terminal pur ANSI pour Forensic Analyzer.
 Lignes et cadres sarcelle, titres cyan, valeurs claires ; rouge et orange réservés aux alertes.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -14,45 +15,45 @@ import textwrap
 from forensic_analyzer.utils.terminal import neutralize, neutralize_data
 
 
-
 class C:
     """Palette de couleurs sémantiques propres."""
-    C_IP       = "\033[38;5;39m"   # Bleu ciel pour IPs
-    C_MAC      = "\033[38;5;141m"  # Violet clair pour MACs
-    C_HOST     = "\033[38;5;220m"  # Or/Jaune pour Hostnames
-    C_USER     = "\033[38;5;208m"  # Orange pour Utilisateurs
-    C_DNS      = "\033[38;5;75m"   # Bleu indigo pour DNS/URLs
-    C_PARAM    = "\033[38;5;45m"   # Cyan/Vert pour Paramètres/Clés
-    C_RESULT   = "\033[38;5;253m"  # Blanc/Gris clair pour Résultats
-    C_DANGER   = "\033[38;5;196m"  # Rouge vif pour Alertes/Malwares
-    C_STRUCT   = "\033[38;5;30m"   # Sarcelle sombre : ponctuation (":", parenthèses)
-    C_LINE     = "\033[38;5;37m"   # Sarcelle : barres, cadres, prompt
-    C_WARN     = "\033[38;5;208m"  # Orange : sévérité intermédiaire
-    
+
+    C_IP = "\033[38;5;39m"  # Bleu ciel pour IPs
+    C_MAC = "\033[38;5;141m"  # Violet clair pour MACs
+    C_HOST = "\033[38;5;220m"  # Or/Jaune pour Hostnames
+    C_USER = "\033[38;5;208m"  # Orange pour Utilisateurs
+    C_DNS = "\033[38;5;75m"  # Bleu indigo pour DNS/URLs
+    C_PARAM = "\033[38;5;45m"  # Cyan/Vert pour Paramètres/Clés
+    C_RESULT = "\033[38;5;253m"  # Blanc/Gris clair pour Résultats
+    C_DANGER = "\033[38;5;196m"  # Rouge vif pour Alertes/Malwares
+    C_STRUCT = "\033[38;5;30m"  # Sarcelle sombre : ponctuation (":", parenthèses)
+    C_LINE = "\033[38;5;37m"  # Sarcelle : barres, cadres, prompt
+    C_WARN = "\033[38;5;208m"  # Orange : sévérité intermédiaire
+
     # Matrix Colors (Pour la bannière historique)
     MG1 = "\033[38;5;22m"  # Très sombre
     MG2 = "\033[38;5;28m"  # Sombre
     MG3 = "\033[38;5;34m"  # Hacker Green
     MG4 = "\033[38;5;40m"  # Vert clair
     MG5 = "\033[38;5;46m"  # Émeraude vif
-    MG6 = "\033[38;5;118m" # Vert-Jaune intense
+    MG6 = "\033[38;5;118m"  # Vert-Jaune intense
 
     # Couleurs de base existantes (pour compatibilité)
-    R   = C_LINE
-    G   = "\033[38;5;46m"
-    Y   = "\033[38;5;226m"
-    B   = "\033[38;5;33m"
-    VB  = "\033[38;5;45m"
-    M   = "\033[38;5;201m"
-    P   = "\033[38;5;141m"
-    W   = "\033[38;5;253m"
-    D   = "\033[38;5;73m"
-    HR  = C_DANGER
-    HY  = Y
+    R = C_LINE
+    G = "\033[38;5;46m"
+    Y = "\033[38;5;226m"
+    B = "\033[38;5;33m"
+    VB = "\033[38;5;45m"
+    M = "\033[38;5;201m"
+    P = "\033[38;5;141m"
+    W = "\033[38;5;253m"
+    D = "\033[38;5;73m"
+    HR = C_DANGER
+    HY = Y
 
-    BD  = "\033[1m"
+    BD = "\033[1m"
     STRIKE = "\033[2;9m"
-    RS  = "\033[0m"
+    RS = "\033[0m"
 
 
 def c(color: str, text: str = "", bold: bool = False) -> str:
@@ -74,7 +75,7 @@ def _width() -> int:
 
 def clear_screen() -> None:
     """Efface complètement le terminal."""
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 # Bannière ASCII Art
@@ -93,6 +94,7 @@ BANNER = f"""
 {c(C.MG2, "  jmp push pop ret xor test cmp mov lea call syscall nop hlt out in 00", bold=True)}
 """
 
+
 def banner() -> None:
     """Efface l'écran et affiche le bandeau principal."""
     clear_screen()
@@ -101,11 +103,10 @@ def banner() -> None:
 
     print(f"{MARGIN}                      {c(C.HY, '© 2026 Félix TOVIGNAN')}")
     print(f"{MARGIN}         {c(C.G, 'https://github.com/VISCHENZISCH/ForensicTool.git')}")
-  
-
 
 
 # Menu principal
+
 
 def menu(unavailable: frozenset[str] = frozenset()) -> None:
     """Affiche le menu ; les options dont le module n'a pas pu être chargé sont grisées."""
@@ -181,6 +182,7 @@ def export_menu() -> None:
     print(f"{MARGIN}    {C.G}[J]{C.RS}  {C.W}Export JSON{C.RS}")
     print(f"{MARGIN}    {C.G}[H]{C.RS}  {C.W}Export HTML (interactif){C.RS}")
     print(f"{MARGIN}    {C.G}[C]{C.RS}  {C.W}Export CSV de la timeline{C.RS}")
+    print(f"{MARGIN}    {C.G}[T]{C.RS}  {C.W}Chronologie Timesketch (JSONL){C.RS}")
     print(f"{MARGIN}    {C.G}[P]{C.RS}  {C.W}Export PDF{C.RS}")
     print(f"{MARGIN}    {C.G}[G]{C.RS}  {C.W}Graphe de corrélation (HTML){C.RS}")
     print(f"{MARGIN}    {C.G}[S]{C.RS}  {C.W}Règles YARA / Suricata / Sigma + STIX 2.1{C.RS}")
@@ -190,21 +192,15 @@ def export_menu() -> None:
 
 # Prompt
 
+
 def prompt(label: str = "forensic-analyzer") -> str:
     """Affiche le prompt style hacker ┌─[forensic-analyzer]─[label] └──╼ $"""
     try:
-        line1 = (
-            f"{MARGIN}"
-            f"{C.R}┌─[{C.RS}"
-            f"{C.HR}{C.BD}forensic-analyzer{C.RS}"
-            f"{C.R}]─[{C.RS}"
-            f"{C.HR}{label}{C.RS}"
-            f"{C.R}]{C.RS}"
-        )
+        line1 = f"{MARGIN}{C.R}┌─[{C.RS}{C.HR}{C.BD}forensic-analyzer{C.RS}{C.R}]─[{C.RS}{C.HR}{label}{C.RS}{C.R}]{C.RS}"
         line2 = f"{MARGIN}{C.R}└──╼{C.RS} {C.W}${C.RS} {C.MG4}"
         print(line1)
         res = input(line2).strip()
-        print(C.RS, end="") # Reset couleur après la saisie
+        print(C.RS, end="")  # Reset couleur après la saisie
         return res
     except (EOFError, KeyboardInterrupt):
         return ""
@@ -238,6 +234,7 @@ def prompt_input(label: str, required: bool = True) -> str | None:
 
 # Messages
 
+
 def info(msg: str) -> None:
     print(f"{MARGIN}{C.VB}[*]{C.RS} {C.W}{neutralize(msg)}{C.RS}")
 
@@ -261,47 +258,113 @@ def status(msg: str) -> None:
 # Affichage des résultats
 
 MODULE_TAGS = {
-    "pdf": "PDF", "pdf_analysis": "PDF", "office_analysis": "DOC", "image": "IMG", "gps": "GPS", "strings": "STR",
-    "firefox_history": "FHX", "firefox_places": "FHX", "firefox_cookies": "FCK",
-    "log_analysis": "LOG", "webshell_analysis": "WSH", "network_recon": "NMP", "ids_alerts": "IDS",
+    "pdf": "PDF",
+    "pdf_analysis": "PDF",
+    "office_analysis": "DOC",
+    "image": "IMG",
+    "gps": "GPS",
+    "strings": "STR",
+    "firefox_history": "FHX",
+    "firefox_places": "FHX",
+    "firefox_cookies": "FCK",
+    "log_analysis": "LOG",
+    "webshell_analysis": "WSH",
+    "network_recon": "NMP",
+    "ids_alerts": "IDS",
     "stego_audio": "SGA",
-    "stego": "SGO", "carving": "CRV", "pcap": "NET", "memory": "MEM",
-    "disk": "DSK", "evtx": "EVT", "registry": "REG",
-    "linux_artifacts": "LNX", "yara": "YRA", "ioc": "IOC", "timeline": "TML",
-    "pe_analysis": "MAL", "malware_analysis": "MAL", "chromium_artifacts": "WEB", 
-    "prefetch": "PF", "lnk_shortcut": "LNK", "elf_analysis": "ELF", "evidence_integrity": "INT", "correlation": "COR"
+    "stego": "SGO",
+    "carving": "CRV",
+    "pcap": "NET",
+    "memory": "MEM",
+    "disk": "DSK",
+    "evtx": "EVT",
+    "registry": "REG",
+    "linux_artifacts": "LNX",
+    "yara": "YRA",
+    "ioc": "IOC",
+    "timeline": "TML",
+    "pe_analysis": "MAL",
+    "malware_analysis": "MAL",
+    "chromium_artifacts": "WEB",
+    "prefetch": "PF",
+    "lnk_shortcut": "LNK",
+    "elf_analysis": "ELF",
+    "evidence_integrity": "INT",
+    "correlation": "COR",
 }
 
 MODULE_NAMES = {
-    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "office_analysis": "Documents Office", "image": "Analyse d'image / EXIF",
-    "gps": "Coordonnées GPS", "strings": "Extraction Strings",
-    "firefox_history": "Historique Firefox", "firefox_places": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
-    "log_analysis": "Journaux Web / Système", "webshell_analysis": "Détection Webshell",
-    "network_recon": "Rapport Nmap", "ids_alerts": "Alertes IDS", "stego_audio": "Stéganographie audio",
-    "stego": "Stéganographie", "carving": "File Carving",
-    "pcap": "Analyse réseau PCAP", "memory": "Analyse mémoire",
-    "disk": "Forensique disque", "evtx": "Windows Event Logs",
-    "registry": "Registre Windows", "linux_artifacts": "Artefacts Linux",
-    "yara": "Scan YARA", "ioc": "Extraction IOC", "timeline": "Timeline DFIR",
-    "pe_analysis": "Triage Malware (PE)", "malware_analysis": "Triage Malware (PE)", "chromium_artifacts": "Artefacts Chromium",
-    "prefetch": "Exécution (Prefetch)", "lnk_shortcut": "Raccourci Windows (LNK)",
-    "elf_analysis": "Binaire Linux (ELF)", "evidence_integrity": "Intégrité des preuves",
-    "correlation": "Corrélation multi-sources"
+    "pdf": "Analyse PDF",
+    "pdf_analysis": "Analyse PDF",
+    "office_analysis": "Documents Office",
+    "image": "Analyse d'image / EXIF",
+    "gps": "Coordonnées GPS",
+    "strings": "Extraction Strings",
+    "firefox_history": "Historique Firefox",
+    "firefox_places": "Historique Firefox",
+    "firefox_cookies": "Cookies Firefox",
+    "log_analysis": "Journaux Web / Système",
+    "webshell_analysis": "Détection Webshell",
+    "network_recon": "Rapport Nmap",
+    "ids_alerts": "Alertes IDS",
+    "stego_audio": "Stéganographie audio",
+    "stego": "Stéganographie",
+    "carving": "File Carving",
+    "pcap": "Analyse réseau PCAP",
+    "memory": "Analyse mémoire",
+    "disk": "Forensique disque",
+    "evtx": "Windows Event Logs",
+    "registry": "Registre Windows",
+    "linux_artifacts": "Artefacts Linux",
+    "yara": "Scan YARA",
+    "ioc": "Extraction IOC",
+    "timeline": "Timeline DFIR",
+    "pe_analysis": "Triage Malware (PE)",
+    "malware_analysis": "Triage Malware (PE)",
+    "chromium_artifacts": "Artefacts Chromium",
+    "prefetch": "Exécution (Prefetch)",
+    "lnk_shortcut": "Raccourci Windows (LNK)",
+    "elf_analysis": "Binaire Linux (ELF)",
+    "evidence_integrity": "Intégrité des preuves",
+    "correlation": "Corrélation multi-sources",
 }
 
 MODULE_COLORS = {
-    "pdf": "\033[38;5;203m", "pdf_analysis": "\033[38;5;203m", "office_analysis": "\033[38;5;33m", "image": C.Y, "gps": C.B, "strings": C.D,
-    "firefox_history": C.M, "firefox_places": C.M, "firefox_cookies": C.P,
-    "log_analysis": "\033[38;5;214m", "webshell_analysis": "\033[38;5;160m", "network_recon": C.VB,
-    "ids_alerts": C.HR, "stego_audio": "\033[38;5;198m",
-    "stego": "\033[38;5;198m", "carving": "\033[38;5;208m", 
-    "pcap": C.VB, "memory": "\033[38;5;111m",
-    "disk": "\033[38;5;240m", "evtx": "\033[38;5;45m", "registry": "\033[38;5;99m",
-    "linux_artifacts": "\033[38;5;214m", "yara": C.HR, "ioc": C.HR, "timeline": C.G,
-    "pe_analysis": "\033[38;5;160m", "malware_analysis": "\033[38;5;160m", "chromium_artifacts": "\033[38;5;33m", 
-    "prefetch": "\033[38;5;184m", "lnk_shortcut": "\033[38;5;136m",
-    "elf_analysis": "\033[38;5;160m", "evidence_integrity": C.G, "correlation": C.HR
+    "pdf": "\033[38;5;203m",
+    "pdf_analysis": "\033[38;5;203m",
+    "office_analysis": "\033[38;5;33m",
+    "image": C.Y,
+    "gps": C.B,
+    "strings": C.D,
+    "firefox_history": C.M,
+    "firefox_places": C.M,
+    "firefox_cookies": C.P,
+    "log_analysis": "\033[38;5;214m",
+    "webshell_analysis": "\033[38;5;160m",
+    "network_recon": C.VB,
+    "ids_alerts": C.HR,
+    "stego_audio": "\033[38;5;198m",
+    "stego": "\033[38;5;198m",
+    "carving": "\033[38;5;208m",
+    "pcap": C.VB,
+    "memory": "\033[38;5;111m",
+    "disk": "\033[38;5;240m",
+    "evtx": "\033[38;5;45m",
+    "registry": "\033[38;5;99m",
+    "linux_artifacts": "\033[38;5;214m",
+    "yara": C.HR,
+    "ioc": C.HR,
+    "timeline": C.G,
+    "pe_analysis": "\033[38;5;160m",
+    "malware_analysis": "\033[38;5;160m",
+    "chromium_artifacts": "\033[38;5;33m",
+    "prefetch": "\033[38;5;184m",
+    "lnk_shortcut": "\033[38;5;136m",
+    "elf_analysis": "\033[38;5;160m",
+    "evidence_integrity": C.G,
+    "correlation": C.HR,
 }
+
 
 def separator(label: str = "", custom_color: str = C.G) -> None:
     """Séparateur double-ligne style hacker avec taille fixe de 85."""
@@ -344,9 +407,9 @@ def kv(key: str, value, indent: int = 3, tone: str | None = None) -> None:
         lines = [""]
 
     def colorize(t):
-        t = re.sub(r'\[([^\]]+)\]', f'[{C.C_DNS}\\1{C.C_RESULT}]', t)
-        t = re.sub(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', f'{C.C_IP}\\1{C.C_RESULT}', t)
-        t = re.sub(r'\((\d+)\)', f'{C.C_STRUCT}({C.C_USER}\\1{C.C_STRUCT}){C.C_RESULT}', t)
+        t = re.sub(r"\[([^\]]+)\]", f"[{C.C_DNS}\\1{C.C_RESULT}]", t)
+        t = re.sub(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", f"{C.C_IP}\\1{C.C_RESULT}", t)
+        t = re.sub(r"\((\d+)\)", f"{C.C_STRUCT}({C.C_USER}\\1{C.C_STRUCT}){C.C_RESULT}", t)
         return t
 
     severity = _TONES.get(tone, "") if tone else _severity(key, val_str)
@@ -361,6 +424,7 @@ def kv(key: str, value, indent: int = 3, tone: str | None = None) -> None:
     print(f"{MARGIN}{pad} {severity or C.C_PARAM}{key:<28}{C.RS} {C.C_STRUCT}:{C.RS} {value_color}{shown[0]}{C.RS}")
     for line in shown[1:]:
         print(f"{MARGIN}{' ' * offset}{value_color}{line}{C.RS}")
+
 
 # Couleur des lignes seulement : la gravité d'un résultat est son champ severity, pas ce texte
 # La couleur suit les marques posées par les modules ([ALERTE], [ATTENTION]) ou le champ severity,
@@ -377,29 +441,22 @@ def _severity(key: str, value: str) -> str:
     return ""
 
 
-def render_finding(finding) -> None:
-    """Rendu complet d'un finding dans le terminal."""
-    finding = finding.model_copy(update={"file": neutralize(finding.file),
-                                         "metadata": neutralize_data(finding.metadata),
-                                         "extra": neutralize_data(finding.extra or {})})
-    fname = os.path.basename(finding.file)
-    finding_header(finding.type, fname)
+# Données détaillées par type de module : une fonction chacune, choisie par _EXTRA_RENDERERS
 
-    if finding.severity:
-        kv("Gravité", finding.severity.capitalize(), tone=finding.severity)
-    for k, v in finding.metadata.items():
-        kv(k, v)
 
-    extra = finding.extra or {}
-
-    if finding.type == "strings" and "strings" in extra:
+def _extra_strings(finding_type: str, extra: dict) -> None:
+    """Chaînes extraites."""
+    if finding_type == "strings" and "strings" in extra:
         strings = extra["strings"]
         print()
         separator("Chaînes extraites")
         for i, s in enumerate(strings, 1):
             print(f"{MARGIN}    {C.D}{i:>4}.{C.RS} {C.W}{s}{C.RS}")
 
-    elif finding.type in ("firefox_history", "firefox_places") and (extra.get("history") or extra.get("entries")):
+
+def _extra_history(finding_type: str, extra: dict) -> None:
+    """Historique Firefox."""
+    if finding_type in ("firefox_history", "firefox_places") and (extra.get("history") or extra.get("entries")):
         entries = extra.get("history") or extra.get("entries")
         if entries:
             print()
@@ -409,7 +466,10 @@ def render_finding(finding) -> None:
                 url = e.get("url", "")
                 print(f"{MARGIN}    {C.D}{date:<22}{C.RS} {C.C_DNS}{url}{C.RS}")
 
-    elif finding.type == "yara" and "matches" in extra:
+
+def _extra_yara(finding_type: str, extra: dict) -> None:
+    """Correspondances YARA."""
+    if finding_type == "yara" and "matches" in extra:
         matches = extra["matches"]
         if matches:
             print()
@@ -417,7 +477,10 @@ def render_finding(finding) -> None:
             for rule in matches:
                 print(f"{MARGIN}    {C.HR}[!]{C.RS} {C.W}{rule}{C.RS}")
 
-    elif finding.type == "pe_analysis":
+
+def _extra_pe(finding_type: str, extra: dict) -> None:
+    """Sections et imports PE."""
+    if finding_type == "pe_analysis":
         if "sections_pe" in extra and extra["sections_pe"]:
             print()
             separator("Sections PE")
@@ -426,35 +489,42 @@ def render_finding(finding) -> None:
                 ent = sec.get("Entropie", "")
                 size = sec.get("Taille Virtuelle", 0)
                 color = C.HR if "CRITIQUE" in ent else C.G
-                print(f"{MARGIN}    {color}{name:<10}{C.RS} {C.HY}Entropie:{C.RS} {C.W}{ent:<15}{C.RS} {C.HY}Taille:{C.RS} {C.W}{size}{C.RS}")
+                print(
+                    f"{MARGIN}    {color}{name:<10}{C.RS} {C.HY}Entropie:{C.RS} {C.W}{ent:<15}{C.RS} {C.HY}Taille:{C.RS} {C.W}{size}{C.RS}"
+                )
         if "dll_imports" in extra and extra["dll_imports"]:
             print()
             separator("Imports DLL")
             for dll in extra["dll_imports"]:
                 print(f"{MARGIN}    {C.G}DLL{C.HY}:{C.RS} {C.W}{dll}{C.RS}")
 
-    elif finding.type == "chromium_artifacts":
+
+def _extra_chromium(finding_type: str, extra: dict) -> None:
+    """Téléchargements et URLs Chromium."""
+    if finding_type == "chromium_artifacts":
         if "chromium_downloads" in extra and extra["chromium_downloads"]:
             print()
             separator("Téléchargements")
             for d in extra["chromium_downloads"]:
-                color = C.HR if d.get('danger_type') else C.G
-                fname = str(d.get('fichier', ''))[:50]
+                color = C.HR if d.get("danger_type") else C.G
+                fname = str(d.get("fichier", ""))[:50]
                 print(f"{MARGIN}    {color}{fname:<50}{C.RS} {C.HY}Taille:{C.RS} {C.W}{d.get('taille_octets', 0)}{C.RS}")
         if "chromium_urls" in extra and extra["chromium_urls"]:
             print()
             separator("Historique URLs")
             for u in extra["chromium_urls"]:
-                url = str(u.get('url', ''))[:65]
+                url = str(u.get("url", ""))[:65]
                 print(f"{MARGIN}    {C.VB}{u.get('visites', 0):>4}x{C.RS} {C.C_DNS}{url}{C.RS}")
 
-    elif finding.type == "firefox_cookies" and extra.get("domains"):
+
+def _extra_cookies(finding_type: str, extra: dict) -> None:
+    """Cookies Firefox."""
+    if finding_type == "firefox_cookies" and extra.get("domains"):
         print()
         separator("Cookies par domaine")
         for host, info in list(extra["domains"].items())[:30]:
             print(f"{MARGIN}    {C.C_HOST}{host:<35}{C.RS} {C.C_RESULT}{str(info)[:60]}{C.RS}")
-
-    elif finding.type == "firefox_cookies" and "entries" in extra:
+    elif finding_type == "firefox_cookies" and "entries" in extra:
         entries = extra["entries"]
         if entries:
             print()
@@ -463,9 +533,14 @@ def render_finding(finding) -> None:
                 name = e.get("name", "")
                 host = e.get("host", "")
                 val = e.get("value", "")[:40]
-                print(f"{MARGIN}    {C.C_PARAM}{name}{C.RS} {C.C_STRUCT}@{C.RS} {C.C_HOST}{host:<30}{C.RS} {C.C_RESULT}{val}{C.RS}")
+                print(
+                    f"{MARGIN}    {C.C_PARAM}{name}{C.RS} {C.C_STRUCT}@{C.RS} {C.C_HOST}{host:<30}{C.RS} {C.C_RESULT}{val}{C.RS}"
+                )
 
-    elif finding.type == "pcap":
+
+def _extra_pcap(finding_type: str, extra: dict) -> None:
+    """Identifiants, hôtes et User-Agents PCAP."""
+    if finding_type == "pcap":
         creds = extra.get("credentials", [])
         if creds:
             print()
@@ -474,10 +549,13 @@ def render_finding(finding) -> None:
                 proto = c_item.get("protocol", "?")
                 who = f"{c_item.get('username', c_item.get('user', '?'))} / {c_item.get('password', '?')}"
                 where = " -> ".join(x for x in (c_item.get("client"), c_item.get("host")) if x)
-                when = (datetime.datetime.fromtimestamp(c_item["time"], datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-                        if isinstance(c_item.get("time"), (int, float)) else "")
+                when = (
+                    datetime.datetime.fromtimestamp(c_item["time"], datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                    if isinstance(c_item.get("time"), (int, float))
+                    else ""
+                )
                 print(f"{MARGIN}    {C.HR}{who}{C.RS}  {C.G}{proto}{C.RS}  {C.C_IP}{where}{C.RS}  {C.D}{when}{C.RS}")
-                
+
         hosts = extra.get("host_identities", {})
         if hosts:
             print()
@@ -488,46 +566,62 @@ def render_finding(finding) -> None:
                     macs = ", ".join(h.get("mac", []))
                     names = ", ".join(h.get("hostnames", []))
                     users = ", ".join(h.get("users", []))
-                    print(f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{macs:<18}{C.RS} {C.C_HOST}{names:<20}{C.RS} {C.C_USER}{users}{C.RS}")
+                    print(
+                        f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{macs:<18}{C.RS} {C.C_HOST}{names:<20}{C.RS} {C.C_USER}{users}{C.RS}"
+                    )
             else:
                 for h in hosts:
                     ip = h.get("ip", "?")
                     mac = h.get("mac", "?")
                     name = h.get("hostname", "?")
                     user = h.get("user", "")
-                    print(f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{mac:<18}{C.RS} {C.C_HOST}{name:<20}{C.RS} {C.C_USER}{user}{C.RS}")
+                    print(
+                        f"{MARGIN}    {C.C_IP}{ip:<15}{C.RS} {C.C_MAC}{mac:<18}{C.RS} {C.C_HOST}{name:<20}{C.RS} {C.C_USER}{user}{C.RS}"
+                    )
 
         ranked = (extra.get("http_attack") or {}).get("user_agents", [])
         if ranked:
             print()
             separator("User-Agents par rôle")
-            marks = {"attaquant": f"{C.C_DANGER}[!] attaquant       ", "outil automatisé": f"{C.Y}[~] outil automatisé",
-                     "navigateur": f"{C.G}[ ] navigateur      "}
+            marks = {
+                "attaquant": f"{C.C_DANGER}[!] attaquant       ",
+                "outil automatisé": f"{C.Y}[~] outil automatisé",
+                "navigateur": f"{C.G}[ ] navigateur      ",
+            }
             for ua in ranked[:10]:
                 clients = ", ".join(ua.get("clients", [])[:3])
-                print(f"{MARGIN}    {marks.get(ua['verdict'], '')}{C.RS} {C.C_RESULT}{ua['user_agent'][:45]:<45}{C.RS} "
-                      f"{C.D}{ua.get('requests', 0)} req. ({clients}){C.RS}")
+                print(
+                    f"{MARGIN}    {marks.get(ua['verdict'], '')}{C.RS} {C.C_RESULT}{ua['user_agent'][:45]:<45}{C.RS} "
+                    f"{C.D}{ua.get('requests', 0)} req. ({clients}){C.RS}"
+                )
 
-    elif finding.type == "ioc" and "iocs" in extra:
+
+def _extra_iocs(finding_type: str, extra: dict) -> None:
+    """IOC extraits."""
+    if finding_type == "ioc" and "iocs" in extra:
         iocs = extra["iocs"]
         if isinstance(iocs, dict):
             print()
             separator("IOC détectés")
             for ioc_type, items in iocs.items():
-                for item in (items if isinstance(items, list) else [items]):
+                for item in items if isinstance(items, list) else [items]:
                     print(f"{MARGIN}    {C.G}{ioc_type:<14}{C.RS} {C.W}{item}{C.RS}")
 
-    elif finding.type == "timeline" and extra.get("facts"):
+
+def _extra_timeline(finding_type: str, extra: dict) -> None:
+    """Chronologie consolidée ou brute."""
+    if finding_type == "timeline" and extra.get("facts"):
         print()
         separator("Chronologie consolidée (confiance)")
         marks = {"élevée": f"{C.G}ÉLEVÉE ", "moyenne": f"{C.Y}MOYENNE", "faible": f"{C.D}FAIBLE "}
         for fact in extra["facts"]:
             ts = fact["timestamp"].replace("+00:00", "Z")[:23]
             sources = "+".join(fact["sources"])[:24]
-            print(f"{MARGIN}    {C.D}{ts:<23}{C.RS} {marks.get(fact['confidence'], '')}{C.RS} "
-                  f"{C.G}{sources:<24}{C.RS} {C.W}{fact['description'][:60]}{C.RS}")
-
-    elif finding.type == "timeline" and "events" in extra:
+            print(
+                f"{MARGIN}    {C.D}{ts:<23}{C.RS} {marks.get(fact['confidence'], '')}{C.RS} "
+                f"{C.G}{sources:<24}{C.RS} {C.W}{fact['description'][:60]}{C.RS}"
+            )
+    elif finding_type == "timeline" and "events" in extra:
         events = extra["events"]
         if events:
             print()
@@ -539,7 +633,10 @@ def render_finding(finding) -> None:
                 ts = ts.replace("+00:00", "Z")[:23]
                 print(f"{MARGIN}    {C.D}{ts:<23}{C.RS} {C.G}{src:<9}{C.RS} {C.W}{detail}{C.RS}")
 
-    elif finding.type in ("carving", "stego"):
+
+def _extra_carved(finding_type: str, extra: dict) -> None:
+    """Fichiers embarqués, polyglottes et données LSB."""
+    if finding_type in ("carving", "stego"):
         for extra_key in ("embedded_files", "polyglots", "lsb_data", "matches"):
             items = extra.get(extra_key)
             if items and isinstance(items, list):
@@ -552,6 +649,43 @@ def render_finding(finding) -> None:
                     else:
                         print(f"{MARGIN}    {C.W}{item}{C.RS}")
 
+
+_EXTRA_RENDERERS = {
+    "strings": _extra_strings,
+    "firefox_history": _extra_history,
+    "firefox_places": _extra_history,
+    "yara": _extra_yara,
+    "pe_analysis": _extra_pe,
+    "chromium_artifacts": _extra_chromium,
+    "firefox_cookies": _extra_cookies,
+    "pcap": _extra_pcap,
+    "ioc": _extra_iocs,
+    "timeline": _extra_timeline,
+    "carving": _extra_carved,
+    "stego": _extra_carved,
+}
+
+
+def render_finding(finding) -> None:
+    """Rendu complet d'un finding dans le terminal."""
+    finding = finding.model_copy(
+        update={
+            "file": neutralize(finding.file),
+            "metadata": neutralize_data(finding.metadata),
+            "extra": neutralize_data(finding.extra or {}),
+        }
+    )
+    fname = os.path.basename(finding.file)
+    finding_header(finding.type, fname)
+
+    if finding.severity:
+        kv("Gravité", finding.severity.capitalize(), tone=finding.severity)
+    for k, v in finding.metadata.items():
+        kv(k, v)
+
+    renderer = _EXTRA_RENDERERS.get(finding.type)
+    if renderer:  # données détaillées propres au module (tableaux, listes)
+        renderer(finding.type, finding.extra or {})
     print()
 
 
@@ -580,8 +714,8 @@ def render_summary(report) -> None:
     print()
 
 
-
 # Conclusion d'analyse : ce qu'un lecteur doit retenir, après le détail par fichier
+
 
 def render_conclusion(report) -> None:
     """Alertes, indicateurs corroborés, chaîne d'attaque (faits concordants), horloge et limites."""
@@ -633,8 +767,11 @@ def render_conclusion(report) -> None:
     partial = [(f, reason) for f in report.findings for reason in f.incomplete]
     if report.evidence:
         changed = [r for r in report.evidence if r.changed_during_analysis]
-        kv("Empreintes", f"{len(report.evidence)} preuve(s) hachée(s) à la collecte (SHA-256, UTC), "
-                         + ("inchangées après analyse" if not changed else f"{len(changed)} MODIFIÉE(S)"))
+        kv(
+            "Empreintes",
+            f"{len(report.evidence)} preuve(s) hachée(s) à la collecte (SHA-256, UTC), "
+            + ("inchangées après analyse" if not changed else f"{len(changed)} MODIFIÉE(S)"),
+        )
         for r in changed:
             kv("[ALERTE] Preuve modifiée", r.file)
     if report.skipped_files or report.scan_notes or report.analysis_errors or partial:
@@ -655,6 +792,7 @@ def render_conclusion(report) -> None:
 
 # Écran de démarrage : chaque ligne correspond à une vérification effectuée
 
+
 def boot_section(title: str) -> None:
     print()
     print(f"{MARGIN}  {C.VB}{C.BD}{title}{C.RS}")
@@ -662,21 +800,25 @@ def boot_section(title: str) -> None:
 
 def _fit(text: str, width: int) -> str:
     """Tronque par le début : la fin d'un chemin est la partie utile."""
-    return text if len(text) <= width else "…" + text[-(width - 1):]
+    return text if len(text) <= width else "…" + text[-(width - 1) :]
 
 
 def boot_item(ok: bool, name: str, detail: str, role: str) -> None:
     mark = f"{C.G}✔{C.RS}" if ok else f"{C.C_WARN}✖{C.RS}"
     detail_color = C.D if ok else C.C_WARN
-    print(f"{MARGIN}   {mark} {C.W}{name:<18}{C.RS} {detail_color}{_fit(detail, 26):<26}{C.RS} "
-          f"{C.C_PARAM}{role if len(role) <= 36 else role[:35] + '…'}{C.RS}")
+    print(
+        f"{MARGIN}   {mark} {C.W}{name:<18}{C.RS} {detail_color}{_fit(detail, 26):<26}{C.RS} "
+        f"{C.C_PARAM}{role if len(role) <= 36 else role[:35] + '…'}{C.RS}"
+    )
 
 
 def boot_footer(ok: int, total: int, warnings: int, elapsed: float) -> None:
     print()
     state = f"{C.G}{C.BD}PRÊT{C.RS}" if not warnings else f"{C.C_WARN}{C.BD}PRÊT (mode dégradé){C.RS}"
-    print(f"{MARGIN}  {state}  {C.R}│{C.RS}  {C.W}{ok}/{total}{C.RS} {C.D}vérifications réussies{C.RS}  "
-          f"{C.R}│{C.RS}  {C.D}{elapsed:.2f} s{C.RS}")
+    print(
+        f"{MARGIN}  {state}  {C.R}│{C.RS}  {C.W}{ok}/{total}{C.RS} {C.D}vérifications réussies{C.RS}  "
+        f"{C.R}│{C.RS}  {C.D}{elapsed:.2f} s{C.RS}"
+    )
 
 
 # Utilitaire interne
@@ -684,7 +826,7 @@ def boot_footer(ok: int, total: int, warnings: int, elapsed: float) -> None:
 
 def _strip_ansi(text: str) -> str:
     """Supprime les codes ANSI pour calculer la longueur visible."""
-    return re.sub(r'\033\[[0-9;]*m', '', text)
+    return re.sub(r"\033\[[0-9;]*m", "", text)
 
 
 def wait_for_key() -> None:

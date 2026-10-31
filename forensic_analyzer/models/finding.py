@@ -1,4 +1,5 @@
 """Modèles de données Pydantic pour les résultats forensiques."""
+
 from __future__ import annotations
 
 import hashlib
@@ -36,7 +37,7 @@ def _hash_file(filepath: str, _size: int, _mtime_ns: int) -> tuple[tuple[str, st
 
     try:
         # Lecture par chunks de 1 Mo : images disque et dumps de plusieurs Go
-        with open(filepath, 'rb') as f:
+        with open(filepath, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 sha256.update(chunk)
                 md5.update(chunk)
@@ -64,17 +65,18 @@ def max_severity(*levels: str | None) -> str | None:
 
 class FindingModel(BaseModel):
     """Résultat d'une analyse forensique sur un fichier."""
+
     type: str
     file: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     extra: dict[str, Any] = Field(default_factory=dict)
     # Données de décision, indépendantes des libellés affichés (code de sortie, synthèse)
-    severity: str | None = None                            # une valeur de SEVERITIES ; None : non évaluée
-    incomplete: list[str] = Field(default_factory=list)    # ce que l'analyse n'a pas pu examiner
+    severity: str | None = None  # une valeur de SEVERITIES ; None : non évaluée
+    incomplete: list[str] = Field(default_factory=list)  # ce que l'analyse n'a pas pu examiner
 
     model_config = {"extra": "allow"}
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def inject_hashes(self) -> "FindingModel":
         if self.file and os.path.isfile(self.file):
             if "SHA-256" not in self.metadata:
@@ -89,6 +91,7 @@ class FindingModel(BaseModel):
 
 class AnalysisError(BaseModel):
     """Module en échec sur un fichier : à dire dans le rapport, pas seulement dans le journal."""
+
     module: str
     file: str
     error: str
@@ -104,12 +107,13 @@ class AnalysisError(BaseModel):
 
 class EvidenceRecord(BaseModel):
     """Empreinte d'une preuve prise à la collecte, avant toute analyse, puis revérifiée après."""
+
     file: str
     size: int
     sha256: str
     md5: str
-    hashed_at: str                              # UTC
-    origin: str | None = None                   # archive d'où le fichier a été extrait
+    hashed_at: str  # UTC
+    origin: str | None = None  # archive d'où le fichier a été extrait
     changed_during_analysis: bool = False
 
 
@@ -117,9 +121,14 @@ def fingerprint(path: str, origin: str | None = None) -> EvidenceRecord | None:
     hashes = compute_hashes(path)
     if not hashes:
         return None
-    return EvidenceRecord(file=os.path.abspath(path), size=os.path.getsize(path), sha256=hashes["SHA-256"],
-                          md5=hashes["MD5"], hashed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                          origin=origin)
+    return EvidenceRecord(
+        file=os.path.abspath(path),
+        size=os.path.getsize(path),
+        sha256=hashes["SHA-256"],
+        md5=hashes["MD5"],
+        hashed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        origin=origin,
+    )
 
 
 def recheck(records: list[EvidenceRecord]) -> list[EvidenceRecord]:
@@ -132,7 +141,8 @@ def recheck(records: list[EvidenceRecord]) -> list[EvidenceRecord]:
 
 class ReportModel(BaseModel):
     """Rapport global d'une session d'analyse complète."""
-    tool: str = Field(default_factory=tool_identity)   # version et commit exacts de l'outil
+
+    tool: str = Field(default_factory=tool_identity)  # version et commit exacts de l'outil
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
     total: int = 0
     findings: list[FindingModel] = Field(default_factory=list)
@@ -142,9 +152,19 @@ class ReportModel(BaseModel):
     evidence: list[EvidenceRecord] = Field(default_factory=list)
 
     @classmethod
-    def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None,
-                      scan_notes: list[str] | None = None,
-                      analysis_errors: list[AnalysisError] | None = None,
-                      evidence: list[EvidenceRecord] | None = None) -> "ReportModel":
-        return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [],
-                   scan_notes=scan_notes or [], analysis_errors=analysis_errors or [], evidence=evidence or [])
+    def from_findings(
+        cls,
+        findings: list[FindingModel],
+        skipped_files: list[str] | None = None,
+        scan_notes: list[str] | None = None,
+        analysis_errors: list[AnalysisError] | None = None,
+        evidence: list[EvidenceRecord] | None = None,
+    ) -> "ReportModel":
+        return cls(
+            total=len(findings),
+            findings=findings,
+            skipped_files=skipped_files or [],
+            scan_notes=scan_notes or [],
+            analysis_errors=analysis_errors or [],
+            evidence=evidence or [],
+        )

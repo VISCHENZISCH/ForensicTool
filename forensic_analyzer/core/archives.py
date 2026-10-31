@@ -4,6 +4,7 @@ L'archive vient de la preuve, donc potentiellement de l'attaquant : chemins abso
 liens, fichiers spéciaux et bombes de décompression sont refusés. L'extraction se fait dans le
 dossier de l'affaire, jamais à côté de la preuve, et un seul niveau est ouvert (pas de cascade).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -57,7 +58,7 @@ def extract_archive(path: str) -> tuple[list[str], str]:
             return _extract_zip(path, dest)
         return _extract_tar(path, dest)
     except (OSError, tarfile.TarError, zipfile.BadZipFile, ValueError) as exc:
-        shutil.rmtree(dest, ignore_errors=True)   # pas de contenu à moitié extrait laissé pour un autre scan
+        shutil.rmtree(dest, ignore_errors=True)  # pas de contenu à moitié extrait laissé pour un autre scan
         log.warning("Archive illisible '%s' : %s", base, exc)
         return [], f"{base} : archive illisible ({exc})"
 
@@ -104,8 +105,9 @@ def _extract_zip(path: str, dest: str) -> tuple[list[str], str]:
     with zipfile.ZipFile(path) as zf:
         infos = zf.infolist()
         # Ni répertoire ni lien symbolique (bits de type Unix dans external_attr)
-        members = [i for i in infos if not i.is_dir() and _safe_name(i.filename)
-                   and (i.external_attr >> 16) & 0o170000 in (0, 0o100000)]
+        members = [
+            i for i in infos if not i.is_dir() and _safe_name(i.filename) and (i.external_attr >> 16) & 0o170000 in (0, 0o100000)
+        ]
         refused = _refusal(base, len(members), sum(i.file_size for i in members), [i.filename for i in infos])
         if refused:
             return [], refused
@@ -153,4 +155,3 @@ def expand_archives(targets: list[str]) -> tuple[list[str], dict[str, str], list
         expanded.extend(files)
         log.info("%s", note)
     return expanded, origins, notes
-

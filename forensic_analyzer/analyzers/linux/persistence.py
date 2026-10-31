@@ -3,6 +3,7 @@
 Fonctionne sur une racine montée ou extraite. Avec un bodyfile, les propriétaires,
 les liens symboliques et les dates de création reflètent l'image d'origine.
 """
+
 from __future__ import annotations
 
 import glob
@@ -59,8 +60,7 @@ def _is_link(root: str, rel: str, body: dict[str, BodyEntry] | None) -> tuple[bo
     return os.path.islink(os.path.join(root, rel)), None
 
 
-def analyze_systemd(root: str, body: dict[str, BodyEntry] | None = None,
-                    owned: set[str] | None = None) -> dict:
+def analyze_systemd(root: str, body: dict[str, BodyEntry] | None = None, owned: set[str] | None = None) -> dict:
     """
     Repère les unités suspectes et les liens d'activation.
 
@@ -78,10 +78,12 @@ def analyze_systemd(root: str, body: dict[str, BodyEntry] | None = None,
                 rel = os.path.relpath(os.path.join(dirpath, name), root)
                 is_link, entry = _is_link(root, rel, body)
                 if is_link or os.path.basename(dirpath).endswith((".wants", ".requires")):
-                    enabled.setdefault(name, []).append({
-                        "link": "/" + rel,
-                        "created": utc(entry.crtime) if entry else "",
-                    })
+                    enabled.setdefault(name, []).append(
+                        {
+                            "link": "/" + rel,
+                            "created": utc(entry.crtime) if entry else "",
+                        }
+                    )
                     continue
                 unit_files.append(rel)
 
@@ -89,10 +91,13 @@ def analyze_systemd(root: str, body: dict[str, BodyEntry] | None = None,
     if body:
         seen = {link["link"] for links in enabled.values() for link in links}
         for entry in body.values():
-            if (entry.is_link and not entry.deleted and entry.path not in seen
-                    and entry.path.startswith(tuple("/" + d + "/" for d in _UNIT_DIRS))):
-                enabled.setdefault(os.path.basename(entry.path), []).append(
-                    {"link": entry.path, "created": utc(entry.crtime)})
+            if (
+                entry.is_link
+                and not entry.deleted
+                and entry.path not in seen
+                and entry.path.startswith(tuple("/" + d + "/" for d in _UNIT_DIRS))
+            ):
+                enabled.setdefault(os.path.basename(entry.path), []).append({"link": entry.path, "created": utc(entry.crtime)})
 
     units = []
     for rel in unit_files:
@@ -142,20 +147,22 @@ def analyze_systemd(root: str, body: dict[str, BodyEntry] | None = None,
             score += 1
             reasons.append("Activée au démarrage")
 
-        units.append({
-            "unit": "/" + rel,
-            "exec_start": exec_starts,
-            "binary": binary,
-            "wanted_by": unit.get("Install", {}).get("WantedBy", []),
-            "owner_uid": entry.uid if entry else None,
-            "created": utc(entry.crtime) if entry else "",
-            "modified": utc(entry.mtime) if entry else "",
-            "enabled_by": enabled.get(name, []),
-            "score": score,
-            "suspicious": score >= 3,
-            "reasons": reasons,
-            "mitre": sorted(techniques) if score >= 3 else [],
-        })
+        units.append(
+            {
+                "unit": "/" + rel,
+                "exec_start": exec_starts,
+                "binary": binary,
+                "wanted_by": unit.get("Install", {}).get("WantedBy", []),
+                "owner_uid": entry.uid if entry else None,
+                "created": utc(entry.crtime) if entry else "",
+                "modified": utc(entry.mtime) if entry else "",
+                "enabled_by": enabled.get(name, []),
+                "score": score,
+                "suspicious": score >= 3,
+                "reasons": reasons,
+                "mitre": sorted(techniques) if score >= 3 else [],
+            }
+        )
     units.sort(key=lambda u: -u["score"])
     return {"units": units, "enabled": enabled}
 
@@ -168,20 +175,26 @@ def other_persistence(root: str, owned: set[str] | None = None) -> list[dict]:
     if os.path.isfile(preload) and os.path.getsize(preload) > 0:
         with open(preload, errors="replace") as f:
             libs = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-        findings.append({"path": "/etc/ld.so.preload", "detail": ", ".join(libs),
-                         "severity": "critique", "mitre": "T1574.006"})
+        findings.append({"path": "/etc/ld.so.preload", "detail": ", ".join(libs), "severity": "critique", "mitre": "T1574.006"})
 
     if os.path.isfile(os.path.join(root, "etc/rc.local")):
-        findings.append({"path": "/etc/rc.local", "detail": "Script exécuté au démarrage",
-                         "severity": "moyenne", "mitre": "T1037.004"})
+        findings.append(
+            {"path": "/etc/rc.local", "detail": "Script exécuté au démarrage", "severity": "moyenne", "mitre": "T1037.004"}
+        )
 
     key_files = glob.glob(os.path.join(root, "root/.ssh/authorized_keys*"))
     key_files += glob.glob(os.path.join(root, "home/*/.ssh/authorized_keys*"))
     for kf in key_files:
         with open(kf, errors="replace") as f:
             keys = [l for l in f if l.strip() and not l.startswith("#")]
-        findings.append({"path": "/" + os.path.relpath(kf, root), "detail": f"{len(keys)} clé(s)",
-                         "severity": "moyenne", "mitre": "T1098.004"})
+        findings.append(
+            {
+                "path": "/" + os.path.relpath(kf, root),
+                "detail": f"{len(keys)} clé(s)",
+                "severity": "moyenne",
+                "mitre": "T1098.004",
+            }
+        )
 
     for rel_dir, technique in _WATCHED_DIRS.items():
         base = os.path.join(root, rel_dir)
@@ -191,10 +204,12 @@ def other_persistence(root: str, owned: set[str] | None = None) -> list[dict]:
             path = f"/{rel_dir}/{name}"
             if name in _BENIGN_NAMES or (owned is not None and path in owned):
                 continue
-            findings.append({
-                "path": path,
-                "detail": "Non déclaré par un paquet" if owned is not None else "À vérifier",
-                "severity": "haute" if owned is not None else "info",
-                "mitre": technique,
-            })
+            findings.append(
+                {
+                    "path": path,
+                    "detail": "Non déclaré par un paquet" if owned is not None else "À vérifier",
+                    "severity": "haute" if owned is not None else "info",
+                    "mitre": technique,
+                }
+            )
     return findings

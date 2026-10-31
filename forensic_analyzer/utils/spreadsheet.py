@@ -3,6 +3,7 @@
 Une commande, une URL ou un nom de fichier venant des preuves qui commence par = + - @
 serait évalué comme formule (CWE-1236) : l'apostrophe en tête le garde en texte.
 """
+
 from __future__ import annotations
 
 _FORMULA_START = ("=", "+", "-", "@", "\t", "\r")

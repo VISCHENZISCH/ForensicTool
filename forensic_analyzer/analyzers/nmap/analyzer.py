@@ -1,4 +1,5 @@
 """Analyzer pour les rapports de scan réseau Nmap (format XML)."""
+
 from __future__ import annotations
 
 import datetime
@@ -15,6 +16,7 @@ log = get_logger("nmap")
 
 class NmapAnalyzer(BaseAnalyzer):
     """Analyse des rapports d'audit réseau et cartographie Nmap XML."""
+
     name = "nmap"
     supported_extensions = (".xml",)
 
@@ -86,11 +88,13 @@ class NmapAnalyzer(BaseAnalyzer):
                             if output:
                                 scripts.append(f"{ip}:{port_id} [{script.get('id')}] {output}")
 
-                hosts_data.append({
-                    "ip": ip,
-                    "hostnames": hostnames,
-                    "open_ports": open_ports,
-                })
+                hosts_data.append(
+                    {
+                        "ip": ip,
+                        "hostnames": hostnames,
+                        "open_ports": open_ports,
+                    }
+                )
 
             meta: dict[str, Any] = {
                 "Outil": f"{scanner} (Scan réseau)",
@@ -104,18 +108,20 @@ class NmapAnalyzer(BaseAnalyzer):
 
             for i, h in enumerate(hosts_data[:5]):
                 ports_str = ", ".join(h["open_ports"][:5]) or "Aucun port ouvert détecté"
-                meta[f"Cible #{i+1} : {h['ip']}"] = ports_str
+                meta[f"Cible #{i + 1} : {h['ip']}"] = ports_str
 
             events = []
             if iso_start:
-                events.append({
-                    "timestamp": iso_start,
-                    "source": "nmap",
-                    "event_type": "network_recon",
-                    "description": f"Scan de reconnaissance réseau Nmap : {args[:100]}",
-                    "ip": ", ".join(sorted(all_ips)[:3]),
-                    "file": path,
-                })
+                events.append(
+                    {
+                        "timestamp": iso_start,
+                        "source": "nmap",
+                        "event_type": "network_recon",
+                        "description": f"Scan de reconnaissance réseau Nmap : {args[:100]}",
+                        "ip": ", ".join(sorted(all_ips)[:3]),
+                        "file": path,
+                    }
+                )
 
             return FindingModel(
                 type="network_recon",
@@ -127,7 +133,7 @@ class NmapAnalyzer(BaseAnalyzer):
                     "iocs": {"ips": sorted(list(all_ips))},
                     "timeline_events": events,
                 },
-                severity="faible",   # trace de reconnaissance, pas une compromission
+                severity="faible",  # trace de reconnaissance, pas une compromission
             )
         except Exception as exc:
             log.error("Erreur lors de l'analyse du rapport Nmap '%s' : %s", path, exc)

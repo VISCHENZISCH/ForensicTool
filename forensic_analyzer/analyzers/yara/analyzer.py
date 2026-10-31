@@ -1,4 +1,5 @@
 """Analyseur pour scan YARA."""
+
 from __future__ import annotations
 
 import os
@@ -11,8 +12,10 @@ from .scanner import YaraScanner, HAS_YARA
 
 log = get_logger("yara")
 
+
 class YARAAnalyzer(BaseAnalyzer):
     """Scanne des fichiers avec des règles YARA."""
+
     name = "yara"
     supported_extensions = ()
     takes_directory = True
@@ -44,13 +47,15 @@ class YARAAnalyzer(BaseAnalyzer):
         matches = []
         if os.path.isfile(path):
             res = self._scanner.scan_file(path)
-            if res.ok: matches.extend(res.value)
+            if res.ok:
+                matches.extend(res.value)
         elif os.path.isdir(path):
             for root, _, files in os.walk(path):
                 for fname in files:
                     fpath = os.path.join(root, fname)
                     res = self._scanner.scan_file(fpath)
-                    if res.ok: matches.extend(res.value)
+                    if res.ok:
+                        matches.extend(res.value)
         else:
             return None
 
@@ -64,8 +69,8 @@ class YARAAnalyzer(BaseAnalyzer):
         meta["Règles déclenchées"] = str(len(rules_matched))
 
         for i, m in enumerate(matches[:15]):
-            tags_str = f" [{', '.join(m['tags'])}]" if m.get('tags') else ""
-            meta[f"Match #{i+1}"] = f"{m['rule']}{tags_str}"
+            tags_str = f" [{', '.join(m['tags'])}]" if m.get("tags") else ""
+            meta[f"Match #{i + 1}"] = f"{m['rule']}{tags_str}"
 
         return FindingModel(
             type="yara",

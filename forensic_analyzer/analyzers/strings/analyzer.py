@@ -1,4 +1,5 @@
 """Analyzer pour l'extraction de chaînes imprimables depuis des fichiers binaires."""
+
 from __future__ import annotations
 
 import os
@@ -19,8 +20,9 @@ class StringsAnalyzer(BaseAnalyzer):
     depuis n'importe quel fichier binaire.
     Activé uniquement via --strings (aucune extension requise).
     """
+
     name = "strings"
-    supported_extensions = ()   # Géré manuellement via CLI, pas en auto-scan
+    supported_extensions = ()  # Géré manuellement via CLI, pas en auto-scan
     accepts_any_file = True
 
     def can_handle(self, path: str) -> bool:
@@ -31,12 +33,12 @@ class StringsAnalyzer(BaseAnalyzer):
             strings = []
             chunk_size = 1024 * 1024
             overlap = 8
-            
+
             with open(path, "rb") as f:
                 f.seek(0, 2)
                 file_size = f.tell()
                 f.seek(0)
-                
+
                 if file_size == 0:
                     return FindingModel(
                         type="strings",
@@ -44,42 +46,41 @@ class StringsAnalyzer(BaseAnalyzer):
                         file=os.path.abspath(path),
                         metadata={
                             "total_trouvées": 0,
-                            "max_affichées":  max_results,
+                            "max_affichées": max_results,
                         },
                         extra={"strings": []},
                     )
-                
+
                 while True:
                     chunk = f.read(chunk_size)
                     if not chunk:
                         break
-                    
+
                     for m in _PATTERN.finditer(chunk):
                         strings.append(m.group().decode("ascii", "ignore"))
                         if len(strings) >= 5000:  # Cap size for safety
                             break
-                    
+
                     if len(strings) >= 5000:
                         break
-                    
+
                     # Advance safely with overlap to prevent cut-off strings
                     current_pos = f.tell()
                     if current_pos < file_size:
                         f.seek(max(0, current_pos - overlap))
                     else:
                         break
-                        
+
             return FindingModel(
                 type="strings",
                 severity="info",
                 file=os.path.abspath(path),
                 metadata={
                     "total_trouvées": len(strings),
-                    "max_affichées":  max_results,
+                    "max_affichées": max_results,
                 },
                 extra={"strings": strings[:max_results]},
             )
         except Exception as exc:
             log.error("Erreur Strings '%s' : %s", os.path.basename(path), exc)
             return None
-

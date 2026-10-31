@@ -5,6 +5,7 @@ on retrouve les arguments constants préparés juste avant l'appel : chaîne poi
 mémoire, entier immédiat, ou structure sockaddr_in construite sur la pile.
 Analyse statique uniquement : le binaire n'est jamais exécuté.
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -13,6 +14,7 @@ from collections.abc import Callable
 try:
     import capstone
     from capstone import x86_const
+
     HAS_CAPSTONE = True
 except ImportError:
     capstone = None
@@ -25,30 +27,62 @@ _WIN64_ARGS = ("rcx", "rdx", "r8", "r9")
 _VOLATILE_SYSV = {"rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"}
 _VOLATILE_WIN64 = {"rax", "rcx", "rdx", "r8", "r9", "r10", "r11"}
 _ALIASES = {
-    "eax": "rax", "ebx": "rbx", "ecx": "rcx", "edx": "rdx", "esi": "rsi", "edi": "rdi", "ebp": "rbp",
-    "r8d": "r8", "r9d": "r9", "r10d": "r10", "r11d": "r11", "r12d": "r12", "r13d": "r13",
-    "r14d": "r14", "r15d": "r15", "cx": "rcx", "dx": "rdx", "di": "rdi", "si": "rsi",
+    "eax": "rax",
+    "ebx": "rbx",
+    "ecx": "rcx",
+    "edx": "rdx",
+    "esi": "rsi",
+    "edi": "rdi",
+    "ebp": "rbp",
+    "r8d": "r8",
+    "r9d": "r9",
+    "r10d": "r10",
+    "r11d": "r11",
+    "r12d": "r12",
+    "r13d": "r13",
+    "r14d": "r14",
+    "r15d": "r15",
+    "cx": "rcx",
+    "dx": "rdx",
+    "di": "rdi",
+    "si": "rsi",
 }
 
 # Fonction normalisée → (catégorie, index de l'argument intéressant, nature de l'argument)
 APIS = {
     "connect": ("réseau", None, "sockaddr"),
-    "inet_pton": ("réseau", 1, "string"), "inet_addr": ("réseau", 0, "string"),
-    "gethostbyname": ("réseau", 0, "string"), "getaddrinfo": ("réseau", 0, "string"),
+    "inet_pton": ("réseau", 1, "string"),
+    "inet_addr": ("réseau", 0, "string"),
+    "gethostbyname": ("réseau", 0, "string"),
+    "getaddrinfo": ("réseau", 0, "string"),
     "htons": ("réseau", 0, "port"),
-    "sleep": ("temporisation", 0, "seconds"), "usleep": ("temporisation", 0, "microseconds"),
+    "sleep": ("temporisation", 0, "seconds"),
+    "usleep": ("temporisation", 0, "microseconds"),
     "Sleep": ("temporisation", 0, "milliseconds"),
-    "open": ("fichiers", 0, "string"), "open64": ("fichiers", 0, "string"), "fopen": ("fichiers", 0, "string"),
-    "creat": ("fichiers", 0, "string"), "unlink": ("fichiers", 0, "string"),
-    "CreateFileA": ("fichiers", 0, "string"), "CreateFileW": ("fichiers", 0, "wstring"),
-    "execve": ("exécution", 0, "string"), "execl": ("exécution", 0, "string"), "execvp": ("exécution", 0, "string"),
-    "system": ("exécution", 0, "string"), "popen": ("exécution", 0, "string"),
-    "WinExec": ("exécution", 0, "string"), "ShellExecuteA": ("exécution", 2, "string"),
-    "CreateProcessA": ("exécution", 1, "string"), "CreateProcessW": ("exécution", 1, "wstring"),
-    "URLDownloadToFileA": ("réseau", 1, "string"), "InternetOpenUrlA": ("réseau", 1, "string"),
-    "RegSetValueExA": ("registre", 1, "string"), "RegCreateKeyExA": ("registre", 1, "string"),
-    "ptrace": ("anti-analyse", None, None), "IsDebuggerPresent": ("anti-analyse", None, None),
-    "daemon": ("furtivité", None, None), "setsid": ("furtivité", None, None),
+    "open": ("fichiers", 0, "string"),
+    "open64": ("fichiers", 0, "string"),
+    "fopen": ("fichiers", 0, "string"),
+    "creat": ("fichiers", 0, "string"),
+    "unlink": ("fichiers", 0, "string"),
+    "CreateFileA": ("fichiers", 0, "string"),
+    "CreateFileW": ("fichiers", 0, "wstring"),
+    "execve": ("exécution", 0, "string"),
+    "execl": ("exécution", 0, "string"),
+    "execvp": ("exécution", 0, "string"),
+    "system": ("exécution", 0, "string"),
+    "popen": ("exécution", 0, "string"),
+    "WinExec": ("exécution", 0, "string"),
+    "ShellExecuteA": ("exécution", 2, "string"),
+    "CreateProcessA": ("exécution", 1, "string"),
+    "CreateProcessW": ("exécution", 1, "wstring"),
+    "URLDownloadToFileA": ("réseau", 1, "string"),
+    "InternetOpenUrlA": ("réseau", 1, "string"),
+    "RegSetValueExA": ("registre", 1, "string"),
+    "RegCreateKeyExA": ("registre", 1, "string"),
+    "ptrace": ("anti-analyse", None, None),
+    "IsDebuggerPresent": ("anti-analyse", None, None),
+    "daemon": ("furtivité", None, None),
+    "setsid": ("furtivité", None, None),
 }
 
 
@@ -67,10 +101,10 @@ class _Reader:
         for s in self.sections:
             if s["addr"] <= vaddr < s["addr"] + s["size"]:
                 off = s["offset"] + vaddr - s["addr"]
-                raw = self.data[off:off + 512]
+                raw = self.data[off : off + 512]
                 if wide:
                     stop = raw.find(b"\x00\x00")
-                    text = raw[:stop + (stop % 2)].decode("utf-16le", "replace") if stop > 0 else ""
+                    text = raw[: stop + (stop % 2)].decode("utf-16le", "replace") if stop > 0 else ""
                 else:
                     text = raw.split(b"\x00", 1)[0].decode("utf-8", "replace")
                 return text if text and text.isprintable() else ""
@@ -84,9 +118,15 @@ def _port_from_sockaddr(imm: int) -> int | None:
     return ((imm >> 16) & 0xFF) << 8 | (imm >> 24) & 0xFF
 
 
-def analyze_code(code_ranges: list[tuple[int, bytes]], reader: _Reader, resolve: Callable[[object], str | None],
-                 is64: bool = True, windows: bool = False, function_starts: set[int] = frozenset(),
-                 import_at: Callable[[int], str | None] = lambda addr: None) -> list[dict]:
+def analyze_code(
+    code_ranges: list[tuple[int, bytes]],
+    reader: _Reader,
+    resolve: Callable[[object], str | None],
+    is64: bool = True,
+    windows: bool = False,
+    function_starts: set[int] = frozenset(),
+    import_at: Callable[[int], str | None] = lambda addr: None,
+) -> list[dict]:
     """
     Désassemble les plages de code et reconstruit les appels sensibles.
 
@@ -181,19 +221,26 @@ def _describe_call(address, api, regs, immediates, reader, arg_regs) -> dict:
 
 def summarize(calls: list[dict]) -> dict:
     """Synthèse : destinations réseau, intervalle de temporisation, fichiers, commandes."""
-    hosts = [c["argument"] for c in calls if c["api"] in ("inet_pton", "inet_addr", "gethostbyname", "getaddrinfo")
-             and c.get("argument")]
+    hosts = [
+        c["argument"]
+        for c in calls
+        if c["api"] in ("inet_pton", "inet_addr", "gethostbyname", "getaddrinfo") and c.get("argument")
+    ]
     ports = sorted({c["port"] for c in calls if c.get("port")})
-    endpoints = [{"host": h, "port": p} for h in hosts for p in ports] or \
-                [{"host": h, "port": None} for h in hosts] or [{"host": None, "port": p} for p in ports]
+    endpoints = (
+        [{"host": h, "port": p} for h in hosts for p in ports]
+        or [{"host": h, "port": None} for h in hosts]
+        or [{"host": None, "port": p} for p in ports]
+    )
     return {
         "endpoints": endpoints,
         # sleep(0) et INT_MAX (« attendre indéfiniment ») ne sont pas des intervalles de balise
         "sleep_seconds": sorted({c["seconds"] for c in calls if 0 < c.get("seconds", 0) <= 30 * 86400}),
         "files": sorted({c["argument"] for c in calls if c["category"] == "fichiers" and len(c.get("argument") or "") > 1}),
         "commands": sorted({c["argument"] for c in calls if c["category"] == "exécution" and c.get("argument")}),
-        "urls": sorted({c["argument"] for c in calls if c["api"].startswith(("URLDownload", "InternetOpen"))
-                        and c.get("argument")}),
+        "urls": sorted(
+            {c["argument"] for c in calls if c["api"].startswith(("URLDownload", "InternetOpen")) and c.get("argument")}
+        ),
         "categories": sorted({c["category"] for c in calls}),
     }
 
@@ -212,7 +259,8 @@ def describe(result: dict | None, meta: dict, techniques: set[str], windows: boo
         e["ip"] = e["host"]
     if endpoints:
         meta["[ALERTE] Destination réseau (désassemblage)"] = ", ".join(
-            f"{e['host'] or '?'}:{e['port'] or '?'}" for e in endpoints)
+            f"{e['host'] or '?'}:{e['port'] or '?'}" for e in endpoints
+        )
         if any(e["port"] and e["port"] not in _COMMON_PORTS for e in endpoints):
             techniques.add("T1571")
     if summary["sleep_seconds"]:
@@ -223,13 +271,16 @@ def describe(result: dict | None, meta: dict, techniques: set[str], windows: boo
         meta["[ALERTE] Commandes exécutées"] = ", ".join(summary["commands"][:10])
         techniques.add("T1059.003" if windows else "T1059.004")
     if endpoints and summary["sleep_seconds"] and any(c["api"] == "connect" for c in result["calls"]):
-        meta["[ALERTE] Comportement"] = (f"Balise réseau probable : connexion vers "
-                                         f"{endpoints[0]['host'] or '?'}:{endpoints[0]['port'] or '?'} "
-                                         f"puis attente de {max(summary['sleep_seconds']):g} s")
+        meta["[ALERTE] Comportement"] = (
+            f"Balise réseau probable : connexion vers "
+            f"{endpoints[0]['host'] or '?'}:{endpoints[0]['port'] or '?'} "
+            f"puis attente de {max(summary['sleep_seconds']):g} s"
+        )
     return result
 
 
 # Adaptateurs par format
+
 
 def analyze_elf(data: bytes) -> dict | None:
     """Appels sensibles d'un ELF x86/x86-64 (symboles statiques ou imports via PLT/GOT)."""
@@ -251,7 +302,7 @@ def analyze_elf(data: bytes) -> dict | None:
     plt: dict[int, str] = {}
     for sec in sections:
         if sec["name"].startswith(".plt") and sec["size"]:
-            code = data[sec["offset"]:sec["offset"] + sec["size"]]
+            code = data[sec["offset"] : sec["offset"] + sec["size"]]
             for insn in md.disasm(code, sec["addr"]):
                 if insn.mnemonic.endswith("jmp") and insn.operands and insn.operands[0].type == x86_const.X86_OP_MEM:
                     name = got.get(_mem_target(insn))
@@ -268,9 +319,8 @@ def analyze_elf(data: bytes) -> dict | None:
         return None
 
     text = [s for s in sections if s["name"] == ".text"]
-    ranges = [(s["addr"], data[s["offset"]:s["offset"] + s["size"]]) for s in text]
-    calls = analyze_code(ranges, reader, resolve, is64=layout["is64"], function_starts=set(functions),
-                         import_at=got.get)
+    ranges = [(s["addr"], data[s["offset"] : s["offset"] + s["size"]]) for s in text]
+    calls = analyze_code(ranges, reader, resolve, is64=layout["is64"], function_starts=set(functions), import_at=got.get)
     return {"calls": calls, "summary": summarize(calls)}
 
 
@@ -287,9 +337,15 @@ def analyze_pe(path: str) -> dict | None:
         is64 = pe.FILE_HEADER.Machine == 0x8664
         base = pe.OPTIONAL_HEADER.ImageBase
         data = pe.__data__
-        sections = [{"name": s.Name.rstrip(b"\x00").decode("latin-1"), "addr": base + s.VirtualAddress,
-                     "offset": s.PointerToRawData, "size": min(s.SizeOfRawData, s.Misc_VirtualSize or s.SizeOfRawData)}
-                    for s in pe.sections]
+        sections = [
+            {
+                "name": s.Name.rstrip(b"\x00").decode("latin-1"),
+                "addr": base + s.VirtualAddress,
+                "offset": s.PointerToRawData,
+                "size": min(s.SizeOfRawData, s.Misc_VirtualSize or s.SizeOfRawData),
+            }
+            for s in pe.sections
+        ]
         iat: dict[int, str] = {}
         for entry in getattr(pe, "DIRECTORY_ENTRY_IMPORT", []):
             for imp in entry.imports:

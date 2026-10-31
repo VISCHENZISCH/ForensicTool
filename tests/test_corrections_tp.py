@@ -1,4 +1,5 @@
 """Tests de validation des corrections apportées d'après les faiblesses du TP."""
+
 import gzip
 
 import pytest
@@ -55,10 +56,10 @@ def test_log_analyzer_parses_syslog_and_auth(tmp_path):
     """Vérifie l'analyse de syslog et auth.log avec détection SSH et SUDO."""
     syslog_file = tmp_path / "syslog"
     content = (
-        'Oct 12 10:14:02 srv sshd[1234]: Failed password for invalid user admin from 203.0.113.42 port 54321 ssh2\n'
-        'Oct 12 10:14:05 srv sshd[1235]: Failed password for root from 203.0.113.42 port 54322 ssh2\n'
-        'Oct 12 10:15:00 srv sshd[1240]: Accepted password for deploy from 203.0.113.42 port 54330 ssh2\n'
-        'Oct 12 10:16:00 srv sudo:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/bin/bash\n'
+        "Oct 12 10:14:02 srv sshd[1234]: Failed password for invalid user admin from 203.0.113.42 port 54321 ssh2\n"
+        "Oct 12 10:14:05 srv sshd[1235]: Failed password for root from 203.0.113.42 port 54322 ssh2\n"
+        "Oct 12 10:15:00 srv sshd[1240]: Accepted password for deploy from 203.0.113.42 port 54330 ssh2\n"
+        "Oct 12 10:16:00 srv sudo:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/bin/bash\n"
     )
     syslog_file.write_text(content)
 
@@ -76,8 +77,8 @@ def test_log_analyzer_parses_wp_debug(tmp_path):
     """Vérifie l'analyse de wp-debug.log et l'identification des fichiers PHP fautifs."""
     debug_file = tmp_path / "wp-debug.log"
     content = (
-        '[12-Oct-2026 13:56:01 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function eval_post() in /var/www/html/wp-content/plugins/vuln/x.php:12\n'
-        '[12-Oct-2026 13:56:02 UTC] PHP Warning:  Cannot modify header information in /var/www/html/wp-includes/pluggable.php on line 1234\n'
+        "[12-Oct-2026 13:56:01 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function eval_post() in /var/www/html/wp-content/plugins/vuln/x.php:12\n"
+        "[12-Oct-2026 13:56:02 UTC] PHP Warning:  Cannot modify header information in /var/www/html/wp-includes/pluggable.php on line 1234\n"
     )
     debug_file.write_text(content)
 
@@ -182,10 +183,18 @@ def test_pcap_rebuild_streams_separates_syn_sessions():
     """Vérifie que des connexions successives partageant le même quadruplet sont scindées en sessions distinctes."""
     scapy = pytest.importorskip("scapy.all")
     pkt1_syn = scapy.IP(src="203.0.113.42", dst="10.0.0.5") / scapy.TCP(sport=50000, dport=80, flags="S", seq=100)
-    pkt1_data = scapy.IP(src="203.0.113.42", dst="10.0.0.5") / scapy.TCP(sport=50000, dport=80, flags="A", seq=101) / scapy.Raw(load=b"POST /wp-login.php (req 1)")
+    pkt1_data = (
+        scapy.IP(src="203.0.113.42", dst="10.0.0.5")
+        / scapy.TCP(sport=50000, dport=80, flags="A", seq=101)
+        / scapy.Raw(load=b"POST /wp-login.php (req 1)")
+    )
 
     pkt2_syn = scapy.IP(src="203.0.113.42", dst="10.0.0.5") / scapy.TCP(sport=50000, dport=80, flags="S", seq=200)
-    pkt2_data = scapy.IP(src="203.0.113.42", dst="10.0.0.5") / scapy.TCP(sport=50000, dport=80, flags="A", seq=201) / scapy.Raw(load=b"POST /wp-login.php (req 2)")
+    pkt2_data = (
+        scapy.IP(src="203.0.113.42", dst="10.0.0.5")
+        / scapy.TCP(sport=50000, dport=80, flags="A", seq=201)
+        / scapy.Raw(load=b"POST /wp-login.php (req 2)")
+    )
 
     streams = rebuild_tcp_streams([pkt1_syn, pkt1_data, pkt2_syn, pkt2_data])
     assert len(streams) == 2

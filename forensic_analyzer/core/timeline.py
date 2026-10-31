@@ -5,6 +5,7 @@ significatif (unité, utilisateur, terminal, fichier, IP...), décrivent le mêm
 Confiance : « élevée » = au moins deux sources concordantes, « moyenne » = une seule source,
 « faible » = horodatage peu fiable (ex : date de modification d'un fichier).
 """
+
 from __future__ import annotations
 
 import datetime
@@ -14,17 +15,56 @@ import unicodedata
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9_.@/-]*[a-z0-9]")
 # Mots trop génériques pour prouver que deux événements décrivent le même fait
 _STOPWORDS = {
-    "session", "opened", "closed", "user", "for", "by", "the", "sur", "via", "depuis", "de", "du", "des",
-    "started", "stopped", "starting", "stopping", "service", "service_start", "service_stop", "system",
-    "login", "logon", "authentification", "demarrage", "systemd", "pam_unix", "uid", "unit", "unite",
-    "creation", "modification", "activation", "execution", "dev", "on", "to", "and", "et", "le", "la",
+    "session",
+    "opened",
+    "closed",
+    "user",
+    "for",
+    "by",
+    "the",
+    "sur",
+    "via",
+    "depuis",
+    "de",
+    "du",
+    "des",
+    "started",
+    "stopped",
+    "starting",
+    "stopping",
+    "service",
+    "service_start",
+    "service_stop",
+    "system",
+    "login",
+    "logon",
+    "authentification",
+    "demarrage",
+    "systemd",
+    "pam_unix",
+    "uid",
+    "unit",
+    "unite",
+    "creation",
+    "modification",
+    "activation",
+    "execution",
+    "dev",
+    "on",
+    "to",
+    "and",
+    "et",
+    "le",
+    "la",
 }
 LOW_RELIABILITY = {"unit_modified"}
 
 
 def _fold(text: str) -> str:
     """Minuscules sans accents : « Création » et « creation » donnent le même jeton."""
-    return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")  # mtime d'un fichier : falsifiable (timestomping)
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn"
+    )  # mtime d'un fichier : falsifiable (timestomping)
 
 
 def parse_ts(ts: str) -> datetime.datetime | None:
@@ -90,12 +130,14 @@ def consolidate(events: list[dict], window: float = 2.0) -> list[dict]:
         else:
             confidence = "moyenne"
         main = members[0][2]  # premier observateur du fait
-        facts.append({
-            "timestamp": members[0][0].isoformat(),
-            "description": main.get("description", ""),
-            "sources": sources,
-            "confidence": confidence,
-            "events": [m[2] for m in members],
-        })
+        facts.append(
+            {
+                "timestamp": members[0][0].isoformat(),
+                "description": main.get("description", ""),
+                "sources": sources,
+                "confidence": confidence,
+                "events": [m[2] for m in members],
+            }
+        )
     facts.sort(key=lambda f: f["timestamp"])
     return facts

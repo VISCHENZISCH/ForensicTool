@@ -1,4 +1,5 @@
 """Intégration optionnelle de capa (Mandiant) : capacités d'un binaire et techniques ATT&CK."""
+
 from __future__ import annotations
 
 import json

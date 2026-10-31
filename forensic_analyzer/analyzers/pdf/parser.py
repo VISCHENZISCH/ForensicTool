@@ -1,4 +1,5 @@
 """Métadonnées d'un PDF via pypdf (dictionnaire /Info, pages, chiffrement)."""
+
 from __future__ import annotations
 
 import logging

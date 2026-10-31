@@ -5,6 +5,7 @@ construite avec le chemin brut est détournée par un `?` ou un `#` dans un nom 
 (`profil?mode=rwc#/places.sqlite` ouvre et crée `profil`). La base et ses journaux sont
 donc copiés dans un dossier temporaire privé, et c'est la copie qui est ouverte.
 """
+
 from __future__ import annotations
 
 import os

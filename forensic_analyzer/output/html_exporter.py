@@ -5,6 +5,7 @@ chaîne d'attaque, indicateurs corroborés, alertes par module), périmètre (pr
 intégrité), chronologie consolidée, indicateurs, constats détaillés sans troncature et limites.
 Aucune ressource externe : polices embarquées, le rapport s'ouvre hors ligne.
 """
+
 from __future__ import annotations
 
 import base64
@@ -27,17 +28,31 @@ log = get_logger("html_exporter")
 _TRANSVERSE = {"timeline", "correlation", "evidence_integrity"}
 
 _CATEGORIES = [
-    ("system", "Système, disque et journaux",
-     {"disk", "evtx", "registry", "prefetch", "lnk_shortcut", "log_analysis", "linux_artifacts", "memory"}),
-    ("network", "Réseau et web",
-     {"pcap", "firefox_history", "firefox_places", "firefox_cookies", "chromium_artifacts", "network_recon", "ids_alerts"}),
-    ("malware", "Binaires, scripts et menaces",
-     {"pe_analysis", "malware_analysis", "elf_analysis", "webshell_analysis", "yara", "ioc", "carving", "strings"}),
+    (
+        "system",
+        "Système, disque et journaux",
+        {"disk", "evtx", "registry", "prefetch", "lnk_shortcut", "log_analysis", "linux_artifacts", "memory"},
+    ),
+    (
+        "network",
+        "Réseau et web",
+        {"pcap", "firefox_history", "firefox_places", "firefox_cookies", "chromium_artifacts", "network_recon", "ids_alerts"},
+    ),
+    (
+        "malware",
+        "Binaires, scripts et menaces",
+        {"pe_analysis", "malware_analysis", "elf_analysis", "webshell_analysis", "yara", "ioc", "carving", "strings"},
+    ),
     ("files", "Fichiers et métadonnées", {"pdf", "pdf_analysis", "office_analysis", "image", "gps", "stego", "stego_audio"}),
 ]
-_SECTIONS = [("synthese", "Synthèse"), ("perimetre", "Périmètre et méthode"), ("chronologie", "Chronologie consolidée"),
-             ("indicateurs", "Indicateurs de compromission"), ("constats", "Constats détaillés"),
-             ("limites", "Limites de l'analyse")]
+_SECTIONS = [
+    ("synthese", "Synthèse"),
+    ("perimetre", "Périmètre et méthode"),
+    ("chronologie", "Chronologie consolidée"),
+    ("indicateurs", "Indicateurs de compromission"),
+    ("constats", "Constats détaillés"),
+    ("limites", "Limites de l'analyse"),
+]
 _MAX_ROWS = 300  # lignes par tableau de données détaillées ; le reste est signalé et figure dans l'export JSON
 _PRINT_ROWS = 25  # au-delà, lignes masquées à l'impression (PDF) avec mention du reste
 _SYNTH_FACTS = 12  # faits de la chaîne d'attaque repris en synthèse (la chronologie les a tous)
@@ -51,9 +66,14 @@ _GRAVITE_CLASSE = {"critique": "critique", "élevé": "eleve", "moyen": "moyen",
 
 # Polices libres (OFL) réduites aux caractères latins : voir output/fonts/OFL-*.txt
 _FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-_FONTS = (("Inter", 400, "normal", "Inter-Regular"), ("Inter", 400, "italic", "Inter-Italic"),
-          ("Inter", 600, "normal", "Inter-SemiBold"), ("Inter", 700, "normal", "Inter-Bold"),
-          ("JetBrains Mono", 400, "normal", "JetBrainsMono-Regular"), ("JetBrains Mono", 700, "normal", "JetBrainsMono-Bold"))
+_FONTS = (
+    ("Inter", 400, "normal", "Inter-Regular"),
+    ("Inter", 400, "italic", "Inter-Italic"),
+    ("Inter", 600, "normal", "Inter-SemiBold"),
+    ("Inter", 700, "normal", "Inter-Bold"),
+    ("JetBrains Mono", 400, "normal", "JetBrainsMono-Regular"),
+    ("JetBrains Mono", 700, "normal", "JetBrainsMono-Bold"),
+)
 
 
 @lru_cache(maxsize=1)
@@ -66,8 +86,10 @@ def _font_faces() -> str:
                 data = base64.b64encode(fh.read()).decode("ascii")
         except OSError:
             continue
-        faces.append(f"@font-face {{ font-family:'{family}'; font-weight:{weight}; font-style:{style}; "
-                     f"font-display:swap; src:url(data:font/woff2;base64,{data}) format('woff2'); }}")
+        faces.append(
+            f"@font-face {{ font-family:'{family}'; font-weight:{weight}; font-style:{style}; "
+            f"font-display:swap; src:url(data:font/woff2;base64,{data}) format('woff2'); }}"
+        )
     return "\n".join(faces)
 
 
@@ -92,7 +114,7 @@ def _utc(timestamp: str) -> str:
 
 
 def _octets(size: int) -> str:
-    return f"{size:,}".replace(",", "\u202f")   # espace fine insécable : 1 107 864
+    return f"{size:,}".replace(",", "\u202f")  # espace fine insécable : 1 107 864
 
 
 def _pill(severity: str | None) -> str:
@@ -103,8 +125,12 @@ def _pill(severity: str | None) -> str:
 
 def _alerts(report: ReportModel) -> list[tuple[int, FindingModel, str, str]]:
     """(index du constat, constat, clé, valeur) de chaque alerte, dans l'ordre des constats."""
-    return [(i, f, k, v) for i, f in enumerate(report.findings) for k, v in f.metadata.items()
-            if str(k).startswith("[ALERTE]") or "[ALERTE]" in str(v)]
+    return [
+        (i, f, k, v)
+        for i, f in enumerate(report.findings)
+        for k, v in f.metadata.items()
+        if str(k).startswith("[ALERTE]") or "[ALERTE]" in str(v)
+    ]
 
 
 def _kv_table(rows: dict, alert_keys: bool = True) -> str:
@@ -112,14 +138,13 @@ def _kv_table(rows: dict, alert_keys: bool = True) -> str:
     for k, v in rows.items():
         alert = alert_keys and (str(k).startswith("[ALERTE]") or "[ALERTE]" in str(v))
         cls = ' class="alerte"' if alert else ""
-        out.append(f"<tr{cls}><th scope=\"row\">{_e(k)}</th><td>{_e(v)}</td></tr>")
+        out.append(f'<tr{cls}><th scope="row">{_e(k)}</th><td>{_e(v)}</td></tr>')
     return f'<table class="kv">{"".join(out)}</table>' if out else ""
 
 
 def _table(head: list[str], rows: list[str], cls: str = "") -> str:
     th = "".join(f"<th>{_e(h)}</th>" for h in head)
-    return (f'<div class="defile"><table class="{cls}"><thead><tr>{th}</tr></thead>'
-            f"<tbody>{''.join(rows)}</tbody></table></div>")
+    return f'<div class="defile"><table class="{cls}"><thead><tr>{th}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
 
 
 def _data_block(key: str, value, depth: int = 0) -> str:
@@ -135,27 +160,28 @@ def _data_block(key: str, value, depth: int = 0) -> str:
             body += "".join(_data_block(k, v, depth + 1) for k, v in nested.items())
         else:
             body += _kv_table({k: v for k, v in nested.items()}, alert_keys=False)
-        return f'<h5>{_e(title)}</h5>{body}' if body else ""
+        return f"<h5>{_e(title)}</h5>{body}" if body else ""
     if isinstance(value, (list, tuple, set)):
         items = list(value)
         rest = len(items) - _MAX_ROWS
         items = items[:_MAX_ROWS]
-        more = (f'<p class="reste">… {rest} élément(s) de plus, présents dans l\'export JSON.</p>'
-                if rest > 0 else "")
+        more = f'<p class="reste">… {rest} élément(s) de plus, présents dans l\'export JSON.</p>' if rest > 0 else ""
         hidden = len(value) - _PRINT_ROWS
         if hidden > 0:
-            more += (f'<p class="reste impression">… {hidden} ligne(s) de plus dans le rapport HTML '
-                     "et l'export JSON.</p>")
+            more += f'<p class="reste impression">… {hidden} ligne(s) de plus dans le rapport HTML et l\'export JSON.</p>'
 
         def cls(n: int) -> str:
             return ' class="surplus"' if n >= _PRINT_ROWS else ""
+
         if items and all(isinstance(x, dict) for x in items):
             cols = []
             for item in items:
                 cols += [c for c in item if c not in cols]
             cols = cols[:10]
-            rows = [f"<tr{cls(n)}>" + "".join(f"<td>{_e(item.get(c, ''))}</td>" for c in cols) + "</tr>"
-                    for n, item in enumerate(items)]
+            rows = [
+                f"<tr{cls(n)}>" + "".join(f"<td>{_e(item.get(c, ''))}</td>" for c in cols) + "</tr>"
+                for n, item in enumerate(items)
+            ]
             table = _table([str(c) for c in cols], rows)
         else:
             table = '<ul class="liste">' + "".join(f"<li{cls(n)}>{_e(x)}</li>" for n, x in enumerate(items)) + "</ul>"
@@ -172,6 +198,7 @@ def _h2(sid: str) -> str:
 
 
 # ── Page de garde ────────────────────────────────────────────────────────────
+
 
 def _verdict(report: ReportModel) -> tuple[str, str]:
     """(classe de la note, phrase de verdict) à partir des champs severity / incomplete."""
@@ -203,55 +230,86 @@ def _couverture(report: ReportModel, alerts, found, facts, case: str) -> str:
         (f"Indicateurs, dont {shared} corroborés", str(len(found)), ""),
         ("Faits datés", str(len(facts)), ""),
     ]
-    tiles = "".join(f'<div class="chiffre {cls}"><span class="valeur">{_e(v)}</span><span class="intitule">{_e(t)}</span></div>'
-                    for t, v, cls in cards)
+    tiles = "".join(
+        f'<div class="chiffre {cls}"><span class="valeur">{_e(v)}</span><span class="intitule">{_e(t)}</span></div>'
+        for t, v, cls in cards
+    )
     kind, sentence = _verdict(report)
-    return (f'<section class="couverture">'
-            f'<p class="surtitre">Rapport d\'investigation numérique</p>'
-            f"<h1>{_e(case)}</h1>"
-            f'<dl class="meta"><div><dt>Généré le</dt><dd>{_e(_utc(report.timestamp))}</dd></div>'
-            f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
-            f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés'}</dd></div>"
-            f"<div><dt>Constats</dt><dd>{sum(1 for f in report.findings if f.type not in _TRANSVERSE)}</dd></div></dl>"
-            f'<div class="chiffres">{tiles}</div>'
-            + _note(f"{kind} verdict", f"<p><strong>Verdict</strong> : {_e(sentence)}</p>")
-            + "</section>")
+    return (
+        f'<section class="couverture">'
+        f'<p class="surtitre">Rapport d\'investigation numérique</p>'
+        f"<h1>{_e(case)}</h1>"
+        f'<dl class="meta"><div><dt>Généré le</dt><dd>{_e(_utc(report.timestamp))}</dd></div>'
+        f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
+        f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés'}</dd></div>"
+        f"<div><dt>Constats</dt><dd>{sum(1 for f in report.findings if f.type not in _TRANSVERSE)}</dd></div></dl>"
+        f'<div class="chiffres">{tiles}</div>'
+        + _note(f"{kind} verdict", f"<p><strong>Verdict</strong> : {_e(sentence)}</p>")
+        + "</section>"
+    )
 
 
 # ── Sections ─────────────────────────────────────────────────────────────────
 
+
 def _synthese(report: ReportModel, alerts, found, facts) -> str:
     out = [_h2("synthese")]
     rank = {lvl: n for n, lvl in enumerate(_GRAVITES)}
-    graded = sorted(((f.severity, i, f) for i, f in enumerate(report.findings) if f.severity in ("critique", "élevé", "moyen")),
-                    key=lambda g: (rank[g[0]], g[1]))
+    graded = sorted(
+        ((f.severity, i, f) for i, f in enumerate(report.findings) if f.severity in ("critique", "élevé", "moyen")),
+        key=lambda g: (rank[g[0]], g[1]),
+    )
     if graded:
         rows = []
         for sev, i, f in graded:
-            reason = next((f"{str(k).replace('[ALERTE]', '').strip()} : {v}" for k, v in f.metadata.items()
-                           if str(k).startswith("[ALERTE]")), f.metadata.get("Verdict", ""))
-            rows.append(f'<tr><td class="fixe">{_pill(sev)}</td><td><a href="#{_anchor(i)}">{_e(_label(f))}</a></td>'
-                        f'<td class="court"><code>{_e(os.path.basename(f.file))}</code></td><td>{_e(str(reason)[:220])}</td></tr>')
+            reason = next(
+                (
+                    f"{str(k).replace('[ALERTE]', '').strip()} : {v}"
+                    for k, v in f.metadata.items()
+                    if str(k).startswith("[ALERTE]")
+                ),
+                f.metadata.get("Verdict", ""),
+            )
+            rows.append(
+                f'<tr><td class="fixe">{_pill(sev)}</td><td><a href="#{_anchor(i)}">{_e(_label(f))}</a></td>'
+                f'<td class="court"><code>{_e(os.path.basename(f.file))}</code></td><td>{_e(str(reason)[:220])}</td></tr>'
+            )
         out.append("<h3>Résultats par gravité</h3>" + _table(["Gravité", "Module", "Fichier", "Motif principal"], rows))
 
     strong = [fact for fact in facts if fact.get("confidence") == "élevée"]
     if strong:
-        rows = [f'<tr><td class="fixe">{_e(_utc(str(fact.get("timestamp", ""))))}</td>'
-                f'<td>{_e(" + ".join(fact.get("sources", [])))}</td><td>{_e(fact.get("description", ""))}</td></tr>'
-                for fact in strong[:_SYNTH_FACTS]]
-        more = (f'<p class="reste">{len(strong) - _SYNTH_FACTS} fait(s) de plus dans la '
-                f'<a href="#chronologie">chronologie</a>.</p>' if len(strong) > _SYNTH_FACTS else "")
-        out.append("<h3>Chaîne d'attaque</h3><p>Faits confirmés par au moins deux sources indépendantes.</p>"
-                   + _table(["Date", "Sources", "Fait"], rows) + more)
+        rows = [
+            f'<tr><td class="fixe">{_e(_utc(str(fact.get("timestamp", ""))))}</td>'
+            f"<td>{_e(' + '.join(fact.get('sources', [])))}</td><td>{_e(fact.get('description', ''))}</td></tr>"
+            for fact in strong[:_SYNTH_FACTS]
+        ]
+        more = (
+            f'<p class="reste">{len(strong) - _SYNTH_FACTS} fait(s) de plus dans la <a href="#chronologie">chronologie</a>.</p>'
+            if len(strong) > _SYNTH_FACTS
+            else ""
+        )
+        out.append(
+            "<h3>Chaîne d'attaque</h3><p>Faits confirmés par au moins deux sources indépendantes.</p>"
+            + _table(["Date", "Sources", "Fait"], rows)
+            + more
+        )
 
     corroborated = [i for i in found if len(i.sources) > 1]
     if corroborated:
-        rows = [f'<tr><td class="court">{_e(i.kind)}</td><td><code>{_e(i.value)}</code></td>'
-                f"<td>{_e(', '.join(sorted(MODULE_NAMES.get(s, s) for s in i.sources)))}</td></tr>"
-                for i in corroborated[:_SYNTH_IOCS]]
-        out.append("<h3>Indicateurs corroborés</h3>" + _table(["Type", "Valeur", "Vu par"], rows)
-                   + ('<p class="reste">Liste complète : <a href="#indicateurs">indicateurs</a>.</p>'
-                      if len(corroborated) > _SYNTH_IOCS else ""))
+        rows = [
+            f'<tr><td class="court">{_e(i.kind)}</td><td><code>{_e(i.value)}</code></td>'
+            f"<td>{_e(', '.join(sorted(MODULE_NAMES.get(s, s) for s in i.sources)))}</td></tr>"
+            for i in corroborated[:_SYNTH_IOCS]
+        ]
+        out.append(
+            "<h3>Indicateurs corroborés</h3>"
+            + _table(["Type", "Valeur", "Vu par"], rows)
+            + (
+                '<p class="reste">Liste complète : <a href="#indicateurs">indicateurs</a>.</p>'
+                if len(corroborated) > _SYNTH_IOCS
+                else ""
+            )
+        )
 
     if alerts:
         groups: dict[int, list[tuple[str, str]]] = defaultdict(list)
@@ -260,8 +318,10 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
         rows = []
         for i, items in groups.items():
             f = report.findings[i]
-            rows.append(f'<tr class="groupe"><th colspan="2"><a href="#{_anchor(i)}">{_e(_label(f))}</a> - '
-                        f"<code>{_e(os.path.basename(f.file))}</code> {_pill(f.severity)}</th></tr>")
+            rows.append(
+                f'<tr class="groupe"><th colspan="2"><a href="#{_anchor(i)}">{_e(_label(f))}</a> - '
+                f"<code>{_e(os.path.basename(f.file))}</code> {_pill(f.severity)}</th></tr>"
+            )
             rows += [f"<tr><td><strong>{_e(k)}</strong></td><td>{_e(v)}</td></tr>" for k, v in items]
         out.append(f"<h3>Alertes par module ({len(alerts)})</h3>" + _table(["Alerte", "Détail"], rows, "alertes"))
     else:
@@ -272,8 +332,10 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
     if corr:
         techniques = sorted(set(techniques) | {t for t in corr.extra.get("techniques", []) if isinstance(t, str)})
     if techniques:
-        rows = [f"<tr><td><code>{_e(t['id'])}</code></td><td>{_e(t['name'])}</td><td>{_e(t.get('tactic', ''))}</td></tr>"
-                for t in mitre.describe(techniques)]
+        rows = [
+            f"<tr><td><code>{_e(t['id'])}</code></td><td>{_e(t['name'])}</td><td>{_e(t.get('tactic', ''))}</td></tr>"
+            for t in mitre.describe(techniques)
+        ]
         out.append("<h3>Techniques MITRE ATT&amp;CK</h3>" + _table(["Identifiant", "Technique", "Tactique"], rows))
     return "".join(out)
 
@@ -281,12 +343,14 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
 def _perimetre(report: ReportModel) -> str:
     evidence = [f for f in report.findings if f.type not in _TRANSVERSE and os.path.isabs(f.file or "")]
     modules = sorted({_label(f) for f in evidence})
-    method = (f'<dl class="methode">'
-              f"<div><dt>Rapport généré</dt><dd>{_e(_utc(report.timestamp))}</dd></div>"
-              f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
-              f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés : aucune donnée envoyée à un tiers'}</dd></div>"
-              f"<div><dt>Modules exécutés</dt><dd>{_e(', '.join(modules) or 'aucun')}</dd></div>"
-              f"<div><dt>Dossier de sortie</dt><dd><code>{_e(export_root())}</code></dd></div></dl>")
+    method = (
+        f'<dl class="methode">'
+        f"<div><dt>Rapport généré</dt><dd>{_e(_utc(report.timestamp))}</dd></div>"
+        f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
+        f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés : aucune donnée envoyée à un tiers'}</dd></div>"
+        f"<div><dt>Modules exécutés</dt><dd>{_e(', '.join(modules) or 'aucun')}</dd></div>"
+        f"<div><dt>Dossier de sortie</dt><dd><code>{_e(export_root())}</code></dd></div></dl>"
+    )
     hashed = {r.file for r in report.evidence}
     # Dossier commun affiché une fois : chaque ligne ne garde que son chemin relatif
     try:
@@ -300,29 +364,57 @@ def _perimetre(report: ReportModel) -> str:
 
     def where(r) -> str:
         return r.origin or (os.path.relpath(os.path.dirname(r.file), root) if root else os.path.dirname(r.file))
-    rows = [f"<tr><td><code>{_e(os.path.basename(r.file))}</code><br><small>{_e(where(r))}</small></td>"
-            f'<td class="nombre">{_octets(r.size)}</td><td><code class="empreinte">{_e(r.sha256)}</code><br><code class="md5">{_e(r.md5)}</code></td>'
-            + ("" if one_stamp else f'<td class="fixe">{_e(_utc(r.hashed_at))}</td>')
-            + f"<td>{'<strong>MODIFIÉE</strong>' if r.changed_during_analysis else 'inchangée'}</td></tr>"
-            for r in report.evidence]
+
+    rows = [
+        f"<tr><td><code>{_e(os.path.basename(r.file))}</code><br><small>{_e(where(r))}</small></td>"
+        f'<td class="nombre">{_octets(r.size)}</td><td><code class="empreinte">{_e(r.sha256)}</code><br><code class="md5">{_e(r.md5)}</code></td>'
+        + ("" if one_stamp else f'<td class="fixe">{_e(_utc(r.hashed_at))}</td>')
+        + f"<td>{'<strong>MODIFIÉE</strong>' if r.changed_during_analysis else 'inchangée'}</td></tr>"
+        for r in report.evidence
+    ]
     # Preuves analysées hors collecte (analyse ciblée) : empreintes prises par le module
-    rows += [f"<tr><td><code>{_e(os.path.basename(f.file))}</code><br><small>{_e(f.file)}</small></td><td>-</td>"
-             f"<td><code>{_e(f.metadata.get('SHA-256', '-'))}</code><br><code class=\"md5\">{_e(f.metadata.get('MD5', '-'))}</code></td>"
-             + ("" if one_stamp else "<td>-</td>") + "<td>-</td></tr>"
-             for f in evidence if f.file not in hashed]
+    rows += [
+        f"<tr><td><code>{_e(os.path.basename(f.file))}</code><br><small>{_e(f.file)}</small></td><td>-</td>"
+        f'<td><code>{_e(f.metadata.get("SHA-256", "-"))}</code><br><code class="md5">{_e(f.metadata.get("MD5", "-"))}</code></td>'
+        + ("" if one_stamp else "<td>-</td>")
+        + "<td>-</td></tr>"
+        for f in evidence
+        if f.file not in hashed
+    ]
     changed = [r for r in report.evidence if r.changed_during_analysis]
-    table = ((_note("warning", f"<p><strong>{len(changed)} preuve(s) modifiée(s) pendant l'analyse</strong>.</p>") if changed else "")
-             + ("<p>Empreintes prises à la collecte, avant toute analyse"
+    table = (
+        (
+            (
+                _note("warning", f"<p><strong>{len(changed)} preuve(s) modifiée(s) pendant l'analyse</strong>.</p>")
+                if changed
+                else ""
+            )
+            + (
+                "<p>Empreintes prises à la collecte, avant toute analyse"
                 + (f" ({_e(_utc(report.evidence[0].hashed_at))})" if one_stamp else "")
-                + f", puis recalculées à la fin. Dossier des preuves : <code>{_e(root)}</code>.</p>" if report.evidence else "")
-             + _table(["Preuve", "Octets", "SHA-256 / MD5"] + ([] if one_stamp else ["Hachée le"]) + ["Après analyse"], rows)) if rows \
+                + f", puis recalculées à la fin. Dossier des preuves : <code>{_e(root)}</code>.</p>"
+                if report.evidence
+                else ""
+            )
+            + _table(["Preuve", "Octets", "SHA-256 / MD5"] + ([] if one_stamp else ["Hachée le"]) + ["Après analyse"], rows)
+        )
+        if rows
         else "<p>Aucune preuve fichier.</p>"
+    )
     integrity = "".join(
-        _note("warning" if f.severity == "critique" else ("important" if f.incomplete else "tip"),
-              f"<p><strong>{_e(f.metadata.get('Phase', 'Vérification'))}</strong> : {_e(f.metadata.get('Verdict', ''))}</p>")
-        for f in report.findings if f.type == "evidence_integrity")
-    return (_h2("perimetre") + method + f"<h3>Empreintes des preuves ({len(rows)})</h3>{table}"
-            + (f"<h3>Intégrité des preuves</h3>{integrity}" if integrity else ""))
+        _note(
+            "warning" if f.severity == "critique" else ("important" if f.incomplete else "tip"),
+            f"<p><strong>{_e(f.metadata.get('Phase', 'Vérification'))}</strong> : {_e(f.metadata.get('Verdict', ''))}</p>",
+        )
+        for f in report.findings
+        if f.type == "evidence_integrity"
+    )
+    return (
+        _h2("perimetre")
+        + method
+        + f"<h3>Empreintes des preuves ({len(rows)})</h3>{table}"
+        + (f"<h3>Intégrité des preuves</h3>{integrity}" if integrity else "")
+    )
 
 
 def _chronologie(report: ReportModel, facts) -> str:
@@ -333,30 +425,42 @@ def _chronologie(report: ReportModel, facts) -> str:
     skew = tl.metadata.get("[ATTENTION] Décalage d'horloge")
     if skew:
         realign = tl.metadata.get("Recalage PCAP")
-        clock = _note("info", f"<p><strong>Décalage d'horloge</strong> : {_e(skew)}</p>"
-                              + (f"<p>{_e(realign)}</p>" if realign else ""))
-    rows = [f'<tr class="confiance-{_e(fact.get("confidence", ""))}"><td class="fixe">{_e(_utc(str(fact.get("timestamp", ""))))}</td>'
-            f'<td class="fixe">{_e(fact.get("confidence", ""))}</td><td>{_e(" + ".join(fact.get("sources", [])))}</td>'
-            f'<td>{_e(fact.get("description", ""))}</td></tr>'
-            for fact in facts]
-    return (_h2("chronologie") + clock
-            + f"<p>{_e(tl.metadata.get('Total événements', 0))} événement(s), {len(facts)} fait(s) consolidé(s). "
-            "Confiance <em>élevée</em> : au moins deux sources concordantes.</p>"
-            + _table(["Date", "Confiance", "Sources", "Fait"], rows)
-            + "<details><summary>Paramètres de la chronologie</summary>" + _kv_table(tl.metadata) + "</details>")
+        clock = _note(
+            "info", f"<p><strong>Décalage d'horloge</strong> : {_e(skew)}</p>" + (f"<p>{_e(realign)}</p>" if realign else "")
+        )
+    rows = [
+        f'<tr class="confiance-{_e(fact.get("confidence", ""))}"><td class="fixe">{_e(_utc(str(fact.get("timestamp", ""))))}</td>'
+        f'<td class="fixe">{_e(fact.get("confidence", ""))}</td><td>{_e(" + ".join(fact.get("sources", [])))}</td>'
+        f"<td>{_e(fact.get('description', ''))}</td></tr>"
+        for fact in facts
+    ]
+    return (
+        _h2("chronologie")
+        + clock
+        + f"<p>{_e(tl.metadata.get('Total événements', 0))} événement(s), {len(facts)} fait(s) consolidé(s). "
+        "Confiance <em>élevée</em> : au moins deux sources concordantes.</p>"
+        + _table(["Date", "Confiance", "Sources", "Fait"], rows)
+        + "<details><summary>Paramètres de la chronologie</summary>"
+        + _kv_table(tl.metadata)
+        + "</details>"
+    )
 
 
 def _indicateurs(found) -> str:
     if not found:
         return _h2("indicateurs") + "<p>Aucun indicateur extrait.</p>"
-    rows = [f'<tr><td class="court">{_e(i.kind)}</td><td><code>{_e(i.value)}</code></td>'
-            f"<td>{_e(', '.join(sorted(MODULE_NAMES.get(s, s) for s in i.sources)))}</td>"
-            f"<td>{_e(' ; '.join(sorted({o.context for o in i.observations if o.context}))[:400])}</td></tr>"
-            for i in found]
+    rows = [
+        f'<tr><td class="court">{_e(i.kind)}</td><td><code>{_e(i.value)}</code></td>'
+        f"<td>{_e(', '.join(sorted(MODULE_NAMES.get(s, s) for s in i.sources)))}</td>"
+        f"<td>{_e(' ; '.join(sorted({o.context for o in i.observations if o.context}))[:400])}</td></tr>"
+        for i in found
+    ]
     shared = sum(len(i.sources) > 1 for i in found)
-    return (_h2("indicateurs")
-            + f"<p>{len(found)} indicateur(s), dont <strong>{shared}</strong> vu(s) par plusieurs sources (en tête).</p>"
-            + _table(["Type", "Valeur", "Sources", "Contexte"], rows))
+    return (
+        _h2("indicateurs")
+        + f"<p>{len(found)} indicateur(s), dont <strong>{shared}</strong> vu(s) par plusieurs sources (en tête).</p>"
+        + _table(["Type", "Valeur", "Sources", "Contexte"], rows)
+    )
 
 
 def _constats(report: ReportModel, toc: list[tuple[str, str]]) -> str:
@@ -380,40 +484,76 @@ def _constats(report: ReportModel, toc: list[tuple[str, str]]) -> str:
                 f'<div class="constat-tete"><h4>{_e(_label(f))}</h4><code class="nom">{_e(name)}</code>{_pill(f.severity)}</div>'
                 f'<p class="chemin">{_e(f.file)}</p>'
                 f"{_kv_table(f.metadata)}"
-                + (f'<details><summary>Données détaillées</summary>{details}</details>' if details else "")
-                + "</div>")
+                + (f"<details><summary>Données détaillées</summary>{details}</details>" if details else "")
+                + "</div>"
+            )
     return "".join(out)
 
 
 def _limites(report: ReportModel) -> str:
     items = []
     if report.analysis_errors:
-        lis = "".join(f"<li><code>{_e(e.module)}</code> sur <code>{_e(e.file)}</code> : {_e(e.error)} - {_e(e.message)}</li>"
-                      for e in report.analysis_errors)
-        items.append(_note("important", f"<p><strong>{len(report.analysis_errors)} échec(s) d'analyse</strong> : "
-                                        f"ces fichiers n'ont pas été analysés par le module indiqué.</p><ul>{lis}</ul>"))
+        lis = "".join(
+            f"<li><code>{_e(e.module)}</code> sur <code>{_e(e.file)}</code> : {_e(e.error)} - {_e(e.message)}</li>"
+            for e in report.analysis_errors
+        )
+        items.append(
+            _note(
+                "important",
+                f"<p><strong>{len(report.analysis_errors)} échec(s) d'analyse</strong> : "
+                f"ces fichiers n'ont pas été analysés par le module indiqué.</p><ul>{lis}</ul>",
+            )
+        )
     partial = [(f, reason) for f in report.findings for reason in f.incomplete]
     if partial:
         lis = "".join(f"<li><code>{_e(os.path.basename(f.file))}</code> : {_e(reason)}</li>" for f, reason in partial)
-        items.append(_note("important", f"<p><strong>Non analysé ou non vérifié</strong> : aucune conclusion "
-                                        f"ne peut être tirée sur ces points.</p><ul>{lis}</ul>"))
+        items.append(
+            _note(
+                "important",
+                f"<p><strong>Non analysé ou non vérifié</strong> : aucune conclusion "
+                f"ne peut être tirée sur ces points.</p><ul>{lis}</ul>",
+            )
+        )
     if report.skipped_files:
         files = "".join(f"<li><code>{_e(p)}</code></li>" for p in report.skipped_files)
-        items.append(_note("warning", f"<p><strong>{len(report.skipped_files)} fichier(s) non analysé(s)</strong> "
-                                      f"(aucun module adapté) :</p><ul>{files}</ul>"))
+        items.append(
+            _note(
+                "warning",
+                f"<p><strong>{len(report.skipped_files)} fichier(s) non analysé(s)</strong> "
+                f"(aucun module adapté) :</p><ul>{files}</ul>",
+            )
+        )
     if report.scan_notes:
-        items.append(_note("info", "<p><strong>Archives</strong> :</p><ul>"
-                                   + "".join(f"<li>{_e(n)}</li>" for n in report.scan_notes) + "</ul>"))
-    warnings = [(f, k, v) for f in report.findings for k, v in f.metadata.items()
-                if k in ("Avertissement", "Enregistrements illisibles") or "illisible" in str(k).lower()]
+        items.append(
+            _note(
+                "info",
+                "<p><strong>Archives</strong> :</p><ul>" + "".join(f"<li>{_e(n)}</li>" for n in report.scan_notes) + "</ul>",
+            )
+        )
+    warnings = [
+        (f, k, v)
+        for f in report.findings
+        for k, v in f.metadata.items()
+        if k in ("Avertissement", "Enregistrements illisibles") or "illisible" in str(k).lower()
+    ]
     if warnings:
         lis = "".join(f"<li><code>{_e(os.path.basename(f.file))}</code> : {_e(k)} : {_e(v)}</li>" for f, k, v in warnings)
         items.append(_note("important", f"<p><strong>Lectures partielles</strong> :</p><ul>{lis}</ul>"))
     if not online_enabled():
-        items.append(_note("info", "<p>Analyse <strong>hors ligne</strong> : aucune réputation externe (VirusTotal, "
-                                   "MalwareBazaar) ni géocodage n'a été consulté.</p>"))
-    items.append(_note("help", "<p>Les constats reflètent les modules exécutés et les preuves fournies ; un artefact "
-                               "absent du périmètre n'est pas couvert. L'export JSON contient l'intégralité des données.</p>"))
+        items.append(
+            _note(
+                "info",
+                "<p>Analyse <strong>hors ligne</strong> : aucune réputation externe (VirusTotal, "
+                "MalwareBazaar) ni géocodage n'a été consulté.</p>",
+            )
+        )
+    items.append(
+        _note(
+            "help",
+            "<p>Les constats reflètent les modules exécutés et les preuves fournies ; un artefact "
+            "absent du périmètre n'est pas couvert. L'export JSON contient l'intégralité des données.</p>",
+        )
+    )
     return _h2("limites") + "".join(items)
 
 
@@ -618,24 +758,36 @@ _JS = """
 })();
 """
 
-_NAV_LABELS = {"synthese": "Synthèse", "perimetre": "Périmètre", "chronologie": "Chronologie",
-               "indicateurs": "Indicateurs", "constats": "Constats", "limites": "Limites"}
+_NAV_LABELS = {
+    "synthese": "Synthèse",
+    "perimetre": "Périmètre",
+    "chronologie": "Chronologie",
+    "indicateurs": "Indicateurs",
+    "constats": "Constats",
+    "limites": "Limites",
+}
 
 
 def build_interactive_html(report: ReportModel) -> str:
     alerts = _alerts(report)
-    found = sorted(ioc_mod.collect([f for f in report.findings if f.type not in ("timeline",)]),
-                   key=lambda i: (-len(i.sources), i.kind, i.value))
+    found = sorted(
+        ioc_mod.collect([f for f in report.findings if f.type not in ("timeline",)]),
+        key=lambda i: (-len(i.sources), i.kind, i.value),
+    )
     timeline = next((f for f in report.findings if f.type == "timeline"), None)
     facts = (timeline.extra.get("facts") or []) if timeline else []
     toc: list[tuple[str, str]] = []
     constats = _constats(report, toc)
     case = os.path.basename(os.path.normpath(export_root())) or "analyse"
-    nav = "".join(f'<a href="#{sid}"' + (' class="active"' if n == 0 else "") + f">{_NAV_LABELS[sid]}</a>"
-                  for n, (sid, _) in enumerate(_SECTIONS))
-    side = "".join(f'<a class="n1" href="#{sid}">{_NAV_LABELS[sid]}</a>' + (
-        "".join(f'<a class="n2" href="#{a}">{_e(name)}</a>' for a, name in toc) if sid == "constats" else "")
-        for sid, _ in _SECTIONS)
+    nav = "".join(
+        f'<a href="#{sid}"' + (' class="active"' if n == 0 else "") + f">{_NAV_LABELS[sid]}</a>"
+        for n, (sid, _) in enumerate(_SECTIONS)
+    )
+    side = "".join(
+        f'<a class="n1" href="#{sid}">{_NAV_LABELS[sid]}</a>'
+        + ("".join(f'<a class="n2" href="#{a}">{_e(name)}</a>' for a, name in toc) if sid == "constats" else "")
+        for sid, _ in _SECTIONS
+    )
     tags = "".join(f"<span>{_e(t)}</span>" for t in sorted({_label(f) for f in report.findings}))
     return f"""<!DOCTYPE html>
 <html lang="fr">

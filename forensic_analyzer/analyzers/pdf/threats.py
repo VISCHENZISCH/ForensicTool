@@ -10,6 +10,7 @@ Le coût reste linéaire : le découpage avance toujours, une recherche qui a é
 commentaire, de flux, de chaîne hexadécimale) n'est jamais relancée plus loin, et un budget borne
 le travail total sur un fichier hostile. Un test impose un temps maximal sur chacun de ces cas.
 """
+
 from __future__ import annotations
 
 import base64
@@ -21,22 +22,40 @@ from dataclasses import dataclass, field
 from forensic_analyzer.analyzers.malware.entropy import calculate_entropy
 
 MAX_FILE_BYTES = 256 * 1024 * 1024
-_MAX_DECODED = 32 * 1024 * 1024          # par flux : bombe zlib
+_MAX_DECODED = 32 * 1024 * 1024  # par flux : bombe zlib
 _MAX_DECODED_TOTAL = 256 * 1024 * 1024
 _MAX_DEPTH = 64
 
-_SUSPICIOUS_NAMES = ("JS", "JavaScript", "OpenAction", "AA", "Launch", "SubmitForm", "ImportData",
-                     "GoToR", "GoToE", "RichMedia", "EmbeddedFiles", "XFA")
+_SUSPICIOUS_NAMES = (
+    "JS",
+    "JavaScript",
+    "OpenAction",
+    "AA",
+    "Launch",
+    "SubmitForm",
+    "ImportData",
+    "GoToR",
+    "GoToE",
+    "RichMedia",
+    "EmbeddedFiles",
+    "XFA",
+)
 _IMAGE_FILTERS = {"DCTDecode", "DCT", "JPXDecode", "CCITTFaxDecode", "CCF", "JBIG2Decode"}
 # Déclencheurs d'annotation qui partent sans clic : ouverture, affichage, apparition de la page
 _AUTO_ANNOT_KEYS = {"PO", "PV", "PI"}
 # API Acrobat visées par des exploits connus (CVE-2007-5659, 2008-2992, 2009-0927, 2009-4324...)
-_EXPLOIT_APIS = ("util.printf", "Collab.collectEmailInfo", "Collab.getIcon", "getAnnots",
-                 "spell.customDictionaryOpen", "media.newPlayer", "this.exportDataObject")
+_EXPLOIT_APIS = (
+    "util.printf",
+    "Collab.collectEmailInfo",
+    "Collab.getIcon",
+    "getAnnots",
+    "spell.customDictionaryOpen",
+    "media.newPlayer",
+    "this.exportDataObject",
+)
 _OBFUSCATION = ("eval(", "unescape(", "String.fromCharCode", "\\x", "%u")
 # Heap spray encodé dans du JavaScript (des octets 0x90 bruts dans une image ne s'exécutent pas)
-_SHELLCODE = (b"%u9090%u9090", b"%U9090%U9090", b"%u0c0c%u0c0c", b"%u0C0C%u0C0C",
-              b"\\x90" * 8, b"\\x0c" * 8, b"\\x0C" * 8)
+_SHELLCODE = (b"%u9090%u9090", b"%U9090%U9090", b"%u0c0c%u0c0c", b"%u0C0C%u0C0C", b"\\x90" * 8, b"\\x0c" * 8, b"\\x0C" * 8)
 
 _DELIM = rb"\s()<>\[\]{}/%\x00"
 _OBJ = re.compile(rb"(\d+)\s+(\d+)\s+obj(?![^" + _DELIM + rb"])")
@@ -136,7 +155,7 @@ class _Parser:
             end = self._find(_HEX_END, pos) - 1
             if end < 0:
                 raise _Malformed("chaîne hexadécimale non fermée")
-            digits = re.sub(rb"[^0-9A-Fa-f]", b"", data[pos + 1:end])
+            digits = re.sub(rb"[^0-9A-Fa-f]", b"", data[pos + 1 : end])
             return self._seen(binascii.unhexlify(digits + b"0" * (len(digits) % 2)), end + 1)
         if c == 0x2F:  # /
             m = _NAME.match(data, pos)
@@ -224,8 +243,8 @@ class PdfThreats:
     launches: list[str] = field(default_factory=list)
     other_actions: list[str] = field(default_factory=list)
     auto_external: list[str] = field(default_factory=list)  # URL ou ressource externe ouverte sans clic
-    urls: list[str] = field(default_factory=list)          # cibles d'actions et URLs du JavaScript
-    text_urls: list[str] = field(default_factory=list)     # URLs citées dans le texte ou les flux
+    urls: list[str] = field(default_factory=list)  # cibles d'actions et URLs du JavaScript
+    text_urls: list[str] = field(default_factory=list)  # URLs citées dans le texte ou les flux
     embedded: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     obfuscated_names: list[str] = field(default_factory=list)
@@ -256,7 +275,7 @@ def text_of(raw) -> str:
 class _Document:
     def __init__(self, data: bytes, reader=None):
         self.data = data
-        self.reader = reader                 # pypdf déchiffré (mot de passe vide), sinon None
+        self.reader = reader  # pypdf déchiffré (mot de passe vide), sinon None
         self.names: set[str] = set()
         self.obfuscated: set[str] = set()
         self.objects: dict[int, _Obj] = {}
@@ -308,15 +327,15 @@ class _Document:
         data = self.data
         if data.startswith(b"\r\n", start):
             start += 2
-        elif data[start:start + 1] in (b"\n", b"\r"):
+        elif data[start : start + 1] in (b"\n", b"\r"):
             start += 1
         length = value.get("Length") if isinstance(value, dict) else None
         if isinstance(length, int) and 0 <= length <= len(data) - start:
             end = data.find(b"endstream", start + length, start + length + 64)
             if end >= 0:
-                return data[start:start + length], end + 9
+                return data[start : start + length], end + 9
         end = data.find(b"endstream", start)
-        if end < 0:   # aucun endstream plus loin : inutile de le rechercher pour les flux suivants
+        if end < 0:  # aucun endstream plus loin : inutile de le rechercher pour les flux suivants
             self.result.partial.append("flux non terminé (fichier tronqué ou piégé)")
             return data[start:], len(data)
         return data[start:end].rstrip(b"\r\n"), end + 9
@@ -396,7 +415,7 @@ class _Document:
             if obj.stream is not None:
                 return text_of(self.stream_data(obj) or b"")
             value = self.resolve(value)
-        if isinstance(value, dict):   # spécification de fichier
+        if isinstance(value, dict):  # spécification de fichier
             return self.text(value.get("UF") or value.get("F") or value.get("Unix") or value.get("DOS"))
         return text_of(value)
 
@@ -426,8 +445,7 @@ class _Document:
     def walk(self) -> None:
         self._visited: set[int] = set()
         catalogs = [self.resolve(t.get("Root")) for t in self.trailers]
-        catalogs += [o.value for o in self.objects.values()
-                     if isinstance(o.value, dict) and o.value.get("Type") == "Catalog"]
+        catalogs += [o.value for o in self.objects.values() if isinstance(o.value, dict) and o.value.get("Type") == "Catalog"]
         seen_catalogs: set[int] = set()
         for cat in catalogs:
             if isinstance(cat, dict) and id(cat) not in seen_catalogs:
@@ -496,8 +514,7 @@ class _Document:
         for kid in self._list(d.get("Kids")):
             self._widget(kid, seen, depth + 1, page)
 
-    def _action(self, node, trigger: str, auto: bool, container: int | None,
-                key: str = "", depth: int = 0) -> None:
+    def _action(self, node, trigger: str, auto: bool, container: int | None, key: str = "", depth: int = 0) -> None:
         act = self.resolve(node)
         if not isinstance(act, dict) or depth > 32:
             return
@@ -590,6 +607,7 @@ def _dicts(value, depth: int = 0):
 
 # ── Filtres ───────────────────────────────────────────────────────────────────
 
+
 def _inflate(data: bytes) -> bytes | None:
     for wbits in (15, -15):
         try:
@@ -655,24 +673,28 @@ def _run_length(data: bytes) -> bytes:
         if n == 128:
             break
         if n < 128:
-            out += data[i + 1:i + 2 + n]
+            out += data[i + 1 : i + 2 + n]
             i += n + 2
         else:
-            out += data[i + 1:i + 2] * (257 - n)
+            out += data[i + 1 : i + 2] * (257 - n)
             i += 2
     return bytes(out)
 
 
 # ── Analyse ───────────────────────────────────────────────────────────────────
 
+
 def _xmp(doc: _Document) -> dict[str, str]:
     for obj in doc.objects.values():
         if isinstance(obj.value, dict) and obj.value.get("Subtype") == "XML" and obj.stream is not None:
             xml = doc.stream_data(obj) or b""
             found = {}
-            for m in re.finditer(rb"(xmp:CreateDate|xmp:ModifyDate|xmp:MetadataDate|xmp:CreatorTool|"
-                                 rb"pdf:Producer|xmpMM:DocumentID|xmpMM:InstanceID)"
-                                 rb"(?:\s*=\s*\"([^\"]*)\"|>([^<]*)<)", xml):
+            for m in re.finditer(
+                rb"(xmp:CreateDate|xmp:ModifyDate|xmp:MetadataDate|xmp:CreatorTool|"
+                rb"pdf:Producer|xmpMM:DocumentID|xmpMM:InstanceID)"
+                rb"(?:\s*=\s*\"([^\"]*)\"|>([^<]*)<)",
+                xml,
+            ):
                 found.setdefault(m.group(1).decode(), (m.group(2) or m.group(3) or b"").decode("utf-8", "replace"))
             if found:
                 return found
@@ -692,14 +714,12 @@ def analyze_pdf(path: str, reader=None) -> PdfThreats:
         r.partial.append("aucun objet PDF reconnu : fichier corrompu ou pas un PDF")
     r.encrypted = any("Encrypt" in t for t in doc.trailers)
     if r.encrypted and reader is None:
-        r.partial.append("PDF chiffré (mot de passe requis) : chaînes et flux illisibles, "
-                         "le code éventuel n'a pas pu être lu")
+        r.partial.append("PDF chiffré (mot de passe requis) : chaînes et flux illisibles, le code éventuel n'a pas pu être lu")
     doc.walk()
 
     info = next((doc._dict(t["Info"]) for t in reversed(doc.trailers) if "Info" in t), {})
     if not r.encrypted:
-        r.info = {str(k): text_of(doc.resolve(v)) for k, v in info.items()
-                  if isinstance(doc.resolve(v), (bytes, str))}
+        r.info = {str(k): text_of(doc.resolve(v)) for k, v in info.items() if isinstance(doc.resolve(v), (bytes, str))}
     r.xmp = _xmp(doc)
     r.linearized = "Linearized" in doc.names
     eofs = data.count(b"%%EOF")
@@ -716,7 +736,7 @@ def analyze_pdf(path: str, reader=None) -> PdfThreats:
         kind = obj.value.get("Type") if isinstance(obj.value, dict) else None
         if any(m in decoded for m in _SHELLCODE):
             r.shellcode.append(f"obj {obj.num}")
-        if kind != "EmbeddedFile" and len(decoded) >= 1024 and calculate_entropy(decoded[:256 * 1024]) > 7.5:
+        if kind != "EmbeddedFile" and len(decoded) >= 1024 and calculate_entropy(decoded[: 256 * 1024]) > 7.5:
             r.high_entropy.append(obj.num)
         if obj.num not in js_objects:
             for u in _URL.findall(decoded):
@@ -751,7 +771,7 @@ def _score(r: PdfThreats) -> tuple[int, str, list[tuple[int, str]]]:
         reasons.append((15, f"JavaScript déclenché par l'utilisateur : {s.trigger}, obj {s.obj}"))
     if r.launches:
         reasons.append((50, f"/Launch : lancement de programme ({r.launches[0]})"))
-    if r.auto_external:   # hameçonnage : le navigateur s'ouvre sur l'URL dès l'ouverture du PDF
+    if r.auto_external:  # hameçonnage : le navigateur s'ouvre sur l'URL dès l'ouverture du PDF
         reasons.append((30, f"ressource externe ouverte sans clic : {r.auto_external[0]}"))
     if r.shellcode:
         reasons.append((50, f"shellcode / heap spray encodé ({', '.join(r.shellcode[:3])})"))

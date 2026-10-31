@@ -1,4 +1,5 @@
 """Logique d'extraction avancée GPS via exifread."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,23 +11,28 @@ from forensic_analyzer.utils.network import online_enabled
 
 log = get_logger("gps")
 
-T = TypeVar('T')
-E = TypeVar('E')
+T = TypeVar("T")
+E = TypeVar("E")
+
 
 @dataclass(frozen=True)
 class Ok(Generic[T]):
     value: T
     ok: bool = True
 
+
 @dataclass(frozen=True)
 class Err(Generic[E]):
     error: E
     ok: bool = False
 
+
 Result = Ok[T] | Err[E]
+
 
 class GPSParser:
     """Extracteur de coordonnées GPS à partir de métadonnées EXIF."""
+
     def __init__(self, filepath: str):
         self.filepath = filepath
 
@@ -41,7 +47,7 @@ class GPSParser:
     def parse(self) -> Result[dict[str, str | float], str]:
         if not HAS_EXIFREAD:
             return Err("Bibliothèque 'exifread' manquante - pip install exifread")
-            
+
         try:
             with open(self.filepath, "rb") as f:
                 tags = exifread.process_file(f, details=False)
@@ -56,12 +62,14 @@ class GPSParser:
 
             lat = self._to_degrees(lat_t)
             lon = self._to_degrees(lon_t)
-            if str(lat_r) != "N": lat = -lat
-            if str(lon_r) != "E": lon = -lon
+            if str(lat_r) != "N":
+                lat = -lat
+            if str(lon_r) != "E":
+                lon = -lon
 
             meta: dict[str, str | float] = {
-                "Latitude":    round(lat, 6),
-                "Longitude":   round(lon, 6),
+                "Latitude": round(lat, 6),
+                "Longitude": round(lon, 6),
                 "Google Maps": f"http://maps.google.com/maps?q=loc:{lat},{lon}",
             }
 
@@ -69,13 +77,14 @@ class GPSParser:
             alt_r = tags.get("GPS GPSAltitudeRef")
             if alt_t and alt_r:
                 try:
-                    av  = alt_t.values[0]
+                    av = alt_t.values[0]
                     alt = av.num / av.den
-                    if hasattr(alt_r, 'values') and alt_r.values[0] == 1: alt = -alt
+                    if hasattr(alt_r, "values") and alt_r.values[0] == 1:
+                        alt = -alt
                     meta["Altitude (m)"] = round(alt, 2)
                 except Exception as exc:
                     log.debug("Champ GPS Altitude illisible dans %s : %s", self.filepath, exc)
-                
+
             speed_t = tags.get("GPS GPSSpeed")
             if speed_t:
                 try:
@@ -83,7 +92,7 @@ class GPSParser:
                     meta["Vitesse (km/h)"] = round(val.num / val.den, 2)
                 except Exception as exc:
                     log.debug("Champ GPS Vitesse illisible dans %s : %s", self.filepath, exc)
-                
+
             track_t = tags.get("GPS GPSTrack")
             if track_t:
                 try:
@@ -91,7 +100,7 @@ class GPSParser:
                     meta["Direction (Degrés)"] = round(val.num / val.den, 2)
                 except Exception as exc:
                     log.debug("Champ GPS Direction illisible dans %s : %s", self.filepath, exc)
-                
+
             gps_date = tags.get("GPS GPSDate") or tags.get("GPS GPSDateStamp")
             gps_time = tags.get("GPS GPSTimeStamp")
             gps_timestamp_str = ""
@@ -105,18 +114,19 @@ class GPSParser:
                     meta["Date/Heure GPS (UTC)"] = gps_timestamp_str
                 except Exception as exc:
                     log.debug("Champ GPS Date/Heure GPS illisible dans %s : %s", self.filepath, exc)
-                
+
             exif_date = tags.get("EXIF DateTimeOriginal")
             if exif_date and gps_timestamp_str:
                 meta["Date/Heure EXIF"] = str(exif_date.values)
                 # L'appareil photo enregistre souvent l'heure locale, le GPS l'heure UTC.
                 # S'il y a plus de 24h de décalage ou des dates différentes, on le signale.
                 meta["Alerte Timezone"] = "Vérifier le décalage (Heure locale vs Heure Satellite UTC)"
-                
+
             if not online_enabled():
                 return Ok(meta)
 
             import requests
+
             try:
                 headers = {"User-Agent": "ForensicAnalyzer-DFIR/1.0"}
                 url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"

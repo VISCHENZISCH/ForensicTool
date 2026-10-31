@@ -16,6 +16,26 @@ jobs:
       - name: "Ruff : erreurs réelles (syntaxe, noms indéfinis, imports inutiles)"
         run: pip install ruff && ruff check forensic_analyzer tests
 
+  ratchet:
+    # Pas de nouvel avertissement ruff (règles étendues) ni mypy par rapport au commit de base
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: "Cliquet ruff + mypy"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          pip install ruff mypy
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "Pas de commit de base (nouvelle branche) : cliquet ignoré"; exit 0
+          fi
+          tools/lint_ratchet.sh "$BASE"
+
   pytest:
     runs-on: ubuntu-latest
     strategy:

@@ -1,2 +1,3 @@
 from .analyzer import ImageAnalyzer
-__all__ = ['ImageAnalyzer']
+
+__all__ = ["ImageAnalyzer"]

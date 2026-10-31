@@ -3,6 +3,7 @@
 wtmp et lastlog sont lus en Python pur (structures glibc x86-64), sans dépendre
 de `last`. journald est lu via `journalctl --directory`.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -68,17 +69,19 @@ def parse_wtmp(path: str) -> list[dict]:
         data = f.read()
     records = []
     for off in range(0, len(data) - _UTMP_SIZE + 1, _UTMP_SIZE):
-        rec = data[off:off + _UTMP_SIZE]
+        rec = data[off : off + _UTMP_SIZE]
         kind = _UTMP_TYPES.get(struct.unpack("<h", rec[:2])[0])
         if kind not in ("BOOT", "USER", "RUN_LVL"):
             continue
-        records.append({
-            "time": _iso(struct.unpack("<i", rec[340:344])[0]),
-            "type": kind,
-            "line": _cstr(rec[8:40]),
-            "user": _cstr(rec[44:76]),
-            "host": _cstr(rec[76:332]),
-        })
+        records.append(
+            {
+                "time": _iso(struct.unpack("<i", rec[340:344])[0]),
+                "type": kind,
+                "line": _cstr(rec[8:40]),
+                "user": _cstr(rec[44:76]),
+                "host": _cstr(rec[76:332]),
+            }
+        )
     return records
 
 
@@ -88,7 +91,7 @@ def parse_lastlog(path: str) -> list[dict]:
         data = f.read()
     entries = []
     for uid in range(len(data) // _LASTLOG_SIZE):
-        rec = data[uid * _LASTLOG_SIZE:(uid + 1) * _LASTLOG_SIZE]
+        rec = data[uid * _LASTLOG_SIZE : (uid + 1) * _LASTLOG_SIZE]
         ts = struct.unpack("<i", rec[:4])[0]
         if ts:
             entries.append({"uid": uid, "time": _iso(ts), "line": _cstr(rec[4:36]), "host": _cstr(rec[36:292])})
@@ -132,12 +135,14 @@ def parse_journal(journal_dir: str, units_of_interest: set[str] | None = None) -
             continue
         unit_event = _UNIT_EVENT.match(message)
         if _JOURNAL_PATTERNS.search(message) or (unit_event and unit_event.group(2) in units):
-            events.append({
-                "time": _iso(ts),
-                "boot_id": boot_id,
-                "source": entry.get("SYSLOG_IDENTIFIER", ""),
-                "message": message[:300],
-            })
+            events.append(
+                {
+                    "time": _iso(ts),
+                    "boot_id": boot_id,
+                    "source": entry.get("SYSLOG_IDENTIFIER", ""),
+                    "message": message[:300],
+                }
+            )
 
     ordered = sorted(boots.values(), key=lambda b: b["first"])
     for i, b in enumerate(ordered):
@@ -151,5 +156,4 @@ def find_journal_dirs(root: str) -> list[str]:
     base = os.path.join(root, "var/log/journal")
     if not os.path.isdir(base):
         return []
-    return [os.path.join(base, d) for d in sorted(os.listdir(base))
-            if os.path.isdir(os.path.join(base, d))]
+    return [os.path.join(base, d) for d in sorted(os.listdir(base)) if os.path.isdir(os.path.join(base, d))]

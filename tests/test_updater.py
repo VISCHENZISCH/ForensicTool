@@ -1,4 +1,5 @@
 """Mise à jour : décision sur git rev-list, refus si le dépôt local a bougé."""
+
 from __future__ import annotations
 
 import shutil
@@ -10,8 +11,13 @@ pytestmark = pytest.mark.skipif(not shutil.which("git"), reason="git absent")
 
 
 def _git(cwd, *args):
-    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=cwd, check=True,
-                   capture_output=True, env={"LANG": "fr_FR.UTF-8", "PATH": "/usr/bin:/bin", "HOME": str(cwd)})
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        env={"LANG": "fr_FR.UTF-8", "PATH": "/usr/bin:/bin", "HOME": str(cwd)},
+    )
 
 
 @pytest.fixture

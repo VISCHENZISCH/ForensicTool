@@ -1,4 +1,5 @@
 """Non-regression des bugs trouves en faisant tourner chaque module sur des preuves synthétiques."""
+
 from __future__ import annotations
 
 import datetime
@@ -25,8 +26,7 @@ def test_gps_date_is_extracted(tmp_path):
 
     path = tmp_path / "photo.jpg"
     exif = PIL.Exif()
-    exif[0x8825] = {1: "N", 2: (R(48), R(51), R(24)), 3: "E", 4: (R(2), R(17), R(40)),
-                    29: "2026:10:01", 7: (R(10), R(0), R(0))}
+    exif[0x8825] = {1: "N", 2: (R(48), R(51), R(24)), 3: "E", 4: (R(2), R(17), R(40)), 29: "2026:10:01", 7: (R(10), R(0), R(0))}
     PIL.new("RGB", (8, 8)).save(path, exif=exif)
 
     meta = GPSAnalyzer().analyze(str(path)).metadata
@@ -63,8 +63,9 @@ def test_pcap_timeline_reads_c2_ip_from_connection():
     scapy = pytest.importorskip("scapy.all")
     pkt = scapy.IP(src="10.0.0.5", dst="185.220.101.42") / scapy.TCP(dport=443, flags="S")
     pkt.time = 1_790_000_000
-    beacons = {"beacons": [{"connection": "10.0.0.5 -> 185.220.101.42:443",
-                            "detail": "Beacon suspect : intervalle ~60s, jitter 0%"}]}
+    beacons = {
+        "beacons": [{"connection": "10.0.0.5 -> 185.220.101.42:443", "detail": "Beacon suspect : intervalle ~60s, jitter 0%"}]
+    }
     timeline = build_attack_timeline([pkt], [], beacons)
     assert [e["type"] for e in timeline] == ["C2 CONNECT"]
 
@@ -103,13 +104,22 @@ def test_syslog_year_comes_from_log_mtime(tmp_path):
 
 
 def test_browser_history_is_not_an_ioc():
-    chrome = FindingModel(type="chromium_artifacts", file="History", extra={"chromium_urls": [
-        {"url": "https://www.google.com/search?q=x"},
-        {"url": "http://185.220.101.42/x"},
-        {"url": "https://cdn.example.org/tool.exe"},
-    ]})
-    firefox = FindingModel(type="firefox_places", file="places.sqlite", extra={
-        "history": [{"url": "https://www.wikipedia.org/"}], "suspects": ["https://pastebin.com/raw/abc"]})
+    chrome = FindingModel(
+        type="chromium_artifacts",
+        file="History",
+        extra={
+            "chromium_urls": [
+                {"url": "https://www.google.com/search?q=x"},
+                {"url": "http://185.220.101.42/x"},
+                {"url": "https://cdn.example.org/tool.exe"},
+            ]
+        },
+    )
+    firefox = FindingModel(
+        type="firefox_places",
+        file="places.sqlite",
+        extra={"history": [{"url": "https://www.wikipedia.org/"}], "suspects": ["https://pastebin.com/raw/abc"]},
+    )
     values = {i.value for i in iocs.collect([chrome, firefox])}
     assert "www.google.com" not in values and "www.wikipedia.org" not in values
     assert {"185.220.101.42", "cdn.example.org", "pastebin.com"} <= values
@@ -117,13 +127,18 @@ def test_browser_history_is_not_an_ioc():
 
 def test_generated_yara_compiles_with_duplicate_binary(tmp_path):
     yara = pytest.importorskip("yara")
-    binary = {"type": "elf_analysis", "metadata": {"SHA-256": "a" * 64, "[ALERTE] Réseau": "connect()"},
-              "extra": {"iocs": {"ips": ["185.220.101.42"], "paths": ["/tmp/.x/kworkerd"]}}}
-    report = ReportModel.from_findings([
-        FindingModel(file="/evidence/kworkerd", **binary),
-        FindingModel(file="/export/extractions/img/tmp/.x/kworkerd", **binary),
-        FindingModel(file="/other/kworkerd", **{**binary, "metadata": {**binary["metadata"], "SHA-256": "b" * 64}}),
-    ])
+    binary = {
+        "type": "elf_analysis",
+        "metadata": {"SHA-256": "a" * 64, "[ALERTE] Réseau": "connect()"},
+        "extra": {"iocs": {"ips": ["185.220.101.42"], "paths": ["/tmp/.x/kworkerd"]}},
+    }
+    report = ReportModel.from_findings(
+        [
+            FindingModel(file="/evidence/kworkerd", **binary),
+            FindingModel(file="/export/extractions/img/tmp/.x/kworkerd", **binary),
+            FindingModel(file="/other/kworkerd", **{**binary, "metadata": {**binary["metadata"], "SHA-256": "b" * 64}}),
+        ]
+    )
     out = DefenseRulesGenerator().generate(report, output_dir=str(tmp_path))
     yara.compile(filepath=out["yara"])
     text = open(out["yara"]).read()
@@ -169,6 +184,7 @@ def _pdf(tmp_path, name: str, body: bytes) -> str:
 
 def _flate(obj: int, data: bytes, extra: bytes = b"") -> bytes:
     import zlib
+
     z = zlib.compress(data)
     return (b"%d 0 obj<</Length %d/Filter/FlateDecode%s>>stream\n" % (obj, len(z), extra)) + z + b"\nendstream endobj\n"
 
@@ -180,14 +196,18 @@ def test_pdf_scoring_flags_malicious_documents(tmp_path):
         meta = PDFAnalyzer().analyze(path).metadata
         return int(meta["Score de menace"].split("/")[0]), meta
 
-    js_open = _pdf(tmp_path, "js.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
-                                        b"2 0 obj<</S/JavaScript/JS(app.alert(1))>>endobj")
+    js_open = _pdf(
+        tmp_path, "js.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n2 0 obj<</S/JavaScript/JS(app.alert(1))>>endobj"
+    )
     s, meta = score(js_open)
     assert 75 <= s <= 85 and "Critique" in meta["PDF Actions"] and meta["Score de menace"].endswith("(Critique)")
 
-    obfuscated = _pdf(tmp_path, "obf.pdf", b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
-                                           b"2 0 obj<</S/J#61vaScript/J#53 3 0 R>>endobj\n"
-                                           + _flate(3, b"var s=unescape('%u9090%u9090%u9090');eval(s);"))
+    obfuscated = _pdf(
+        tmp_path,
+        "obf.pdf",
+        b"1 0 obj<</Type/Catalog/OpenAction 2 0 R>>endobj\n"
+        b"2 0 obj<</S/J#61vaScript/J#53 3 0 R>>endobj\n" + _flate(3, b"var s=unescape('%u9090%u9090%u9090');eval(s);"),
+    )
     s, meta = score(obfuscated)
     assert s >= 90 and "Noms obfusqués" in meta and "Shellcode" in meta
 
@@ -202,10 +222,15 @@ def test_pdf_scoring_flags_malicious_documents(tmp_path):
 def test_pdf_scoring_ignores_benign_structures(tmp_path):
     from forensic_analyzer.analyzers.pdf import PDFAnalyzer
 
-    benign = _pdf(tmp_path, "benign.pdf",
-                  b"1 0 obj<</Type/Catalog/OpenAction[3 0 R/Fit]/JSomething 1>>endobj\n"
-                  + _flate(2, b"BT /F1 12 Tf (Rapport annuel) Tj ET\n" * 200 + b"\x90" * 64)  # octets 0x90 bruts
-                  + b"4 0 obj<</Length 4096/Filter/DCTDecode>>stream\n" + os.urandom(4096) + b"\nendstream endobj\n")
+    benign = _pdf(
+        tmp_path,
+        "benign.pdf",
+        b"1 0 obj<</Type/Catalog/OpenAction[3 0 R/Fit]/JSomething 1>>endobj\n"
+        + _flate(2, b"BT /F1 12 Tf (Rapport annuel) Tj ET\n" * 200 + b"\x90" * 64)  # octets 0x90 bruts
+        + b"4 0 obj<</Length 4096/Filter/DCTDecode>>stream\n"
+        + os.urandom(4096)
+        + b"\nendstream endobj\n",
+    )
     meta = PDFAnalyzer().analyze(benign).metadata
     assert meta["Score de menace"].startswith("0/100")
     assert "Shellcode" not in meta and "/JS" not in meta.get("Tags PDF Suspects", "")
@@ -255,13 +280,13 @@ def test_folder_keeps_only_files_of_the_chosen_type(tmp_path):
 
     (tmp_path / "sub").mkdir()
     (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
-    (tmp_path / "sub" / "renamed.bin").write_bytes(b"%PDF-1.7\n%%EOF\n")   # PDF reconnu par sa signature
+    (tmp_path / "sub" / "renamed.bin").write_bytes(b"%PDF-1.7\n%%EOF\n")  # PDF reconnu par sa signature
     (tmp_path / "notes.txt").write_text("185.220.101.42")
-    (tmp_path / "fake.pdf").write_bytes(b"MZ\x90\x00" + b"\x00" * 60)      # exécutable déguisé en PDF
+    (tmp_path / "fake.pdf").write_bytes(b"MZ\x90\x00" + b"\x00" * 60)  # exécutable déguisé en PDF
 
     assert sorted(os.path.basename(f) for f in files_for(PDFAnalyzer(), str(tmp_path))) == ["a.pdf", "renamed.bin"]
     assert files_for(PDFAnalyzer(), str(tmp_path / "a.pdf")) == [str(tmp_path / "a.pdf")]
-    assert len(files_for(IOCAnalyzer(), str(tmp_path))) == 4               # tout fichier
+    assert len(files_for(IOCAnalyzer(), str(tmp_path))) == 4  # tout fichier
     assert files_for(LinuxArtifactsAnalyzer(), str(tmp_path)) == [str(tmp_path)]  # la racine elle-même
 
 
@@ -269,10 +294,23 @@ def test_lnk_and_chromium_downloads_reach_the_timeline():
     from forensic_analyzer.analyzers.timeline.analyzer import build_timeline
 
     # LnkParse3 fournit un datetime, pas une chaîne
-    lnk = FindingModel(type="lnk_shortcut", file="evil.lnk",
-                       metadata={"Date Création (LNK)": datetime.datetime(2026, 9, 21, 10, 0)})
-    chrome = FindingModel(type="chromium_artifacts", file="History", extra={"chromium_downloads": [
-        {"fichier": "C:\\\\Users\\\\bob\\\\mimikatz.zip", "date": "2026-09-21 10:05:00", "taille_octets": 1, "danger_type": 1}]})
+    lnk = FindingModel(
+        type="lnk_shortcut", file="evil.lnk", metadata={"Date Création (LNK)": datetime.datetime(2026, 9, 21, 10, 0)}
+    )
+    chrome = FindingModel(
+        type="chromium_artifacts",
+        file="History",
+        extra={
+            "chromium_downloads": [
+                {
+                    "fichier": "C:\\\\Users\\\\bob\\\\mimikatz.zip",
+                    "date": "2026-09-21 10:05:00",
+                    "taille_octets": 1,
+                    "danger_type": 1,
+                }
+            ]
+        },
+    )
     sources = {e["file"] for e in build_timeline(ReportModel.from_findings([lnk, chrome]))}
     assert {"evil.lnk", "History"} <= sources
 
@@ -280,8 +318,9 @@ def test_lnk_and_chromium_downloads_reach_the_timeline():
 def test_timeline_tokens_ignore_accents():
     from forensic_analyzer.core.timeline import _tokens
 
-    assert _tokens({"description": "Création de l'unité /etc/x.service"}) == \
-        _tokens({"description": "Creation de l'unite /etc/x.service"})
+    assert _tokens({"description": "Création de l'unité /etc/x.service"}) == _tokens(
+        {"description": "Creation de l'unite /etc/x.service"}
+    )
 
 
 # Audit de sécurité : preuves malveillantes
@@ -293,13 +332,15 @@ def test_graph_tooltips_cannot_inject_html(tmp_path):
     from forensic_analyzer.output.graph_renderer import render_correlation_graph
 
     evil = "http://185.220.101.42/x?href=<img/src=x/onerror=alert(1)>"
-    findings = [FindingModel(type="elf_analysis", file="/e/implant", extra={"iocs": {"urls": [evil]}}),
-                FindingModel(type="ioc", file="/e/notes.txt", extra={"iocs": {"urls": [evil]}})]
+    findings = [
+        FindingModel(type="elf_analysis", file="/e/implant", extra={"iocs": {"urls": [evil]}}),
+        FindingModel(type="ioc", file="/e/notes.txt", extra={"iocs": {"urls": [evil]}}),
+    ]
     out = render_correlation_graph(correlate(findings), str(tmp_path / "g.html"))
     page = open(out).read()
     # Seules les infobulles passent par innerHTML (libellés et identifiants : dessin sur canevas)
     nodes = json.loads(re.search(r"nodes = new vis\.DataSet\((.*?)\);", page, re.S).group(1))
-    assert "popup.innerHTML" in page   # mode HTML bien déclenché par "href"
+    assert "popup.innerHTML" in page  # mode HTML bien déclenché par "href"
     assert all("<" not in n["title"] for n in nodes)
 
 
@@ -307,8 +348,7 @@ def test_terminal_output_neutralizes_escape_sequences(capsys):
     from forensic_analyzer.output import ui
 
     evil = "a\x1b[1A\x1b[2K\x1b]52;c;cHduZWQ=\x07b"
-    ui.render_finding(FindingModel(type="pdf_analysis", file="/e/" + evil, metadata={"Author": evil},
-                                   extra={"strings": [evil]}))
+    ui.render_finding(FindingModel(type="pdf_analysis", file="/e/" + evil, metadata={"Author": evil}, extra={"strings": [evil]}))
     ui.error(evil)
     out = capsys.readouterr().out
     assert "\x1b[1A" not in out and "\x1b]52" not in out and "\x07" not in out
@@ -320,9 +360,21 @@ def test_csv_exports_cannot_carry_formulas(tmp_path, monkeypatch):
     from forensic_analyzer.output.csv_exporter import CSVExporter
 
     monkeypatch.chdir(tmp_path)
-    linux = FindingModel(type="linux_artifacts", file="/e/root", extra={"timeline_events": [
-        {"timestamp": "2026-09-21T10:00:00", "source": "bash_history", "event_type": "command",
-         "description": "=HYPERLINK(\"http://evil\",\"x\")", "details": "+cmd|' /C calc'!A0"}]})
+    linux = FindingModel(
+        type="linux_artifacts",
+        file="/e/root",
+        extra={
+            "timeline_events": [
+                {
+                    "timestamp": "2026-09-21T10:00:00",
+                    "source": "bash_history",
+                    "event_type": "command",
+                    "description": '=HYPERLINK("http://evil","x")',
+                    "details": "+cmd|' /C calc'!A0",
+                }
+            ]
+        },
+    )
     CSVExporter().export(ReportModel.from_findings([linux]), "t.csv")
     rows = list(csv.DictReader(open(tmp_path / "export" / "t.csv")))
     assert rows[0]["description"].startswith("'=") and rows[0]["details"].startswith("'+")
@@ -344,15 +396,17 @@ def test_browser_databases_never_touch_evidence(tmp_path):
         INSERT INTO moz_places VALUES (1, 'http://only-in-wal.example', 't', 1);
         INSERT INTO moz_historyvisits VALUES (1, 1, 1790000000000000, 1);""")
     conn.commit()
-    evidence = tmp_path / "profil?mode=rwc#x"   # nom de dossier qui détournait l'URI SQLite
+    evidence = tmp_path / "profil?mode=rwc#x"  # nom de dossier qui détournait l'URI SQLite
     evidence.mkdir()
     for name in ("places.sqlite", "places.sqlite-wal"):
         (evidence / name).write_bytes((src / name).read_bytes())
     conn.close()
 
     def state():
-        return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in tmp_path.iterdir() if p.is_file()} | \
-               {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in evidence.iterdir()}
+        return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in tmp_path.iterdir() if p.is_file()} | {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in evidence.iterdir()
+        }
+
     before = state()
     finding = FirefoxHistoryAnalyzer().analyze(str(evidence / "places.sqlite"))
     assert [e["url"] for e in finding.extra["history"]] == ["http://only-in-wal.example"]
@@ -411,7 +465,7 @@ def test_manifest_never_verifies_a_lookalike_file(tmp_path, monkeypatch):
     import hashlib
     from forensic_analyzer.core.integrity import verify_manifest
 
-    (tmp_path / "a.bin").write_bytes(b"autre fichier")          # homonyme hors du chemin attendu
+    (tmp_path / "a.bin").write_bytes(b"autre fichier")  # homonyme hors du chemin attendu
     manifest = tmp_path / "manifeste" / "m.sha256"
     manifest.parent.mkdir()
     manifest.write_text(f"{hashlib.sha256(b'autre fichier').hexdigest()}  disque/preuve_originale/a.bin\n")

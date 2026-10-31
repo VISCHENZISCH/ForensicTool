@@ -1,2 +1,3 @@
 from .analyzer import IOCAnalyzer
-__all__ = ['IOCAnalyzer']
+
+__all__ = ["IOCAnalyzer"]

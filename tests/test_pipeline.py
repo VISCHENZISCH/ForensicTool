@@ -1,4 +1,5 @@
 """Tests du registre d'analyzers et du pipeline."""
+
 from __future__ import annotations
 
 from forensic_analyzer.core.base import BaseAnalyzer
@@ -6,7 +7,7 @@ from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
 from forensic_analyzer.core.scanner import collect_targets
 from forensic_analyzer.models.finding import FindingModel
 
-JPEG_HEADER = b"\xFF\xD8\xFF\xE0" + b"\x00" * 32
+JPEG_HEADER = b"\xff\xd8\xff\xe0" + b"\x00" * 32
 
 
 class DummyAnalyzer(BaseAnalyzer):

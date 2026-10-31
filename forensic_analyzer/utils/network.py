@@ -1,4 +1,5 @@
 """Politique d'accès réseau (OPSEC) partagée par tous les analyzers."""
+
 import os
 
 _online = os.environ.get("FORENSIC_ONLINE") == "1"

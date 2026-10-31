@@ -3,6 +3,7 @@
 Chaque analyzer stocke ses indicateurs à sa façon ; ce module les ramène à une forme
 commune (type, valeur) pour la corrélation, la génération de règles et l'export STIX.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -20,20 +21,28 @@ _DOMAIN = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+
 _SHA256 = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 _MD5 = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 # Domaines de documentation / licences présents dans presque tous les binaires légitimes
-_BENIGN_DOMAINS = {"www.debian.org", "debian.org", "gnu.org", "www.gnu.org", "example.com",
-                   "www.example.com", "schemas.microsoft.com", "www.w3.org", "w3.org"}
+_BENIGN_DOMAINS = {
+    "www.debian.org",
+    "debian.org",
+    "gnu.org",
+    "www.gnu.org",
+    "example.com",
+    "www.example.com",
+    "schemas.microsoft.com",
+    "www.w3.org",
+    "w3.org",
+}
 
 # Types de résultats dont le fichier analysé est lui-même un indicateur (empreinte, nom)
-_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "webshell_analysis",
-                        "office_analysis"}
+_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "webshell_analysis", "office_analysis"}
 
 
 @dataclass(frozen=True)
 class Observation:
-    kind: str          # ipv4, domain, url, sha256, md5, path, filename, ja3, service
+    kind: str  # ipv4, domain, url, sha256, md5, path, filename, ja3, service
     value: str
-    source: str        # type du résultat (elf_analysis, pcap, memory...)
-    artifact: str      # fichier ou origine dans l'image
+    source: str  # type du résultat (elf_analysis, pcap, memory...)
+    artifact: str  # fichier ou origine dans l'image
     context: str = ""
 
 
@@ -46,7 +55,6 @@ class IOC:
     @property
     def sources(self) -> set[str]:
         return {o.source for o in self.observations}
-
 
 
 def _keep_ip(value: str) -> bool:
@@ -107,6 +115,7 @@ class _Collector:
 
 
 # Extracteurs spécifiques, par type de résultat
+
 
 def _behaviour(c: _Collector, f: FindingModel) -> None:
     """Destinations, fichiers et commandes reconstruits par désassemblage (ELF et PE)."""
@@ -199,7 +208,7 @@ def _linux(c: _Collector, f: FindingModel) -> None:
         c.add("ipv4", a.get("source_ip"), "échec d'authentification")
     histories = [f.extra["bash_history"]] if f.extra.get("bash_history") else list(f.extra.get("bash_histories") or [])
     for hist in histories:
-        for cmd in (hist.get("suspicious", []) if isinstance(hist, dict) else []):
+        for cmd in hist.get("suspicious", []) if isinstance(hist, dict) else []:
             c.text(cmd.get("command", ""), "commande suspecte (historique bash)")
             for name in re.findall(r"[\w.-]+\.(?:sql\.gz|sql|php|gz|zip|tar)\b", cmd.get("command", "")):
                 c.add("filename", name.lower(), "fichier manipulé (historique bash)")
@@ -230,8 +239,11 @@ def _evtx(c: _Collector, f: FindingModel) -> None:
 
 def _registry(c: _Collector, f: FindingModel) -> None:
     for p in f.extra.get("persistence", []):
-        c.add("path", str(p.get("value", "")).split('"')[1] if '"' in str(p.get("value", "")) else p.get("value"),
-              f"{p.get('type')} {p.get('key')}")
+        c.add(
+            "path",
+            str(p.get("value", "")).split('"')[1] if '"' in str(p.get("value", "")) else p.get("value"),
+            f"{p.get('type')} {p.get('key')}",
+        )
 
 
 _DROPPED_EXT = (".exe", ".dll", ".scr", ".ps1", ".bat", ".vbs", ".hta", ".js", ".jar", ".msi", ".sh", ".elf", ".bin")
@@ -305,7 +317,9 @@ def _webshell(c: _Collector, f: FindingModel) -> None:
 
 _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "elf_analysis": _elf,
-    "malware_analysis": _pe, "pe_analysis": _pe, "pdf_analysis": _pe,
+    "malware_analysis": _pe,
+    "pe_analysis": _pe,
+    "pdf_analysis": _pe,
     "office_analysis": _office,
     "pcap": _pcap,
     "memory": _memory,
@@ -315,7 +329,8 @@ _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "registry": _registry,
     "chromium_artifacts": _chromium,
     "firefox_places": _firefox,
-    "prefetch": _prefetch, "lnk_shortcut": _prefetch,
+    "prefetch": _prefetch,
+    "lnk_shortcut": _prefetch,
     "ids_alerts": _ids,
     "ioc": _ioc_extractor,
     "log_analysis": _log_analysis,

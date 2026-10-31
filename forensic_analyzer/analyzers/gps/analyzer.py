@@ -1,4 +1,5 @@
 """Analyseur pour coordonnées GPS."""
+
 from __future__ import annotations
 
 import os
@@ -11,10 +12,12 @@ from .parser import GPSParser, Ok, Err
 
 log = get_logger("gps")
 
+
 class GPSAnalyzer(BaseAnalyzer):
     """Analyzer dédié à l'extraction GPS."""
+
     name = "gps"
-    supported_extensions = ('.jpg', '.jpeg', '.tiff')
+    supported_extensions = (".jpg", ".jpeg", ".tiff")
 
     def analyze(self, path: str) -> FindingModel | None:
         if not self.can_handle(path):
@@ -22,7 +25,7 @@ class GPSAnalyzer(BaseAnalyzer):
 
         log.debug(f"Analyse GPS sur {path}...")
         parser = GPSParser(path)
-        
+
         match parser.parse():
             case Ok(value=metadata):
                 return FindingModel(

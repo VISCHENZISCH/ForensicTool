@@ -1,2 +1,3 @@
 from .analyzer import LinuxArtifactsAnalyzer
-__all__ = ['LinuxArtifactsAnalyzer']
+
+__all__ = ["LinuxArtifactsAnalyzer"]

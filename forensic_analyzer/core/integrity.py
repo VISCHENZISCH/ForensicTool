@@ -1,4 +1,5 @@
 """Vérification d'un manifeste d'empreintes (équivalent de `sha256sum -c`)."""
+
 from __future__ import annotations
 
 import datetime
@@ -49,8 +50,9 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
                 results.append({**entry, "status": "ABSENT", **({"lookalike": lookalike} if lookalike else {})})
                 continue
             actual = _digest(path, algo)
-            results.append({**entry, "actual": actual, "size": os.path.getsize(path),
-                            "status": "OK" if actual == expected else "DIFFÉRENT"})
+            results.append(
+                {**entry, "actual": actual, "size": os.path.getsize(path), "status": "OK" if actual == expected else "DIFFÉRENT"}
+            )
     return {
         "manifest": os.path.abspath(manifest),
         "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),

@@ -1,2 +1,3 @@
 from .analyzer import IntegrityAnalyzer
-__all__ = ['IntegrityAnalyzer']
+
+__all__ = ["IntegrityAnalyzer"]

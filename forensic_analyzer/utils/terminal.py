@@ -4,6 +4,7 @@ Un nom de fichier ou une métadonnée piégée peut contenir des séquences ESC 
 lignes déjà affichées (masquer une alerte), changer le titre ou écrire dans le
 presse-papiers (OSC 52). Elles sont rendues visibles (\\x1b) au lieu d'être interprétées.
 """
+
 from __future__ import annotations
 
 import re

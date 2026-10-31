@@ -1,6 +1,7 @@
 """
 Module de mise à jour (Updater) pour Forensic Analyzer.
 """
+
 import os
 import subprocess
 
@@ -48,8 +49,10 @@ class Updater:
                 ui.success("Forensic Analyzer est déjà à jour.")
                 return
             if ahead:
-                ui.error(f"Le dépôt local a {ahead} commit(s) absent(s) du dépôt distant : "
-                         "mise à jour refusée (à fusionner à la main).")
+                ui.error(
+                    f"Le dépôt local a {ahead} commit(s) absent(s) du dépôt distant : "
+                    "mise à jour refusée (à fusionner à la main)."
+                )
                 return
             if _git("status", "--porcelain", "--untracked-files=no").stdout.strip():
                 ui.error("Le dépôt local a des modifications non validées : mise à jour refusée.")
@@ -60,8 +63,10 @@ class Updater:
             if signed:
                 states = _git("log", "--format=%G?", "HEAD..@{u}").stdout.split()
                 if any(s != "G" for s in states):
-                    ui.error(f"{sum(s != 'G' for s in states)} commit(s) sans signature valide : mise à jour refusée "
-                             f"({_ALLOW_UNSIGNED}=1 pour l'accepter en connaissance de cause).")
+                    ui.error(
+                        f"{sum(s != 'G' for s in states)} commit(s) sans signature valide : mise à jour refusée "
+                        f"({_ALLOW_UNSIGNED}=1 pour l'accepter en connaissance de cause)."
+                    )
                     return
             pull = _git("merge", "--ff-only", *(["--verify-signatures"] if signed else []), "@{u}")
             if pull.returncode == 0:

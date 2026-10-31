@@ -1,4 +1,5 @@
 """Analyzer IOC - extraction d'indicateurs de compromission (IPs, URLs, hashes, emails)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -14,47 +15,62 @@ log = get_logger("ioc")
 # Patterns IOC. Repetitions bornees (limites DNS / RFC 5321) : un quantificateur ouvert
 # rend la recherche quadratique sur une longue chaine piegee ("a.a.a...", "aaa@aaa...").
 _IPV4 = re.compile(
-    r'\b(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}'
-    r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\b'
+    r"\b(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\b"
 )
 _IPV6 = re.compile(
-    r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'
-    r'|'
-    r'\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b'
+    r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b"
+    r"|"
+    r"\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b"
 )
 _URL = re.compile(
     r'https?://[^\s<>"\')\]}{,]+',
     re.IGNORECASE,
 )
 _DOMAIN = re.compile(
-    r'\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.){1,8}'
-    r'(?:com|net|org|io|info|biz|co|me|xyz|top|tk|ml|ga|cf|gq|'
-    r'ru|cn|de|uk|fr|br|in|au|jp|onion|bit|exit)\b',
+    r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.){1,8}"
+    r"(?:com|net|org|io|info|biz|co|me|xyz|top|tk|ml|ga|cf|gq|"
+    r"ru|cn|de|uk|fr|br|in|au|jp|onion|bit|exit)\b",
     re.IGNORECASE,
 )
-_EMAIL = re.compile(
-    r'\b[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,253}\.[a-zA-Z]{2,24}\b'
-)
-_MD5 = re.compile(r'\b[a-fA-F0-9]{32}\b')
-_SHA1 = re.compile(r'\b[a-fA-F0-9]{40}\b')
-_SHA256 = re.compile(r'\b[a-fA-F0-9]{64}\b')
-_BITCOIN = re.compile(r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b')
-_CVE = re.compile(r'\bCVE-\d{4}-\d{4,}\b', re.IGNORECASE)
+_EMAIL = re.compile(r"\b[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,253}\.[a-zA-Z]{2,24}\b")
+_MD5 = re.compile(r"\b[a-fA-F0-9]{32}\b")
+_SHA1 = re.compile(r"\b[a-fA-F0-9]{40}\b")
+_SHA256 = re.compile(r"\b[a-fA-F0-9]{64}\b")
+_BITCOIN = re.compile(r"\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b")
+_CVE = re.compile(r"\bCVE-\d{4}-\d{4,}\b", re.IGNORECASE)
 
 # IPs privées à exclure
 _PRIVATE_RANGES = (
-    '10.', '172.16.', '172.17.', '172.18.', '172.19.',
-    '172.20.', '172.21.', '172.22.', '172.23.', '172.24.',
-    '172.25.', '172.26.', '172.27.', '172.28.', '172.29.',
-    '172.30.', '172.31.', '192.168.', '127.', '0.0.0.0',
-    '255.255.255.255', '169.254.',
+    "10.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "192.168.",
+    "127.",
+    "0.0.0.0",
+    "255.255.255.255",
+    "169.254.",
 )
 
 
 def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
     """Extrait tous les IOCs d'un texte ou de données binaires."""
     if isinstance(data, bytes):
-        text = data.decode('utf-8', 'replace')
+        text = data.decode("utf-8", "replace")
     else:
         text = data
 
@@ -84,7 +100,7 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
             result["ipv6"].append(ip)
 
     for match in _URL.finditer(text):
-        url = match.group().rstrip('.,;:)')
+        url = match.group().rstrip(".,;:)")
         if url not in result["urls"]:
             result["urls"].append(url)
 
@@ -115,9 +131,7 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
     sha1_set = set(result["sha1"])
     for match in _MD5.finditer(text):
         h = match.group().lower()
-        if (h not in result["md5"]
-            and not any(h in s for s in sha256_set)
-            and not any(h in s for s in sha1_set)):
+        if h not in result["md5"] and not any(h in s for s in sha256_set) and not any(h in s for s in sha1_set):
             result["md5"].append(h)
 
     for match in _BITCOIN.finditer(text):
@@ -159,7 +173,8 @@ def compute_file_hashes(path: str) -> dict:
 _OFFENSIVE_LINE = re.compile(
     r"(?i)failed password|invalid user|not in sudoers|authentication failure|union\s+select|\.\./|"
     r"/etc/(?:passwd|shadow)|\.(?:php|jsp|aspx?)\?(?:c|cmd|exec|command)=|sqlmap|nikto|hydra|masscan|"
-    r"\bnmap\b|limiting requests|seg ?fault|reverse shell|/beacon\b")
+    r"\bnmap\b|limiting requests|seg ?fault|reverse shell|/beacon\b"
+)
 
 
 def _ip_roles(path: str, text: str, ips: set[str]) -> tuple[dict[str, int], dict[str, str]]:
@@ -167,7 +182,11 @@ def _ip_roles(path: str, text: str, ips: set[str]) -> tuple[dict[str, int], dict
     from collections import Counter
 
     from forensic_analyzer.analyzers.log_analyzer.parsers import (
-        detect_log_type, parse_syslog_file, parse_web_access_log, parse_web_error_log)
+        detect_log_type,
+        parse_syslog_file,
+        parse_web_access_log,
+        parse_web_error_log,
+    )
 
     offensive: dict[str, str] = {}
     log_type = detect_log_type(path)
@@ -204,6 +223,7 @@ def _ip_roles(path: str, text: str, ips: set[str]) -> tuple[dict[str, int], dict
 
 class IOCAnalyzer(BaseAnalyzer):
     """Extraction d'indicateurs de compromission (IOC) depuis des fichiers."""
+
     name = "ioc"
     supported_extensions = ()
     accepts_any_file = True
@@ -238,12 +258,14 @@ class IOCAnalyzer(BaseAnalyzer):
             # Le rôle et non la fréquence : un brute-force rend l'attaquant majoritaire dans un journal
             if offensive:
                 meta["[ALERTE] IP à l'activité offensive"] = " | ".join(
-                    f"{ip} ({occurrences.get(ip, 0)}x : {reason})" for ip, reason in sorted(
-                        offensive.items(), key=lambda x: -occurrences.get(x[0], 0))[:10])
+                    f"{ip} ({occurrences.get(ip, 0)}x : {reason})"
+                    for ip, reason in sorted(offensive.items(), key=lambda x: -occurrences.get(x[0], 0))[:10]
+                )
             others = sorted((ip for ip in occurrences if ip not in offensive), key=lambda ip: -occurrences[ip])
             if others:
-                meta["Autres IP (aucune activité offensive observée)"] = (
-                    f"{len(others)} : " + ", ".join(f"{ip} ({occurrences[ip]}x)" for ip in others[:5]))
+                meta["Autres IP (aucune activité offensive observée)"] = f"{len(others)} : " + ", ".join(
+                    f"{ip} ({occurrences[ip]}x)" for ip in others[:5]
+                )
 
             for ioc_type, items in iocs.items():
                 if items:
@@ -251,7 +273,7 @@ class IOCAnalyzer(BaseAnalyzer):
 
             for ioc_type, items in iocs.items():
                 for i, item in enumerate(items[:5]):
-                    meta[f"{ioc_type} #{i+1}"] = str(item)[:100]
+                    meta[f"{ioc_type} #{i + 1}"] = str(item)[:100]
 
             return FindingModel(
                 type="ioc",

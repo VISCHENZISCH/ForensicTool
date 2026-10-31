@@ -8,10 +8,27 @@ from forensic_analyzer.utils.logger import get_logger
 
 from .credentials import extract_credentials
 
-# rdpcap charge toute la capture en objets scapy (~10x sa taille en mémoire)
-MAX_PCAP_BYTES = int(os.environ.get("FORENSIC_PCAP_MAX_MB", "512")) * 2**20
+# Au-delà de IN_MEMORY_BYTES, la capture est relue depuis le disque à chaque parcours (PcapReader)
+# au lieu d'être chargée en objets scapy (~10x sa taille en mémoire). MAX_PCAP_BYTES borne la durée.
+IN_MEMORY_BYTES = 64 * 2**20
+MAX_PCAP_BYTES = int(os.environ.get("FORENSIC_PCAP_MAX_MB", "4096")) * 2**20
+
+
+class _Capture:
+    """Paquets relus depuis le disque à chaque parcours : mémoire constante, quelle que soit la taille."""
+
+    def __init__(self, path: str):
+        self.filename = path  # lu par get_ja3_fingerprints (tshark)
+
+    def __iter__(self):
+        with PcapReader(self.filename) as reader:  # pcap et pcapng
+            yield from reader
+
+
 from .http import analyze_http_attack, extract_http_transactions
 from .streams import (
+    MAX_STREAM_BYTES,
+    MAX_TOTAL_STREAM_BYTES,
     rebuild_tcp_streams,
     extract_files_from_streams,
     extract_http_user_agents,
@@ -31,44 +48,57 @@ from .tls_decrypt import extract_decrypted_http
 log = get_logger("pcap")
 
 try:
-    from scapy.all import DNS, IP, TCP, UDP, rdpcap
+    from scapy.all import DNS, IP, TCP, UDP, PcapReader, rdpcap
+
     HAS_SCAPY = True
 except ImportError:
     HAS_SCAPY = False
 
+
 class PCAPAnalyzer(BaseAnalyzer):
     """Analyse de fichiers PCAP - reconstruction, credentials, C2, DNS exfil."""
+
     name = "pcap"
-    heavy = True   # rdpcap charge toute la capture en mémoire : une à la fois
-    supported_extensions = ('.pcap', '.pcapng', '.cap')
+    heavy = True  # rdpcap charge toute la capture en mémoire : une à la fois
+    supported_extensions = (".pcap", ".pcapng", ".cap")
 
     def analyze(self, path: str) -> FindingModel | None:
         if not HAS_SCAPY:
             log.error("scapy requis pour l'analyse PCAP - pip install scapy")
             return None
-        size = os.path.getsize(path)
-        if size > MAX_PCAP_BYTES:
+        capture_size = os.path.getsize(path)
+        if capture_size > MAX_PCAP_BYTES:
             return FindingModel(
-                type="pcap", file=os.path.abspath(path),
-                metadata={"[ATTENTION] Non analysé": f"capture de {size / 2**20:.0f} Mo au-delà du plafond de "
-                                                     f"{MAX_PCAP_BYTES // 2**20} Mo (FORENSIC_PCAP_MAX_MB) : utiliser "
-                                                     "tshark ou Zeek, ou découper avec editcap -c"},
-                incomplete=[f"capture trop volumineuse ({size / 2**20:.0f} Mo) pour un chargement en mémoire"])
+                type="pcap",
+                file=os.path.abspath(path),
+                metadata={
+                    "[ATTENTION] Non analysé": f"capture de {capture_size / 2**20:.0f} Mo au-delà du plafond de "
+                    f"{MAX_PCAP_BYTES // 2**20} Mo (FORENSIC_PCAP_MAX_MB) : utiliser "
+                    "tshark ou Zeek, ou découper avec editcap -c"
+                },
+                incomplete=[f"capture trop volumineuse ({capture_size / 2**20:.0f} Mo) au-delà du plafond d'analyse"],
+            )
         try:
-            packets = rdpcap(path)
-            total = len(packets)
+            streamed = capture_size > IN_MEMORY_BYTES
+            packets = _Capture(path) if streamed else rdpcap(path)
+            total = 0
             protocols = Counter()
             src_ips = Counter()
             dst_ips = Counter()
             for pkt in packets:
+                total += 1
                 if pkt.haslayer(IP):
                     src_ips[pkt[IP].src] += 1
                     dst_ips[pkt[IP].dst] += 1
-                if pkt.haslayer(TCP): protocols["TCP"] += 1
-                if pkt.haslayer(UDP): protocols["UDP"] += 1
-                if pkt.haslayer(DNS): protocols["DNS"] += 1
+                if pkt.haslayer(TCP):
+                    protocols["TCP"] += 1
+                if pkt.haslayer(UDP):
+                    protocols["UDP"] += 1
+                if pkt.haslayer(DNS):
+                    protocols["DNS"] += 1
 
-            streams = rebuild_tcp_streams(packets)
+            stream_stats: dict = {}
+            streams = rebuild_tcp_streams(packets, stream_stats)
             credentials = extract_credentials(streams)
             host_identities = extract_host_identities(packets, streams, path)
             c2_result = detect_c2_beacons(packets)
@@ -77,7 +107,7 @@ class PCAPAnalyzer(BaseAnalyzer):
             dns_res = extract_dns_mappings(packets)
             dns_mappings = dns_res.get("mappings", {})
             suspect_domains = dns_res.get("suspects", [])
-            
+
             user_agents = extract_http_user_agents(streams)
             pe_files = extract_pe_from_streams(streams)
             payload_deliveries = extract_payload_delivery(streams)
@@ -89,19 +119,40 @@ class PCAPAnalyzer(BaseAnalyzer):
             # Les mots de passe d'un brute-force ne sont pas des identifiants : seul celui qui
             # a fonctionné l'est (réponse 302 + session), placé en tête
             brute_clients = {b["client"] for b in http_attack["brute_force"]}
-            winners = [{"protocol": "HTTP Form (POST) - VALIDE", "host": s["server"], "client": s["client"],
-                        "username": s["username"], "password": s["password"], "time": s["time"]}
-                       for s in http_attack["successful_logins"]]
-            credentials = winners + [c for c in credentials if not (
-                c.get("protocol", "").startswith("HTTP Form") and c.get("stream", "").split(" <-> ")[-1].split(":")[0] in brute_clients)]
+            winners = [
+                {
+                    "protocol": "HTTP Form (POST) - VALIDE",
+                    "host": s["server"],
+                    "client": s["client"],
+                    "username": s["username"],
+                    "password": s["password"],
+                    "time": s["time"],
+                }
+                for s in http_attack["successful_logins"]
+            ]
+            credentials = winners + [
+                c
+                for c in credentials
+                if not (
+                    c.get("protocol", "").startswith("HTTP Form")
+                    and c.get("stream", "").split(" <-> ")[-1].split(":")[0] in brute_clients
+                )
+            ]
 
             # Balises : une requête isolée vers un port de C2 compte (pas seulement les séries périodiques)
             known = {b["connection"] for b in c2_result["beacons"]}
             for b in http_attack["beacons"]:
                 conn = f"{b['source']} -> {b['destination']}:{b['port']}"
                 if b["outbound"] and conn not in known:
-                    c2_result["beacons"].append({"connection": conn, "count": 1, "avg_interval_sec": 0, "jitter_pct": 0,
-                                                 "detail": f"Requête sortante vers C2 : {conn} {b['uri']}"})
+                    c2_result["beacons"].append(
+                        {
+                            "connection": conn,
+                            "count": 1,
+                            "avg_interval_sec": 0,
+                            "jitter_pct": 0,
+                            "detail": f"Requête sortante vers C2 : {conn} {b['uri']}",
+                        }
+                    )
                     known.add(conn)
             c2_result["detected"] = bool(c2_result["beacons"])
 
@@ -117,22 +168,24 @@ class PCAPAnalyzer(BaseAnalyzer):
                     ip = pkt[IP]
                     tcp = pkt[TCP]
                     flags = str(tcp.flags)
-                    t = float(pkt.time) if hasattr(pkt, 'time') else 0.0
+                    t = float(pkt.time) if hasattr(pkt, "time") else 0.0
 
-                    if 'S' in flags and 'A' not in flags:
+                    if "S" in flags and "A" not in flags:
                         syn_scans += 1
                         pair = (ip.src, ip.dst)
                         if pair not in syn_velocity:
                             syn_velocity[pair] = []
                         syn_velocity[pair].append((t, tcp.dport))
 
-                    if flags == 'FPU': xmas_scans += 1
-                    elif flags == '': null_scans += 1
+                    if flags == "FPU":
+                        xmas_scans += 1
+                    elif flags == "":
+                        null_scans += 1
 
                     # Mouvement latéral SMB (ports 445, 139) entre sous-réseaux (/24 différents)
-                    if tcp.dport in (445, 139) and ('S' in flags and 'A' not in flags):
-                        src_net = ip.src.rsplit('.', 1)[0]
-                        dst_net = ip.dst.rsplit('.', 1)[0]
+                    if tcp.dport in (445, 139) and ("S" in flags and "A" not in flags):
+                        src_net = ip.src.rsplit(".", 1)[0]
+                        dst_net = ip.dst.rsplit(".", 1)[0]
                         if src_net != dst_net and ip.src not in attackers:
                             smb_desc = f"{ip.src} -> {ip.dst}:{tcp.dport}"
                             if smb_desc not in smb_lateral:
@@ -154,30 +207,30 @@ class PCAPAnalyzer(BaseAnalyzer):
                 scan_alerts.append(f"XMAS Scan (Nmap) détecté ({xmas_scans} paquets)")
             if null_scans > 0:
                 scan_alerts.append(f"NULL Scan (Nmap) détecté ({null_scans} paquets)")
-                
+
             # TLS & JA3
             tls_data = get_ja3_fingerprints(packets)
             ja3_fingerprints = tls_data.get("ja3", {})
             tls_snis = tls_data.get("sni", [])
-            
+
             tls_decrypted = []
             sslkeylogfile = os.environ.get("SSLKEYLOGFILE")
             if sslkeylogfile and os.path.exists(sslkeylogfile):
                 tls_decrypted = extract_decrypted_http(path, sslkeylogfile)
-                
+
             attack_timeline = build_attack_timeline(packets, suspect_domains, c2_result)
-            attack_timeline = sorted(attack_timeline + _http_attack_events(http_attack),
-                                     key=lambda e: e["time"])
-            
+            attack_timeline = sorted(attack_timeline + _http_attack_events(http_attack), key=lambda e: e["time"])
+
             malware_hits = []
             if pe_files:
                 import tempfile
                 from forensic_analyzer.analyzers.malware.analyzer import MalwareAnalyzer
+
                 mw_analyzer = MalwareAnalyzer()
                 for idx, pe_data in enumerate(pe_files[:5]):  # limit to top 5 PEs to avoid taking forever
                     fd, tmp_path = tempfile.mkstemp(suffix=".exe")
                     try:
-                        with os.fdopen(fd, 'wb') as f:
+                        with os.fdopen(fd, "wb") as f:
                             f.write(pe_data)
                         mw_res = mw_analyzer.analyze(tmp_path)
                         if mw_res:
@@ -213,9 +266,9 @@ class PCAPAnalyzer(BaseAnalyzer):
             }
 
             for i, cred in enumerate(credentials[:5]):
-                meta[f"Cred #{i+1}"] = f"[{cred['protocol']}] {cred.get('username', '?')}:{cred.get('password', '?')}"
+                meta[f"Cred #{i + 1}"] = f"[{cred['protocol']}] {cred.get('username', '?')}:{cred.get('password', '?')}"
             for i, beacon in enumerate(c2_result["beacons"][:3]):
-                meta[f"Beacon #{i+1}"] = beacon["detail"]
+                meta[f"Beacon #{i + 1}"] = beacon["detail"]
 
             if suspect_domains:
                 meta["Alerte Phishing/Typosquatting"] = f"{len(suspect_domains)} domaine(s) suspect(s) !"
@@ -223,18 +276,21 @@ class PCAPAnalyzer(BaseAnalyzer):
             for bf in http_attack["brute_force"]:
                 outcome = f"RÉUSSI : {bf['winning_credential']}" if bf["succeeded"] else "sans succès"
                 meta[f"[ALERTE] Brute-force HTTP {bf['client']}"] = (
-                    f"{bf['attempts']} tentatives vers {bf['server']} en {bf['last'] - bf['first']:.0f} s, {outcome}")
+                    f"{bf['attempts']} tentatives vers {bf['server']} en {bf['last'] - bf['first']:.0f} s, {outcome}"
+                )
             for up in http_attack["uploads"]:
                 label = "[ALERTE] Téléversement de script" if up["php"] else "Téléversement"
                 meta[f"{label} {up['filename']}"] = f"{up['client']} -> {up['server']}{up['uri']}"
             if http_attack["webshell_commands"]:
                 cmds = http_attack["webshell_commands"]
-                meta["[ALERTE] Commandes via webshell"] = (f"{len(cmds)} ({cmds[0]['shell']}) : "
-                                                          + " ; ".join(c["command"] for c in cmds))
+                meta["[ALERTE] Commandes via webshell"] = f"{len(cmds)} ({cmds[0]['shell']}) : " + " ; ".join(
+                    c["command"] for c in cmds
+                )
             for ex in http_attack["exfiltration"]:
                 size = f"{ex['bytes'] / 1024 / 1024:.1f} Mo" if ex["bytes"] else "réponse non capturée"
                 meta[f"[ALERTE] Exfiltration HTTP {ex['uri'].rsplit('/', 1)[-1]}"] = (
-                    f"téléchargé par {ex['client']} depuis {ex['server']} ({size})")
+                    f"téléchargé par {ex['client']} depuis {ex['server']} ({size})"
+                )
             if smb_lateral:
                 meta["[ALERTE] Mouvement latéral SMB"] = " | ".join(smb_lateral)
 
@@ -242,28 +298,36 @@ class PCAPAnalyzer(BaseAnalyzer):
                 ranked = http_attack["user_agents"]
                 meta["User-Agents (par rôle)"] = " | ".join(f"{u['user_agent']} ({u['verdict']})" for u in ranked[:5])
                 meta["User-Agents suspects"] = str(sum(u["verdict"] == "attaquant" for u in ranked))
-                
+
             # Add Auto-Malware Pipeline hits
             if malware_hits:
                 meta["Malwares extraits"] = f"{len(malware_hits)} analysés"
-                
+
             if payload_deliveries:
                 for idx, pd in enumerate(payload_deliveries[:3]):
-                    sz_mb = round(pd['size_bytes'] / 1024 / 1024, 2)
-                    meta[f"Payload Delivery #{idx+1}"] = f"IP: {pd['source_ip']} ({pd['type']}, {sz_mb} Mo)"
-                
+                    sz_mb = round(pd["size_bytes"] / 1024 / 1024, 2)
+                    meta[f"Payload Delivery #{idx + 1}"] = f"IP: {pd['source_ip']} ({pd['type']}, {sz_mb} Mo)"
+
             if scan_alerts:
                 meta["Alerte Scans / Reconnaissance"] = " | ".join(scan_alerts)
-                
+
             if ja3_fingerprints:
                 meta["Empreintes JA3 (TLS)"] = str(len(set(ja3_fingerprints.values())))
-                
+
             if tls_snis:
                 meta["TLS SNI (Serveurs ciblés)"] = " | ".join(list(set(tls_snis))[:5])
-                
-                
+
             if tls_decrypted:
                 meta["Déchiffrement TLS"] = f"SUCCÈS ({len(tls_decrypted)} requêtes HTTP extraites)"
+            if streamed:
+                meta["Lecture"] = f"en flux depuis le disque ({capture_size / 2**20:.0f} Mo, mémoire constante)"
+            incomplete = []
+            if stream_stats.get("dropped_bytes"):
+                incomplete.append(
+                    f"{stream_stats['dropped_bytes'] / 2**20:.0f} Mo de contenu TCP non reconstitués "
+                    f"(plafond de {MAX_TOTAL_STREAM_BYTES // 2**20} Mo, {MAX_STREAM_BYTES // 2**20} Mo par flux)"
+                )
+                meta["[ATTENTION] Non analysé"] = incomplete[0]
 
             return FindingModel(
                 type="pcap",
@@ -288,9 +352,10 @@ class PCAPAnalyzer(BaseAnalyzer):
                     "auth_attempts": auth_attempts,
                     "smb_lateral": smb_lateral,
                     "http_attack": http_attack,
-                    "tls_decrypted": tls_decrypted
+                    "tls_decrypted": tls_decrypted,
                 },
                 severity=severity_if_alerts(meta, "élevé"),
+                incomplete=incomplete,
             )
         except Exception as exc:
             log.error("Erreur PCAP '%s' : %s", os.path.basename(path), exc)
@@ -305,22 +370,40 @@ def _http_attack_events(http_attack: dict) -> list[dict]:
     """Étapes de l'attaque, datées, pour la chronologie (un événement par fait, pas par paquet)."""
     events = []
     for bf in http_attack["brute_force"]:
-        events.append({"time": _iso(bf["first"]), "type": "BRUTE-FORCE",
-                       "desc": f"Début du brute-force HTTP depuis {bf['client']} ({bf['attempts']} tentatives)"})
+        events.append(
+            {
+                "time": _iso(bf["first"]),
+                "type": "BRUTE-FORCE",
+                "desc": f"Début du brute-force HTTP depuis {bf['client']} ({bf['attempts']} tentatives)",
+            }
+        )
     for s in http_attack["successful_logins"]:
-        events.append({"time": _iso(s["time"]), "type": "CONNEXION RÉUSSIE",
-                       "desc": f"Connexion réussie {s['username']} depuis {s['client']} ({s['uri']})"})
+        events.append(
+            {
+                "time": _iso(s["time"]),
+                "type": "CONNEXION RÉUSSIE",
+                "desc": f"Connexion réussie {s['username']} depuis {s['client']} ({s['uri']})",
+            }
+        )
     for up in http_attack["uploads"]:
-        events.append({"time": _iso(up["time"]), "type": "TÉLÉVERSEMENT",
-                       "desc": f"Téléversement de {up['filename']} par {up['client']}"})
+        events.append(
+            {"time": _iso(up["time"]), "type": "TÉLÉVERSEMENT", "desc": f"Téléversement de {up['filename']} par {up['client']}"}
+        )
     for c in http_attack["webshell_commands"]:
-        events.append({"time": _iso(c["time"]), "type": "WEBSHELL",
-                       "desc": f"Commande via {c['shell']} : {c['command']} ({c['client']})"})
+        events.append(
+            {"time": _iso(c["time"]), "type": "WEBSHELL", "desc": f"Commande via {c['shell']} : {c['command']} ({c['client']})"}
+        )
     for ex in http_attack["exfiltration"]:
-        events.append({"time": _iso(ex["time"]), "type": "EXFILTRATION",
-                       "desc": f"Téléchargement de {ex['uri']} par {ex['client']}"})
+        events.append(
+            {"time": _iso(ex["time"]), "type": "EXFILTRATION", "desc": f"Téléchargement de {ex['uri']} par {ex['client']}"}
+        )
     for b in http_attack["beacons"]:
         if b["outbound"]:
-            events.append({"time": _iso(b["time"]), "type": "C2 BEACON",
-                           "desc": f"Requête sortante {b['source']} -> {b['destination']}:{b['port']} {b['uri']}"})
+            events.append(
+                {
+                    "time": _iso(b["time"]),
+                    "type": "C2 BEACON",
+                    "desc": f"Requête sortante {b['source']} -> {b['destination']}:{b['port']} {b['uri']}",
+                }
+            )
     return events

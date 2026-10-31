@@ -1,4 +1,5 @@
 """Parseurs spécialisés pour journaux web (Nginx, Apache), syslog, auth.log et WordPress."""
+
 from __future__ import annotations
 
 import datetime
@@ -20,65 +21,81 @@ _ACCESS_LOG_REGEX = re.compile(
 # Regex Nginx Error
 _NGINX_ERROR_REGEX = re.compile(
     # Message gourmand jusqu'à « , client: » : en non gourmand suivi de groupes optionnels, il restait vide
-    r'^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+\d+#\d+:\s+(?:\*\d+\s+)?((?:(?!,\s+client:).)*)'
+    r"^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+\d+#\d+:\s+(?:\*\d+\s+)?((?:(?!,\s+client:).)*)"
     r'(?:,\s+client:\s+([^,\s]+))?(?:,\s+server:\s+([^,\s]+))?(?:,\s+request:\s+"([^"]*)")?'
 )
 
 # Regex Apache Error
-_APACHE_ERROR_REGEX = re.compile(
-    r'^\[([^\]]+)\]\s+\[(?:[^:]+:)?(\w+)\]\s+(?:\[pid \d+\]\s+)?(?:\[client ([^\]]+)\]\s+)?(.*)'
-)
+_APACHE_ERROR_REGEX = re.compile(r"^\[([^\]]+)\]\s+\[(?:[^:]+:)?(\w+)\]\s+(?:\[pid \d+\]\s+)?(?:\[client ([^\]]+)\]\s+)?(.*)")
 
 # Regex Syslog RFC 3164 (ex: Oct 12 10:14:02)
-_SYSLOG_RFC3164 = re.compile(
-    r'^([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+([^:\[]+)(?:\[(\d+)\])?:\s+(.*)$'
-)
+_SYSLOG_RFC3164 = re.compile(r"^([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+([^:\[]+)(?:\[(\d+)\])?:\s+(.*)$")
 
 # Regex Syslog RFC 5424 / ISO (ex: 2026-10-12T10:14:02.123456+02:00)
 _SYSLOG_RFC5424 = re.compile(
-    r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:?\d{2})?)\s+(\S+)\s+([^:\[]+)(?:\[(\d+)\])?:\s+(.*)$'
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:?\d{2})?)\s+(\S+)\s+([^:\[]+)(?:\[(\d+)\])?:\s+(.*)$"
 )
 
 # Regex WordPress Debug Log
 _WP_DEBUG_REGEX = re.compile(
-    r'^\[(\d{2}-[A-Za-z]{3}-\d{4}\s+\d{2}:\d{2}:\d{2}(?:\s+UTC)?)\]\s+(PHP\s+(?:Fatal error|Parse error|Warning|Notice|Deprecated)):\s+(.*)$'
+    r"^\[(\d{2}-[A-Za-z]{3}-\d{4}\s+\d{2}:\d{2}:\d{2}(?:\s+UTC)?)\]\s+(PHP\s+(?:Fatal error|Parse error|Warning|Notice|Deprecated)):\s+(.*)$"
 )
 
 # Avis WordPress significatifs dans wp-debug.log : (motif, type, gabarit)
 _WP_NOTABLE = [
-    (re.compile(r'wp_login_failed (\S+) from (\S+)'), "auth_failed", "Échec de connexion WordPress '{0}' depuis {1}"),
-    (re.compile(r'wp_login OK (\S+) from (\S+)'), "auth_success", "Connexion WordPress réussie '{0}' depuis {1}"),
-    (re.compile(r'attachment uploaded (\S+) by (\S+)'), "upload", "Fichier {0} téléversé par '{1}'"),
-    (re.compile(r'(?i)file extension (\.\w+) allowed in uploads'), "misconfiguration", "Extension {0} autorisée dans les téléversements (mauvaise configuration)"),
+    (re.compile(r"wp_login_failed (\S+) from (\S+)"), "auth_failed", "Échec de connexion WordPress '{0}' depuis {1}"),
+    (re.compile(r"wp_login OK (\S+) from (\S+)"), "auth_success", "Connexion WordPress réussie '{0}' depuis {1}"),
+    (re.compile(r"attachment uploaded (\S+) by (\S+)"), "upload", "Fichier {0} téléversé par '{1}'"),
+    (
+        re.compile(r"(?i)file extension (\.\w+) allowed in uploads"),
+        "misconfiguration",
+        "Extension {0} autorisée dans les téléversements (mauvaise configuration)",
+    ),
 ]
 
 # Attaques web courantes dans les URI / requêtes
 _WEB_ATTACKS = [
-    (re.compile(r'(?i)(?:union\s+select|select\s+.*\s+from|concat\(|information_schema|waitfor\s+delay|sleep\(\d+\)|benchmark\(|load_file\(|order\s+by\s+\d+|[\'"]\s+or\s+[\'"]\d+[\'"]=[\'"]\d+|[\'"]\s+or\s+1=1)'), "SQL Injection (SQLi)"),
-    (re.compile(r'(?i)(?:\.\./|\.\.\\|/etc/passwd|/etc/shadow|/proc/self|/var/log/|c:\\windows|boot\.ini|win\.ini)'), "Path Traversal / LFI"),
-    (re.compile(r'(?i)(?:<script|javascript:|onerror\s*=|onload\s*=|alert\(|document\.cookie|<img\s+src=)'), "Cross-Site Scripting (XSS)"),
-    (re.compile(r'(?i)\b(?:x|shell|cmd|c99|r57|b374k|wso|alfa|root|backdoor|weevely)\.php'), "Webshell Access"),
-    (re.compile(r'(?i)(?:php://input|php://filter|data://text|expect://)'), "PHP Wrapper / RFI"),
+    (
+        re.compile(
+            r'(?i)(?:union\s+select|select\s+.*\s+from|concat\(|information_schema|waitfor\s+delay|sleep\(\d+\)|benchmark\(|load_file\(|order\s+by\s+\d+|[\'"]\s+or\s+[\'"]\d+[\'"]=[\'"]\d+|[\'"]\s+or\s+1=1)'
+        ),
+        "SQL Injection (SQLi)",
+    ),
+    (
+        re.compile(r"(?i)(?:\.\./|\.\.\\|/etc/passwd|/etc/shadow|/proc/self|/var/log/|c:\\windows|boot\.ini|win\.ini)"),
+        "Path Traversal / LFI",
+    ),
+    (
+        re.compile(r"(?i)(?:<script|javascript:|onerror\s*=|onload\s*=|alert\(|document\.cookie|<img\s+src=)"),
+        "Cross-Site Scripting (XSS)",
+    ),
+    (re.compile(r"(?i)\b(?:x|shell|cmd|c99|r57|b374k|wso|alfa|root|backdoor|weevely)\.php"), "Webshell Access"),
+    (re.compile(r"(?i)(?:php://input|php://filter|data://text|expect://)"), "PHP Wrapper / RFI"),
 ]
 
 # Scanners web identifiables dans User-Agent
 _SCANNER_AGENTS = re.compile(
-    r'(?i)(?:sqlmap|nikto|wpscan|dirbuster|gobuster|ffuf|acunetix|masscan|zgrab|nessus|openvas|hydra|burpcollaborator|^nmap|nmap scripting engine)'
+    r"(?i)(?:sqlmap|nikto|wpscan|dirbuster|gobuster|ffuf|acunetix|masscan|zgrab|nessus|openvas|hydra|burpcollaborator|^nmap|nmap scripting engine)"
 )
-_LOGIN_URI = re.compile(r'(?i)wp-login\.php|xmlrpc\.php|/login|/signin')
-_UPLOAD_URI = re.compile(r'(?i)async-upload\.php|/upload|media-new\.php')
-_SENSITIVE_DOWNLOAD = re.compile(r'(?i)\.(sql|sql\.gz|gz|tgz|tar|zip|7z|rar|bak|dump|db|sqlite|csv|xlsx?)$')
+_LOGIN_URI = re.compile(r"(?i)wp-login\.php|xmlrpc\.php|/login|/signin")
+_UPLOAD_URI = re.compile(r"(?i)async-upload\.php|/upload|media-new\.php")
+_SENSITIVE_DOWNLOAD = re.compile(r"(?i)\.(sql|sql\.gz|gz|tgz|tar|zip|7z|rar|bak|dump|db|sqlite|csv|xlsx?)$")
 _CMD_PARAMS = ("c", "cmd", "command", "exec", "e")
 BRUTE_FORCE_THRESHOLD = 20  # tentatives de connexion depuis une même IP
 
 # Lignes syslog notables : (motif, type, gabarit de description, alerte)
 _SYSLOG_NOTABLE = [
-    (re.compile(r'(\S+)\s*:\s*.*NOT in sudoers'), "sudo_denied", "Tentative sudo refusée pour '{0}'", True),
-    (re.compile(r'LOGIN SUCCESS user=(\S+) from (\S+)'), "app_login", "Connexion applicative réussie '{0}' depuis {1}", True),
-    (re.compile(r'RELOAD \((/etc/cron[^)]*)\)'), "cron_reload", "Rechargement de la tâche planifiée {0}", True),
-    (re.compile(r'(?i)seg(?:mentation)? ?fault.*?from (\d+\.\d+\.\d+\.\d+)'), "crash", "Plantage déclenché par une requête de {0}", True),
-    (re.compile(r'Connection from (\S+) port'), "ssh_connection", "Connexion SSH entrante depuis {0}", False),
-    (re.compile(r'useradd\[?\d*\]?:.*new user: name=(\S+?),'), "user_created", "Création du compte {0}", True),
+    (re.compile(r"(\S+)\s*:\s*.*NOT in sudoers"), "sudo_denied", "Tentative sudo refusée pour '{0}'", True),
+    (re.compile(r"LOGIN SUCCESS user=(\S+) from (\S+)"), "app_login", "Connexion applicative réussie '{0}' depuis {1}", True),
+    (re.compile(r"RELOAD \((/etc/cron[^)]*)\)"), "cron_reload", "Rechargement de la tâche planifiée {0}", True),
+    (
+        re.compile(r"(?i)seg(?:mentation)? ?fault.*?from (\d+\.\d+\.\d+\.\d+)"),
+        "crash",
+        "Plantage déclenché par une requête de {0}",
+        True,
+    ),
+    (re.compile(r"Connection from (\S+) port"), "ssh_connection", "Connexion SSH entrante depuis {0}", False),
+    (re.compile(r"useradd\[?\d*\]?:.*new user: name=(\S+?),"), "user_created", "Création du compte {0}", True),
 ]
 
 
@@ -162,9 +179,16 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
             scanners_detected.add(f"{ip} ({ua[:50]})")
             if ip not in scanner_ips:
                 scanner_ips.add(ip)
-                events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "recon",
-                               "description": f"Reconnaissance par outil automatisé ({ua[:40]}) depuis {ip} : {method} {uri[:60]}",
-                               "ip": ip, "file": path})
+                events.append(
+                    {
+                        "timestamp": iso_ts,
+                        "source": "web_access",
+                        "event_type": "recon",
+                        "description": f"Reconnaissance par outil automatisé ({ua[:40]}) depuis {ip} : {method} {uri[:60]}",
+                        "ip": ip,
+                        "file": path,
+                    }
+                )
 
         params = urllib.parse.parse_qs(query)
         cmd_key = next((k for k in _CMD_PARAMS if k in params), None)
@@ -172,19 +196,42 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         if shell_command:
             command = params[cmd_key][0]
             webshell_commands.append({"timestamp": iso_ts, "ip": ip, "shell": path_only, "command": command})
-            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "webshell_command",
-                           "description": f"Commande via webshell {path_only} : {command[:80]} ({ip})", "ip": ip, "file": path})
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "web_access",
+                    "event_type": "webshell_command",
+                    "description": f"Commande via webshell {path_only} : {command[:80]} ({ip})",
+                    "ip": ip,
+                    "file": path,
+                }
+            )
 
         if method == "POST" and _UPLOAD_URI.search(path_only) and status < 400:
             uploads.append({"timestamp": iso_ts, "ip": ip, "uri": path_only})
-            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "upload",
-                           "description": f"Téléversement de fichier par {ip} : POST {path_only}", "ip": ip, "file": path})
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "web_access",
+                    "event_type": "upload",
+                    "description": f"Téléversement de fichier par {ip} : POST {path_only}",
+                    "ip": ip,
+                    "file": path,
+                }
+            )
 
         if method == "GET" and status in (200, 206) and _SENSITIVE_DOWNLOAD.search(path_only):
             exfiltration.append({"timestamp": iso_ts, "ip": ip, "uri": path_only, "bytes": size})
-            events.append({"timestamp": iso_ts, "source": "web_access", "event_type": "exfiltration",
-                           "description": f"Téléchargement de {path_only} ({size / 1024 / 1024:.1f} Mo) par {ip}",
-                           "ip": ip, "file": path})
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "web_access",
+                    "event_type": "exfiltration",
+                    "description": f"Téléchargement de {path_only} ({size / 1024 / 1024:.1f} Mo) par {ip}",
+                    "ip": ip,
+                    "file": path,
+                }
+            )
 
         # Détection attaques web dans l'URI
         attack_detected = None
@@ -205,14 +252,16 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
             }
             suspicious_requests.append(req_info)
             if not shell_command:  # sinon déjà l'événement « Commande via webshell », plus précis
-                events.append({
-                    "timestamp": iso_ts,
-                    "source": "web_access",
-                    "event_type": "web_attack",
-                    "description": f"Attaque web [{attack_detected}] depuis {ip} : {method} {uri[:80]} (HTTP {status})",
-                    "ip": ip,
-                    "file": path,
-                })
+                events.append(
+                    {
+                        "timestamp": iso_ts,
+                        "source": "web_access",
+                        "event_type": "web_attack",
+                        "description": f"Attaque web [{attack_detected}] depuis {ip} : {method} {uri[:80]} (HTTP {status})",
+                        "ip": ip,
+                        "file": path,
+                    }
+                )
             if attack_detected == "Webshell Access":
                 webshell_access.append(req_info)
 
@@ -229,18 +278,37 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         if count >= BRUTE_FORCE_THRESHOLD:
             start, end = login_window[ip]
             brute_force.append({"ip": ip, "attempts": count, "first": start, "last": end, "succeeded": bool(won)})
-            events.append({"timestamp": start, "source": "web_access", "event_type": "brute_force",
-                           "description": f"Début du brute-force web depuis {ip} ({count} tentatives jusqu'à {end})",
-                           "ip": ip, "file": path})
+            events.append(
+                {
+                    "timestamp": start,
+                    "source": "web_access",
+                    "event_type": "brute_force",
+                    "description": f"Début du brute-force web depuis {ip} ({count} tentatives jusqu'à {end})",
+                    "ip": ip,
+                    "file": path,
+                }
+            )
         for w in won:
-            events.append({"timestamp": w["timestamp"], "source": "web_access", "event_type": "auth_success",
-                           "description": f"Connexion web réussie depuis {ip} ({w['uri']}, HTTP 302)"
-                                          + (" après brute-force" if count >= BRUTE_FORCE_THRESHOLD else ""),
-                           "ip": ip, "file": path})
+            events.append(
+                {
+                    "timestamp": w["timestamp"],
+                    "source": "web_access",
+                    "event_type": "auth_success",
+                    "description": f"Connexion web réussie depuis {ip} ({w['uri']}, HTTP 302)"
+                    + (" après brute-force" if count >= BRUTE_FORCE_THRESHOLD else ""),
+                    "ip": ip,
+                    "file": path,
+                }
+            )
 
     # Attaquant : IP qui a agi offensivement, et non simple client fréquent
-    attackers = ({b["ip"] for b in brute_force} | {r["ip"] for r in suspicious_requests} | scanner_ips
-                 | {c["ip"] for c in webshell_commands} | {e["ip"] for e in exfiltration})
+    attackers = (
+        {b["ip"] for b in brute_force}
+        | {r["ip"] for r in suspicious_requests}
+        | scanner_ips
+        | {c["ip"] for c in webshell_commands}
+        | {e["ip"] for e in exfiltration}
+    )
     top_ips = sorted(ip_counts.items(), key=lambda x: -x[1])[:10]
     top_uris = sorted(uri_counts.items(), key=lambda x: -x[1])[:10]
     events.sort(key=lambda e: e["timestamp"])
@@ -297,14 +365,16 @@ def parse_web_error_log(path: str) -> dict[str, Any]:
                     "request": req or "",
                 }
                 suspicious_errors.append(err_data)
-                events.append({
-                    "timestamp": iso_ts,
-                    "source": "web_error",
-                    "event_type": "web_error",
-                    "description": f"Erreur Nginx [{level}] : {msg[:100]}" + (f" (client {client})" if client else ""),
-                    "ip": client or "",
-                    "file": path,
-                })
+                events.append(
+                    {
+                        "timestamp": iso_ts,
+                        "source": "web_error",
+                        "event_type": "web_error",
+                        "description": f"Erreur Nginx [{level}] : {msg[:100]}" + (f" (client {client})" if client else ""),
+                        "ip": client or "",
+                        "file": path,
+                    }
+                )
             continue
 
         m_apache = _APACHE_ERROR_REGEX.match(line_clean)
@@ -314,20 +384,24 @@ def parse_web_error_log(path: str) -> dict[str, Any]:
             if client:
                 client_errors[client] = client_errors.get(client, 0) + 1
             if level in ("crit", "alert", "error", "emerg"):
-                suspicious_errors.append({
-                    "timestamp": ts_raw,
-                    "level": level,
-                    "message": msg[:200],
-                    "client": client or "",
-                })
-                events.append({
-                    "timestamp": ts_raw,
-                    "source": "web_error",
-                    "event_type": "web_error",
-                    "description": f"Erreur Apache [{level}] : {msg[:100]}",
-                    "ip": client or "",
-                    "file": path,
-                })
+                suspicious_errors.append(
+                    {
+                        "timestamp": ts_raw,
+                        "level": level,
+                        "message": msg[:200],
+                        "client": client or "",
+                    }
+                )
+                events.append(
+                    {
+                        "timestamp": ts_raw,
+                        "source": "web_error",
+                        "event_type": "web_error",
+                        "description": f"Erreur Apache [{level}] : {msg[:100]}",
+                        "ip": client or "",
+                        "file": path,
+                    }
+                )
 
     return {
         "log_type": "web_error",
@@ -353,9 +427,9 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
     total_lines = 0
     ref = _log_mtime(path)
 
-    re_failed = re.compile(r'Failed\s+(?:password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\S+)\s+from\s+(\S+)')
-    re_accepted = re.compile(r'Accepted\s+(?:password|publickey)\s+for\s+(\S+)\s+from\s+(\S+)')
-    re_sudo = re.compile(r'(?:sudo:\s*)?(\S+)\s*:\s*.*COMMAND=(.*)')
+    re_failed = re.compile(r"Failed\s+(?:password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\S+)\s+from\s+(\S+)")
+    re_accepted = re.compile(r"Accepted\s+(?:password|publickey)\s+for\s+(\S+)\s+from\s+(\S+)")
+    re_sudo = re.compile(r"(?:sudo:\s*)?(\S+)\s*:\s*.*COMMAND=(.*)")
 
     for line in _open_log(path):
         total_lines += 1
@@ -381,14 +455,16 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
             user, ip = mf.group(1), mf.group(2)
             auth_failures += 1
             failed_ips[ip] = failed_ips.get(ip, 0) + 1
-            events.append({
-                "timestamp": iso_ts,
-                "source": "syslog",
-                "event_type": "auth_failed",
-                "description": f"Échec d'authentification SSH pour l'utilisateur '{user}' depuis {ip}",
-                "ip": ip,
-                "file": path,
-            })
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "syslog",
+                    "event_type": "auth_failed",
+                    "description": f"Échec d'authentification SSH pour l'utilisateur '{user}' depuis {ip}",
+                    "ip": ip,
+                    "file": path,
+                }
+            )
 
         ma = re_accepted.search(msg)
         if ma:
@@ -398,14 +474,16 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
             # signal utile, les suivantes (sessions d'exploitation régulières) noient la chronologie
             if (user, ip) not in ssh_pairs:
                 ssh_pairs.add((user, ip))
-                events.append({
-                    "timestamp": iso_ts,
-                    "source": "syslog",
-                    "event_type": "auth_success",
-                    "description": f"Première connexion SSH réussie de '{user}' depuis {ip}",
-                    "ip": ip,
-                    "file": path,
-                })
+                events.append(
+                    {
+                        "timestamp": iso_ts,
+                        "source": "syslog",
+                        "event_type": "auth_success",
+                        "description": f"Première connexion SSH réussie de '{user}' depuis {ip}",
+                        "ip": ip,
+                        "file": path,
+                    }
+                )
 
         for pattern, kind, template, alert in _SYSLOG_NOTABLE:
             mn = pattern.search(msg)
@@ -413,8 +491,16 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
                 description = template.format(*mn.groups())
                 notable.append({"timestamp": iso_ts, "type": kind, "description": description, "alert": alert})
                 notable_ips.update(g for g in mn.groups() if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", g or ""))
-                events.append({"timestamp": iso_ts, "source": "syslog", "event_type": kind,
-                               "description": description, "ip": "", "file": path})
+                events.append(
+                    {
+                        "timestamp": iso_ts,
+                        "source": "syslog",
+                        "event_type": kind,
+                        "description": description,
+                        "ip": "",
+                        "file": path,
+                    }
+                )
                 break
 
         ms = re_sudo.search(msg) or re_sudo.search(line_clean)
@@ -423,14 +509,16 @@ def parse_syslog_file(path: str) -> dict[str, Any]:
             # Refus sur la même ligne (format sudo standard) ou sur la ligne suivante (voir plus bas)
             denied = "NOT in sudoers" in line_clean or "incorrect password" in line_clean
             sudo_commands.append({"timestamp": iso_ts, "user": user, "command": cmd, "denied": denied})
-            events.append({
-                "timestamp": iso_ts,
-                "source": "syslog",
-                "event_type": "sudo",
-                "description": f"Commande SUDO par '{user}' : {cmd[:80]}",
-                "ip": "",
-                "file": path,
-            })
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "syslog",
+                    "event_type": "sudo",
+                    "description": f"Commande SUDO par '{user}' : {cmd[:80]}",
+                    "ip": "",
+                    "file": path,
+                }
+            )
 
     # Refus journalisé à part ("www-data : NOT in sudoers") : même compte, même seconde
     refusals = {(n["description"].split("'")[1], n["timestamp"]) for n in notable if n["type"] == "sudo_denied"}
@@ -476,26 +564,36 @@ def parse_wp_debug_log(path: str) -> dict[str, Any]:
             iso_ts = ts_raw
 
         # Trouver les fichiers mentionnés dans le message d'erreur
-        for fp in re.findall(r'in\s+(/[^\s:]+)', msg):
+        for fp in re.findall(r"in\s+(/[^\s:]+)", msg):
             referenced_files.add(fp)
 
         if "Fatal" in severity or "Parse" in severity:
             fatal_errors.append({"timestamp": iso_ts, "severity": severity, "message": msg})
-            events.append({
-                "timestamp": iso_ts,
-                "source": "wp_debug",
-                "event_type": "php_fatal",
-                "description": f"Erreur PHP WordPress [{severity}] : {msg[:120]}",
-                "ip": "",
-                "file": path,
-            })
+            events.append(
+                {
+                    "timestamp": iso_ts,
+                    "source": "wp_debug",
+                    "event_type": "php_fatal",
+                    "description": f"Erreur PHP WordPress [{severity}] : {msg[:120]}",
+                    "ip": "",
+                    "file": path,
+                }
+            )
         else:
             warnings.append({"timestamp": iso_ts, "severity": severity, "message": msg})
             for pattern, kind, template in _WP_NOTABLE:
                 mw = pattern.search(msg)
                 if mw:
-                    events.append({"timestamp": iso_ts, "source": "wp_debug", "event_type": kind,
-                                   "description": template.format(*mw.groups()), "ip": "", "file": path})
+                    events.append(
+                        {
+                            "timestamp": iso_ts,
+                            "source": "wp_debug",
+                            "event_type": kind,
+                            "description": template.format(*mw.groups()),
+                            "ip": "",
+                            "file": path,
+                        }
+                    )
                     notable.append(template.format(*mw.groups()))
                     break
 

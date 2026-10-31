@@ -1,4 +1,5 @@
 """Documents Office : macros, DDE, relations externes, chiffrement, signatures de fichier."""
+
 from __future__ import annotations
 
 import os
@@ -29,13 +30,14 @@ def _docx(path, body: str = "<w:p/>", extra: dict[str, str | bytes] | None = Non
 
 
 def _external(kind: str, target: str) -> dict[str, str]:
-    return {"word/_rels/settings.xml.rels":
-            f'<Relationships {_RELS}><Relationship Id="r1" Type="{_REL_TYPE}{kind}" '
-            f'Target="{target}" TargetMode="External"/></Relationships>'}
+    return {
+        "word/_rels/settings.xml.rels": f'<Relationships {_RELS}><Relationship Id="r1" Type="{_REL_TYPE}{kind}" '
+        f'Target="{target}" TargetMode="External"/></Relationships>'
+    }
 
 
 def test_file_signatures_route_office_documents(tmp_path):
-    assert get_file_magic_extension(_docx(tmp_path / "rapport.zip")) == ".ooxml"      # extension trompeuse
+    assert get_file_magic_extension(_docx(tmp_path / "rapport.zip")) == ".ooxml"  # extension trompeuse
     with zipfile.ZipFile(tmp_path / "a.zip", "w") as z:
         z.writestr("note.txt", "x")
     assert get_file_magic_extension(str(tmp_path / "a.zip")) == ".zip"
@@ -50,7 +52,9 @@ def test_benign_document_is_info(tmp_path):
 
 
 def test_remote_template_and_unc_object_are_flagged(tmp_path):
-    f = OfficeAnalyzer().analyze(_docx(tmp_path / "t.docx", extra=_external("attachedTemplate", "https://cdn.example.org/t.dotm")))
+    f = OfficeAnalyzer().analyze(
+        _docx(tmp_path / "t.docx", extra=_external("attachedTemplate", "https://cdn.example.org/t.dotm"))
+    )
     assert f.severity == "élevé" and "T1221" in f.metadata["[ALERTE] Verdict"]
     assert f.extra["office_urls"] == ["https://cdn.example.org/t.dotm"]
 
@@ -64,8 +68,10 @@ def test_hyperlinks_are_not_alerts(tmp_path):
 
 
 def test_dde_command_is_critical(tmp_path):
-    field = ('<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>DDEAUTO c:\\windows\\system32\\cmd.exe '
-             '"/k calc"</w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>')
+    field = (
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>DDEAUTO c:\\windows\\system32\\cmd.exe '
+        '"/k calc"</w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    )
     f = OfficeAnalyzer().analyze(_docx(tmp_path / "dde.docx", field))
     assert f.severity == "critique" and "cmd" in f.metadata["Champs DDE"]
 

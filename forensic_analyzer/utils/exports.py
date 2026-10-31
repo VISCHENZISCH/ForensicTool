@@ -3,6 +3,7 @@
 Sans cela, rapports et extractions de plusieurs enquêtes se mélangent dans export/.
 Le dossier n'est créé qu'à la première écriture.
 """
+
 from __future__ import annotations
 
 import datetime
