@@ -21,8 +21,11 @@ class PDFExporter:
         from forensic_analyzer.output.html_exporter import build_interactive_html
         target_path = resolve_output(output_path)
 
-        # Aucune ressource chargée (ni réseau ni fichier local) : le rapport est autonome
+        # Aucune ressource chargée (ni réseau ni fichier local) : seules les polices embarquées
+        # dans le rapport (data:) sont lues
         def refuse(url, *args, **kwargs):
+            if url.startswith("data:"):
+                return weasyprint.default_url_fetcher(url, *args, **kwargs)
             raise ValueError(f"ressource externe refusée : {url}")
 
         weasyprint.HTML(string=build_interactive_html(report), url_fetcher=refuse).write_pdf(target_path)

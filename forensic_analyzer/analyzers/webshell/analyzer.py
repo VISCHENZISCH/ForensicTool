@@ -99,7 +99,7 @@ class WebshellAnalyzer(BaseAnalyzer):
             }
 
             if is_webshell:
-                meta["[ALERTE] Verdict"] = "WEBSHELL DÉTECTÉ — Script de porte dérobée (Backdoor)"
+                meta["[ALERTE] Verdict"] = "WEBSHELL DÉTECTÉ - Script de porte dérobée (Backdoor)"
             else:
                 meta["Verdict"] = "Script PHP sans indicateur évident de webshell"
 

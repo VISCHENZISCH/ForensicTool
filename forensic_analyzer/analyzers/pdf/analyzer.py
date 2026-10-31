@@ -58,7 +58,7 @@ class PDFAnalyzer(BaseAnalyzer):
 
         if t.score >= 50:
             metadata["[ALERTE] Verdict"] = "PDF malveillant probable : " + t.reasons[0][1]
-        metadata["Score de menace"] = f"{t.score}/100 ({t.level})" + (" — analyse partielle" if t.partial else "")
+        metadata["Score de menace"] = f"{t.score}/100 ({t.level})" + (" - analyse partielle" if t.partial else "")
         if t.reasons:
             metadata["Justification du score"] = "\n".join(f"+{p} {text}" for p, text in t.reasons)
         if t.scripts:
@@ -85,7 +85,7 @@ class PDFAnalyzer(BaseAnalyzer):
         if t.text_urls:
             metadata["URLs dans le texte"] = "\n".join(t.text_urls)
         if t.scripts:
-            js = "\n\n".join(f"// obj {s.obj} — {s.trigger}\n{s.code or '(illisible)'}" for s in t.scripts)
+            js = "\n\n".join(f"// obj {s.obj} - {s.trigger}\n{s.code or '(illisible)'}" for s in t.scripts)
             metadata["JS Code Extrait"] = js if len(js) <= _MAX_JS_SHOWN else \
                 js[:_MAX_JS_SHOWN] + f"\n… ({len(js)} caractères au total, code complet dans le JSON)"
 

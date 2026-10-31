@@ -520,18 +520,18 @@ class _Document:
             win = self._dict(act.get("Win"))
             target = self.text(act.get("F") or win.get("F")) or "cible non lisible"
             params = text_of(win.get("P")) if isinstance(win.get("P"), bytes) else ""
-            self.result.launches.append(f"{target}{' ' + params if params else ''} — {trigger}, obj {num}")
+            self.result.launches.append(f"{target}{' ' + params if params else ''} - {trigger}, obj {num}")
         elif kind == "URI":
             url = self.text(act.get("URI"), where[0], where[1] + ("URI",))
             self._url(url)
             if auto:
-                self.result.auto_external.append(f"/URI {url or 'cible illisible'} — {trigger}, obj {num}")
+                self.result.auto_external.append(f"/URI {url or 'cible illisible'} - {trigger}, obj {num}")
         elif kind in ("SubmitForm", "GoToR", "GoToE", "ImportData", "RichMediaExecute"):
             target = self.text(act.get("F")) if "F" in act else ""
-            self.result.other_actions.append(f"/{kind} {target} — {trigger}".replace("  ", " "))
+            self.result.other_actions.append(f"/{kind} {target} - {trigger}".replace("  ", " "))
             self._url(target)
             if auto:
-                self.result.auto_external.append(f"/{kind} {target or 'cible illisible'} — {trigger}, obj {num}")
+                self.result.auto_external.append(f"/{kind} {target or 'cible illisible'} - {trigger}, obj {num}")
         nxt = act.get("Next")
         for n in self._list(nxt) if isinstance(self.resolve(nxt), list) else ([nxt] if nxt else []):
             self._action(n, trigger, auto, num, "Next", depth + 1)

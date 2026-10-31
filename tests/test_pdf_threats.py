@@ -84,7 +84,7 @@ def test_corrupt_file_is_not_called_clean(tmp_path):
     path.write_bytes(b"%PDF-1.4\n\x00garbage" * 50)
     _, meta, _ = _analyze(str(path))
     assert "aucun objet PDF" in meta["[ATTENTION] Non analysé"]
-    assert meta["Score de menace"] == "0/100 (Indéterminé) — analyse partielle"
+    assert meta["Score de menace"] == "0/100 (Indéterminé) - analyse partielle"
 
 
 @pytest.mark.parametrize("body", [

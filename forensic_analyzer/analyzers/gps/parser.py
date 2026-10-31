@@ -40,7 +40,7 @@ class GPSParser:
 
     def parse(self) -> Result[dict[str, str | float], str]:
         if not HAS_EXIFREAD:
-            return Err("Bibliothèque 'exifread' manquante — pip install exifread")
+            return Err("Bibliothèque 'exifread' manquante - pip install exifread")
             
         try:
             with open(self.filepath, "rb") as f:

@@ -33,7 +33,7 @@ class ImageExifParser:
 
     def parse(self) -> Result[dict[str, str], str]:
         if not HAS_PIL:
-            return Err("Bibliothèque 'Pillow' manquante — pip install Pillow")
+            return Err("Bibliothèque 'Pillow' manquante - pip install Pillow")
             
         try:
             with PILImage.open(self.filepath) as img:

@@ -45,7 +45,7 @@ class ColoredFormatter(logging.Formatter):
         lvl_color = LEVEL_COLORS.get(level_raw, COLOR_MUTED)
         level_str = f"{lvl_color}[{level_raw:<5}]{COLOR_RESET}"
 
-        # 3. Logger name (Sky Blue / Muted) — padé à 24 chars pour alignement
+        # 3. Logger name (Sky Blue / Muted) - padé à 24 chars pour alignement
         logger_name = f"{COLOR_CYAN}{record.name:<24}{COLOR_RESET}"
 
         msg = neutralize(record.getMessage())

@@ -1,4 +1,4 @@
-"""Analyzers Firefox — historique et cookies depuis les bases SQLite."""
+"""Analyzers Firefox - historique et cookies depuis les bases SQLite."""
 from __future__ import annotations
 
 import os
