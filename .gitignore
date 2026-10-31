@@ -92,3 +92,4 @@ INTEGRATION.md
 # Fixtures de tests (versionnées malgré les règles ci-dessus)
 !tests/**
 __pycache__/
+TEST_FORENSICTOOL/
