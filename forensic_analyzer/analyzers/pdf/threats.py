@@ -6,8 +6,9 @@ chaînes aussi (échappements octaux, hexadécimal, UTF-16). On suit ensuite les
 le catalogue jusqu'au code : /OpenAction, /AA, JavaScript de document (/Names), pages, annotations
 et champs de formulaire. Chaque point du score cite l'objet en cause.
 
-Le coût reste linéaire : le découpage avance toujours, et un budget borne le travail total sur un
-fichier hostile (chaînes ou flux jamais fermés).
+Le coût reste linéaire : le découpage avance toujours, une recherche qui a échoué (fin de
+commentaire, de flux, de chaîne hexadécimale) n'est jamais relancée plus loin, et un budget borne
+le travail total sur un fichier hostile. Un test impose un temps maximal sur chacun de ces cas.
 """
 from __future__ import annotations
 
@@ -47,6 +48,7 @@ _LITERAL_RUN = re.compile(rb"[^()\\]+")
 _HEX_ESCAPE = re.compile(rb"#([0-9A-Fa-f]{2})")
 _OCTAL = re.compile(rb"[0-7]{1,3}")
 _EOL = re.compile(rb"[\r\n]")
+_HEX_END = re.compile(rb">")
 _URL = re.compile(rb"https?://[^\s<>()\[\]{}\"'\\`^|\x00-\x1f\x7f-\xff]+", re.IGNORECASE)
 _ESCAPES = {ord("n"): 10, ord("r"): 13, ord("t"): 9, ord("b"): 8, ord("f"): 12}
 _ACTION_KINDS = ("JavaScript", "Launch", "URI", "SubmitForm", "GoToR", "GoToE", "ImportData", "RichMediaExecute")
@@ -73,6 +75,21 @@ class _Parser:
     def __init__(self, data: bytes, names: set[str], obfuscated: set[str]):
         self.data, self.names, self.obfuscated = data, names, obfuscated
         self.furthest = 0
+        self._absent_from: dict[bytes, int] = {}
+
+    def _find(self, pattern: re.Pattern, pos: int) -> int:
+        """
+        Position de fin du prochain motif, ou -1. Un échec est mémorisé : chercher à nouveau la
+        fin d'un commentaire sans fin de ligne, objet après objet, relirait tout le fichier à
+        chaque fois (coût quadratique).
+        """
+        if pos >= self._absent_from.get(pattern.pattern, len(self.data) + 1):
+            return -1
+        m = pattern.search(self.data, pos)
+        if not m:
+            self._absent_from[pattern.pattern] = pos
+            return -1
+        return m.end()
 
     def skip(self, pos: int) -> int:
         data, n = self.data, len(self.data)
@@ -81,8 +98,8 @@ class _Parser:
             if c in b" \t\r\n\f\x00":
                 pos += 1
             elif c == 0x25:  # commentaire
-                m = _EOL.search(data, pos)
-                pos = m.end() if m else n
+                end = self._find(_EOL, pos)
+                pos = end if end >= 0 else n
             else:
                 break
         return pos
@@ -116,7 +133,7 @@ class _Parser:
         if c == 0x28:  # (
             return self._literal(pos)
         if c == 0x3C:  # <
-            end = data.find(b">", pos)
+            end = self._find(_HEX_END, pos) - 1
             if end < 0:
                 raise _Malformed("chaîne hexadécimale non fermée")
             digits = re.sub(rb"[^0-9A-Fa-f]", b"", data[pos + 1:end])
@@ -206,6 +223,7 @@ class PdfThreats:
     scripts: list[Script] = field(default_factory=list)
     launches: list[str] = field(default_factory=list)
     other_actions: list[str] = field(default_factory=list)
+    auto_external: list[str] = field(default_factory=list)  # URL ou ressource externe ouverte sans clic
     urls: list[str] = field(default_factory=list)          # cibles d'actions et URLs du JavaScript
     text_urls: list[str] = field(default_factory=list)     # URLs citées dans le texte ou les flux
     embedded: list[str] = field(default_factory=list)
@@ -279,7 +297,7 @@ class _Document:
             self.result.partial.append("structure anormale : découpage interrompu (budget de lecture épuisé)")
         for m in re.finditer(rb"trailer", data):
             try:
-                value, _ = _Parser(data, self.names, self.obfuscated).value(m.end())
+                value, _ = parser.value(m.end())
             except (_Malformed, binascii.Error, RecursionError):
                 continue
             if isinstance(value, dict) and ("Root" in value or "Info" in value or "Encrypt" in value):
@@ -504,11 +522,16 @@ class _Document:
             params = text_of(win.get("P")) if isinstance(win.get("P"), bytes) else ""
             self.result.launches.append(f"{target}{' ' + params if params else ''} — {trigger}, obj {num}")
         elif kind == "URI":
-            self._url(self.text(act.get("URI"), where[0], where[1] + ("URI",)))
+            url = self.text(act.get("URI"), where[0], where[1] + ("URI",))
+            self._url(url)
+            if auto:
+                self.result.auto_external.append(f"/URI {url or 'cible illisible'} — {trigger}, obj {num}")
         elif kind in ("SubmitForm", "GoToR", "GoToE", "ImportData", "RichMediaExecute"):
             target = self.text(act.get("F")) if "F" in act else ""
             self.result.other_actions.append(f"/{kind} {target} — {trigger}".replace("  ", " "))
             self._url(target)
+            if auto:
+                self.result.auto_external.append(f"/{kind} {target or 'cible illisible'} — {trigger}, obj {num}")
         nxt = act.get("Next")
         for n in self._list(nxt) if isinstance(self.resolve(nxt), list) else ([nxt] if nxt else []):
             self._action(n, trigger, auto, num, "Next", depth + 1)
@@ -728,6 +751,8 @@ def _score(r: PdfThreats) -> tuple[int, str, list[tuple[int, str]]]:
         reasons.append((15, f"JavaScript déclenché par l'utilisateur : {s.trigger}, obj {s.obj}"))
     if r.launches:
         reasons.append((50, f"/Launch : lancement de programme ({r.launches[0]})"))
+    if r.auto_external:   # hameçonnage : le navigateur s'ouvre sur l'URL dès l'ouverture du PDF
+        reasons.append((30, f"ressource externe ouverte sans clic : {r.auto_external[0]}"))
     if r.shellcode:
         reasons.append((50, f"shellcode / heap spray encodé ({', '.join(r.shellcode[:3])})"))
     codes = [s.code for s in r.scripts]

@@ -30,7 +30,7 @@ _CATEGORIES = [
      {"pcap", "firefox_history", "firefox_places", "firefox_cookies", "chromium_artifacts", "network_recon", "ids_alerts"}),
     ("malware", "Binaires, scripts et menaces",
      {"pe_analysis", "malware_analysis", "elf_analysis", "webshell_analysis", "yara", "ioc", "carving", "strings"}),
-    ("files", "Fichiers et métadonnées", {"pdf", "pdf_analysis", "image", "gps", "stego", "stego_audio"}),
+    ("files", "Fichiers et métadonnées", {"pdf", "pdf_analysis", "office_analysis", "image", "gps", "stego", "stego_audio"}),
 ]
 _MAX_ROWS = 300  # lignes par tableau de données détaillées ; le reste est signalé et figure dans l'export JSON
 _PRINT_ROWS = 25  # au-delà, lignes masquées à l'impression (PDF) avec mention du reste
@@ -232,9 +232,15 @@ def _constats(report: ReportModel, toc: list[tuple[str, str, int]]) -> str:
 def _limites(report: ReportModel) -> str:
     items = []
     if report.analysis_errors:
-        lis = "".join(f"<li><code>{_e(e)}</code></li>" for e in report.analysis_errors)
+        lis = "".join(f"<li><code>{_e(e.module)}</code> sur <code>{_e(e.file)}</code> : {_e(e.error)} — {_e(e.message)}</li>"
+                      for e in report.analysis_errors)
         items.append(_note("important", f"<p><strong>{len(report.analysis_errors)} échec(s) d'analyse</strong> : "
                                         f"ces fichiers n'ont pas été analysés par le module indiqué.</p><ul>{lis}</ul>"))
+    partial = [(f, reason) for f in report.findings for reason in f.incomplete]
+    if partial:
+        lis = "".join(f"<li><code>{_e(os.path.basename(f.file))}</code> — {_e(reason)}</li>" for f, reason in partial)
+        items.append(_note("important", f"<p><strong>Non analysé ou non vérifié</strong> : aucune conclusion "
+                                        f"ne peut être tirée sur ces points.</p><ul>{lis}</ul>"))
     if report.skipped_files:
         files = "".join(f"<li><code>{_e(p)}</code></li>" for p in report.skipped_files)
         items.append(_note("warning", f"<p><strong>{len(report.skipped_files)} fichier(s) non analysé(s)</strong> "

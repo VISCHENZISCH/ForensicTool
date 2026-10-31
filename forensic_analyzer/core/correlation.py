@@ -12,7 +12,7 @@ from forensic_analyzer.models.finding import FindingModel
 # Libellés lisibles des sources
 SOURCE_LABELS = {
     "disk": "Disque", "linux_artifacts": "Artefacts Linux", "memory": "Mémoire", "elf_analysis": "Binaire ELF",
-    "malware_analysis": "Binaire PE", "pdf_analysis": "PDF", "pcap": "Réseau (PCAP)", "evtx": "Journaux Windows",
+    "malware_analysis": "Binaire PE", "pdf_analysis": "PDF", "office_analysis": "Office", "pcap": "Réseau (PCAP)", "evtx": "Journaux Windows",
     "registry": "Registre", "chromium_artifacts": "Navigateur Chromium", "firefox_places": "Navigateur Firefox",
     "prefetch": "Prefetch", "lnk_shortcut": "Raccourci LNK", "ids_alerts": "IDS", "ioc": "Extraction IOC",
 }

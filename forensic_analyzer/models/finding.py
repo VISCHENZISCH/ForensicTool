@@ -45,12 +45,18 @@ def _hash_file(filepath: str, _size: int, _mtime_ns: int) -> tuple[tuple[str, st
         return ()
 
 
+SEVERITIES = ("info", "faible", "moyen", "élevé", "critique")
+
+
 class FindingModel(BaseModel):
     """Résultat d'une analyse forensique sur un fichier."""
     type: str
     file: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     extra: dict[str, Any] = Field(default_factory=dict)
+    # Données de décision, indépendantes des libellés affichés (code de sortie, synthèse)
+    severity: str | None = None                            # une valeur de SEVERITIES ; None : non évaluée
+    incomplete: list[str] = Field(default_factory=list)    # ce que l'analyse n'a pas pu examiner
 
     model_config = {"extra": "allow"}
 
@@ -67,6 +73,21 @@ class FindingModel(BaseModel):
         return self
 
 
+class AnalysisError(BaseModel):
+    """Module en échec sur un fichier : à dire dans le rapport, pas seulement dans le journal."""
+    module: str
+    file: str
+    error: str
+    message: str
+
+    def __str__(self) -> str:
+        return f"{self.module} sur {self.file} : {self.error} : {self.message}"
+
+    @classmethod
+    def of(cls, module: str, file: str, exc: BaseException) -> "AnalysisError":
+        return cls(module=module, file=file, error=type(exc).__name__, message=str(exc))
+
+
 class ReportModel(BaseModel):
     """Rapport global d'une session d'analyse complète."""
     tool: str = "Forensic Analyzer v1.0"
@@ -75,11 +96,11 @@ class ReportModel(BaseModel):
     findings: list[FindingModel] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
     scan_notes: list[str] = Field(default_factory=list)  # archives extraites ou refusées, etc.
-    analysis_errors: list[str] = Field(default_factory=list)  # module en échec sur un fichier : à dire, pas à taire
+    analysis_errors: list[AnalysisError] = Field(default_factory=list)
 
     @classmethod
     def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None,
                       scan_notes: list[str] | None = None,
-                      analysis_errors: list[str] | None = None) -> "ReportModel":
+                      analysis_errors: list[AnalysisError] | None = None) -> "ReportModel":
         return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [],
                    scan_notes=scan_notes or [], analysis_errors=analysis_errors or [])

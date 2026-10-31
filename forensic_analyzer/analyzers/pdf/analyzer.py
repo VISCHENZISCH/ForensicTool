@@ -14,6 +14,7 @@ log = get_logger("pdf")
 
 _DATE_KEYS = ("CreationDate", "ModDate")
 _MAX_JS_SHOWN = 20_000
+_SEVERITY = {"Critique": "critique", "Élevé": "élevé", "Moyen": "moyen", "Faible": "faible"}   # Indéterminé : None
 
 
 class PDFAnalyzer(BaseAnalyzer):
@@ -32,7 +33,8 @@ class PDFAnalyzer(BaseAnalyzer):
         except (OSError, MemoryError) as exc:
             log.warning("↳ PDF non analysé (%s)", exc)
             metadata["[ATTENTION] Non analysé"] = f"{exc} : aucune conclusion sur la menace"
-            return FindingModel(type="pdf_analysis", file=os.path.abspath(path), metadata=metadata)
+            return FindingModel(type="pdf_analysis", file=os.path.abspath(path), metadata=metadata,
+                                incomplete=[f"analyse de menace impossible : {exc}"])
 
         if not reader:   # pypdf absent ou en échec : /Info lu dans la structure brute
             metadata = {**t.info, **metadata}
@@ -65,8 +67,8 @@ class PDFAnalyzer(BaseAnalyzer):
                 for s in t.scripts)
         if t.launches:
             metadata["Lancement de programme"] = "\n".join(f"{x} (Critique)" for x in t.launches)
-        if t.other_actions:
-            metadata["Actions externes"] = "\n".join(t.other_actions)
+        if t.other_actions or t.auto_external:
+            metadata["Actions externes"] = "\n".join(dict.fromkeys(t.auto_external + t.other_actions))
         if t.embedded:
             metadata["Fichiers Embarqués"] = ", ".join(t.embedded) + " (à extraire et analyser)"
         if t.shellcode:
@@ -95,4 +97,5 @@ class PDFAnalyzer(BaseAnalyzer):
             extra["pdf_javascript"] = [s.code for s in t.scripts]
             extra["pdf_scripts"] = [{"obj": s.obj, "trigger": s.trigger, "auto": s.auto, "code": s.code}
                                     for s in t.scripts]
-        return FindingModel(type="pdf_analysis", file=os.path.abspath(path), metadata=metadata, extra=extra)
+        return FindingModel(type="pdf_analysis", file=os.path.abspath(path), metadata=metadata, extra=extra,
+                            severity=_SEVERITY.get(t.level), incomplete=list(dict.fromkeys(t.partial)))

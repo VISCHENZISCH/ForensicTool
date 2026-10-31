@@ -91,7 +91,8 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         if f.file in origins:
             f.metadata = {"Origine (archive)": origins[f.file], **f.metadata}
     report.skipped_files = [origins.get(s, s) for s in report.skipped_files]
-    report.analysis_errors = [_with_origin(e, origins) for e in report.analysis_errors]
+    for err in report.analysis_errors:   # fichier extrait : citer l'archive d'origine
+        err.file = origins.get(err.file, err.file)
     return report
 
 
@@ -111,6 +112,7 @@ def default_registry() -> AnalyzerRegistry:
     from forensic_analyzer.analyzers.malware import MalwareAnalyzer
     from forensic_analyzer.analyzers.memory import MemoryAnalyzer
     from forensic_analyzer.analyzers.nmap import NmapAnalyzer
+    from forensic_analyzer.analyzers.office import OfficeAnalyzer
     from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
     from forensic_analyzer.analyzers.pdf import PDFAnalyzer
     from forensic_analyzer.analyzers.registry import RegistryAnalyzer
@@ -120,7 +122,7 @@ def default_registry() -> AnalyzerRegistry:
 
     return AnalyzerRegistry().register_all(
         IntegrityAnalyzer(),
-        PDFAnalyzer(), ImageAnalyzer(), GPSAnalyzer(), StegoAnalyzer(),
+        PDFAnalyzer(), OfficeAnalyzer(), ImageAnalyzer(), GPSAnalyzer(), StegoAnalyzer(),
         PCAPAnalyzer(), EVTXAnalyzer(), RegistryAnalyzer(),
         MemoryAnalyzer(), DiskAnalyzer(), MalwareAnalyzer(), ELFAnalyzer(),
         ChromiumAnalyzer(), FirefoxHistoryAnalyzer(), FirefoxCookiesAnalyzer(),
@@ -128,10 +130,3 @@ def default_registry() -> AnalyzerRegistry:
         LinuxArtifactsAnalyzer(), LogAnalyzer(), WebshellAnalyzer(), NmapAnalyzer(),
     )
 
-
-def _with_origin(error: str, origins: dict[str, str]) -> str:
-    """Erreur sur un fichier extrait d'archive : citer l'archive plutôt que le dossier d'extraction."""
-    for extracted, origin in origins.items():
-        if extracted in error:
-            return error.replace(extracted, origin)
-    return error

@@ -31,9 +31,18 @@ def repos(tmp_path, monkeypatch):
     return upstream, local
 
 
-def test_update_is_applied_when_behind(repos, capsys):
+def test_unsigned_update_is_refused_by_default(repos, capsys):
     from forensic_analyzer.core.updater import Updater
 
+    Updater().check_and_update()
+    assert "sans signature valide" in capsys.readouterr().out
+    assert (repos[1] / "f.txt").read_text() == "v1"
+
+
+def test_update_is_applied_when_behind(repos, capsys, monkeypatch):
+    from forensic_analyzer.core.updater import Updater
+
+    monkeypatch.setenv("FORENSIC_UPDATE_ALLOW_UNSIGNED", "1")
     Updater().check_and_update()
     assert (repos[1] / "f.txt").read_text() == "v2"
     Updater().check_and_update()

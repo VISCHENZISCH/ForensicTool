@@ -31,7 +31,8 @@ def test_module_failure_is_reported_not_hidden(tmp_path):
     evidence.write_bytes(b"x")
     report = run_pipeline([str(evidence)], AnalyzerRegistry().register_all(_Crashing(), _Working()))
     assert report.total == 1                                       # l'autre module a tourné
-    assert report.analysis_errors == [f"plante sur {evidence} : ValueError : structure inattendue"]
+    err, = report.analysis_errors
+    assert (err.module, err.file, err.error, err.message) == ("plante", str(evidence), "ValueError", "structure inattendue")
 
 
 def test_report_timestamp_is_utc():
@@ -62,3 +63,20 @@ def test_exit_code_signals_altered_evidence(tmp_path):
     assert _cli(tmp_path, "--verify-hashes", str(manifest)).returncode == 2
     manifest.write_text(f"{hashlib.sha256(b'modifie').hexdigest()}  disk.img\n")
     assert _cli(tmp_path, "--verify-hashes", str(manifest)).returncode == 0
+
+
+def test_exit_code_signals_unverifiable_evidence(tmp_path):
+    manifest = tmp_path / "m.sha256"
+    manifest.write_text(f"{hashlib.sha256(b'x').hexdigest()}  absent.img\n")
+    assert _cli(tmp_path, "--verify-hashes", str(manifest)).returncode == 1
+
+
+def test_exit_code_ignores_wording():
+    from forensic_analyzer.cli.main import exit_code
+    from forensic_analyzer.models.finding import ReportModel
+
+    renamed = FindingModel(type="evidence_integrity", file="/m", metadata={"Verdict": "libellé reformulé"},
+                           severity="critique")
+    assert exit_code(ReportModel.from_findings([renamed])) == 2
+    partial = FindingModel(type="pdf_analysis", file="/p", metadata={}, incomplete=["PDF chiffré"])
+    assert exit_code(ReportModel.from_findings([partial])) == 1

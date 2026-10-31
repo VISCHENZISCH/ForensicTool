@@ -261,7 +261,7 @@ def status(msg: str) -> None:
 # Affichage des résultats
 
 MODULE_TAGS = {
-    "pdf": "PDF", "pdf_analysis": "PDF", "image": "IMG", "gps": "GPS", "strings": "STR",
+    "pdf": "PDF", "pdf_analysis": "PDF", "office_analysis": "DOC", "image": "IMG", "gps": "GPS", "strings": "STR",
     "firefox_history": "FHX", "firefox_places": "FHX", "firefox_cookies": "FCK",
     "log_analysis": "LOG", "webshell_analysis": "WSH", "network_recon": "NMP", "ids_alerts": "IDS",
     "stego_audio": "SGA",
@@ -273,7 +273,7 @@ MODULE_TAGS = {
 }
 
 MODULE_NAMES = {
-    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "image": "Analyse d'image / EXIF",
+    "pdf": "Analyse PDF", "pdf_analysis": "Analyse PDF", "office_analysis": "Documents Office", "image": "Analyse d'image / EXIF",
     "gps": "Coordonnées GPS", "strings": "Extraction Strings",
     "firefox_history": "Historique Firefox", "firefox_places": "Historique Firefox", "firefox_cookies": "Cookies Firefox",
     "log_analysis": "Journaux Web / Système", "webshell_analysis": "Détection Webshell",
@@ -290,7 +290,7 @@ MODULE_NAMES = {
 }
 
 MODULE_COLORS = {
-    "pdf": "\033[38;5;203m", "pdf_analysis": "\033[38;5;203m", "image": C.Y, "gps": C.B, "strings": C.D,
+    "pdf": "\033[38;5;203m", "pdf_analysis": "\033[38;5;203m", "office_analysis": "\033[38;5;33m", "image": C.Y, "gps": C.B, "strings": C.D,
     "firefox_history": C.M, "firefox_places": C.M, "firefox_cookies": C.P,
     "log_analysis": "\033[38;5;214m", "webshell_analysis": "\033[38;5;160m", "network_recon": C.VB,
     "ids_alerts": C.HR, "stego_audio": "\033[38;5;198m",
@@ -618,11 +618,14 @@ def render_conclusion(report) -> None:
                 print(f"{MARGIN}    {C.MG6}{ts}{C.RS}  {C.D}{' + '.join(fact.get('sources', []))}{C.RS}")
                 for line in textwrap.wrap(fact["description"], width=77, break_long_words=False):
                     print(f"{MARGIN}      {C.W}{line}{C.RS}")
-    if report.skipped_files or report.scan_notes or report.analysis_errors:
+    partial = [(f, reason) for f in report.findings for reason in f.incomplete]
+    if report.skipped_files or report.scan_notes or report.analysis_errors or partial:
         print()
         separator("Limites")
         for i, err in enumerate(report.analysis_errors, 1):
-            kv(f"[ALERTE] Échec d'analyse #{i}", err)
+            kv(f"[ALERTE] Échec d'analyse #{i}", str(err))
+        for f, reason in partial:
+            kv(f"Non analysé : {os.path.basename(f.file)}"[:28], reason)
         if report.skipped_files:
             names = ", ".join(os.path.basename(p) for p in report.skipped_files[:12])
             kv("Fichiers non analysés", f"{len(report.skipped_files)} : {names}")

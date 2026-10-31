@@ -33,6 +33,7 @@ Exemples :
     g1 = p.add_argument_group("Analyse de fichiers")
     g1.add_argument("--scan",    metavar="CHEMIN",  help="Scan automatique d'un fichier ou d'un dossier")
     g1.add_argument("--pdf",     metavar="FICHIER", help="Métadonnées PDF")
+    g1.add_argument("--office",  metavar="FICHIER", help="Documents Office : macros, DDE, modèles distants")
     g1.add_argument("--image",   metavar="FICHIER", help="Métadonnées EXIF d'une image")
     g1.add_argument("--gps",     metavar="FICHIER", help="Coordonnées GPS EXIF")
     g1.add_argument("--strings", metavar="FICHIER", help="Chaînes imprimables d'un binaire")
@@ -109,6 +110,7 @@ def cli_dispatch():
         LinuxArtifactsAnalyzer
     from forensic_analyzer.analyzers.memory import MemoryAnalyzer
     from forensic_analyzer.analyzers.pcap import PCAPAnalyzer
+    from forensic_analyzer.analyzers.office import OfficeAnalyzer
     from forensic_analyzer.analyzers.pdf import PDFAnalyzer
     from forensic_analyzer.analyzers.malware import MalwareAnalyzer as PEAnalyzer
     from forensic_analyzer.analyzers.registry import RegistryAnalyzer
@@ -123,7 +125,7 @@ def cli_dispatch():
     from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
     from forensic_analyzer.core.correlation import correlate
     from forensic_analyzer.core.scanner import auto_scan, default_registry, files_for
-    from forensic_analyzer.models.finding import ReportModel
+    from forensic_analyzer.models.finding import AnalysisError, ReportModel
     from forensic_analyzer.output.csv_exporter import CSVExporter
     from forensic_analyzer.output.graph_renderer import render_correlation_graph
     from forensic_analyzer.output.html_exporter import HTMLExporter
@@ -133,7 +135,7 @@ def cli_dispatch():
     from forensic_analyzer.output.rich_renderer import RichRenderer
     from forensic_analyzer.utils.deps import HAS_RICH
     from forensic_analyzer.utils.network import set_online
-    from forensic_analyzer.utils.exports import export_root
+    from forensic_analyzer.utils.exports import export_root, output_path
     from forensic_analyzer.output import ui
 
     parser = build_parser()
@@ -145,7 +147,7 @@ def cli_dispatch():
         set_export_root(args.export_dir)
     else:
         target = next((v for v in (args.scan, args.linux, args.disk, args.mem, args.pcap, args.pe, args.elf,
-                                   args.evtx, args.registry, args.pdf, args.image, args.ioc, args.logs,
+                                   args.evtx, args.registry, args.pdf, args.office, args.image, args.ioc, args.logs,
                                    args.webshell, args.nmap) if v), "analyse")
         new_case_dir(target)
 
@@ -170,7 +172,7 @@ def cli_dispatch():
 
     skipped: list[str] = []
     notes: list[str] = []
-    errors: list[str] = []
+    errors: list = []
     if args.scan:
         report = auto_scan(args.scan, registry)
         findings.extend(report.findings)
@@ -178,6 +180,7 @@ def cli_dispatch():
 
     simple_analyzers = [
         (args.pdf,     PDFAnalyzer),
+        (args.office,  OfficeAnalyzer),
         (args.image,   ImageAnalyzer),
         (args.gps,     GPSAnalyzer),
         (args.strings, StringsAnalyzer),
@@ -206,7 +209,7 @@ def cli_dispatch():
                 res = analyzer.analyze(f, **kwargs)
             except Exception as exc:   # garder les résultats déjà obtenus et le dire dans le rapport
                 ui.error(f"{analyzer.name} a échoué sur {f} : {exc}")
-                errors.append(f"{analyzer.name} sur {f} : {type(exc).__name__} : {exc}")
+                errors.append(AnalysisError.of(analyzer.name, f, exc))
                 continue
             findings.extend(r for r in (res if isinstance(res, list) else [res]) if r)
 
@@ -222,7 +225,7 @@ def cli_dispatch():
         run(MemoryAnalyzer(), args.mem, plugins=plugins, os_type=args.mem_os, symbols_dir=args.mem_symbols)
 
     if args.yara:
-        targets = [t for t in (args.scan, args.pdf, args.image, args.stego, args.carve,
+        targets = [t for t in (args.scan, args.pdf, args.office, args.image, args.stego, args.carve,
                                args.pcap, args.disk, args.evtx, args.registry, args.linux,
                                args.ioc, args.pe, args.elf, args.strings, args.mem) if t]
         if targets:
@@ -232,7 +235,7 @@ def cli_dispatch():
                     res = yara.analyze(target)
                 except Exception as exc:
                     ui.error(f"YARA a échoué sur {target} : {exc}")
-                    errors.append(f"yara sur {target} : {type(exc).__name__} : {exc}")
+                    errors.append(AnalysisError.of("yara", target, exc))
                     continue
                 if res:
                     findings.append(res)
@@ -266,29 +269,32 @@ def cli_dispatch():
             continue
         try:
             ui.success(f"Exporté : {exporter().export(report, wanted)}")
-        except (OSError, RuntimeError) as exc:
-            ui.error(f"Export {wanted} impossible : {exc}")
+        except Exception as exc:   # un exporteur en échec n'empêche pas les suivants
+            ui.error(f"Export {wanted} impossible : {type(exc).__name__} : {exc}")
             export_failed = True
-    export_dir = export_root()
-    if args.export_graph and correlation:
-        out_graph = args.export_graph if os.path.dirname(args.export_graph) else os.path.join(export_dir, args.export_graph)
-        os.makedirs(os.path.dirname(out_graph) or export_dir, exist_ok=True)
-        render_correlation_graph(correlation, out_graph)
-        
-    if getattr(args, 'export_rules', False) and report.findings:
-        from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
-        DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_dir, "rules"))
+    try:
+        if args.export_graph and correlation:
+            render_correlation_graph(correlation, output_path(args.export_graph))
+        if getattr(args, 'export_rules', False) and report.findings:
+            from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
+            DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_root(), "rules"))
+    except Exception as exc:
+        ui.error(f"Export du graphe ou des règles impossible : {type(exc).__name__} : {exc}")
+        export_failed = True
 
     return exit_code(report, export_failed)
 
 
 def exit_code(report, export_failed: bool = False) -> int:
-    """0 : rien à signaler ; 1 : échec d'analyse ou d'export ; 2 : preuve altérée (prioritaire)."""
-    altered = any(f.type == "evidence_integrity" and str(f.metadata.get("Verdict", "")).startswith("[ALERTE]")
-                  for f in report.findings)
-    if altered:
+    """
+    0 : tout a été analysé et vérifié ; 1 : quelque chose n'a pas pu l'être (preuve introuvable,
+    PDF chiffré, module ou export en échec) ; 2 : preuve altérée, prioritaire.
+    Fondé sur les champs severity / incomplete, jamais sur les libellés affichés.
+    """
+    if any(f.type == "evidence_integrity" and f.severity == "critique" for f in report.findings):
         return 2
-    return 1 if export_failed or report.analysis_errors else 0
+    incomplete = any(f.incomplete for f in report.findings)
+    return 1 if export_failed or report.analysis_errors or incomplete else 0
 
 def main():
     """Point d'entrée : menu interactif par défaut, CLI si arguments."""

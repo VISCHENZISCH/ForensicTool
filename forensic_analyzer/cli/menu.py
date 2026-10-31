@@ -157,8 +157,8 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
             try:
                 target = getattr(importlib.import_module(module), cls)().export(report, path)
                 ui.success(f"{label} exporté dans : {target}")
-            except (OSError, RuntimeError) as exc:
-                ui.error(f"{label} non exporté : {exc}")
+            except Exception as exc:   # le menu reste utilisable après un export raté
+                ui.error(f"{label} non exporté : {type(exc).__name__} : {exc}")
 
     elif choice == "G":
         path = ui.prompt_input("Entrez le chemin du graphe HTML de sortie (.html)")

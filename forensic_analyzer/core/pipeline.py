@@ -6,7 +6,7 @@ import os
 import threading
 
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel, ReportModel
+from forensic_analyzer.models.finding import AnalysisError, FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("pipeline")
@@ -68,7 +68,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
     # Plusieurs Volatility ou pytsk3 en parallèle saturent la RAM
     heavy_lock = threading.Lock()
 
-    errors: list[str] = []
+    errors: list[AnalysisError] = []
 
     def process_path(path: str) -> list[FindingModel]:
         if not os.path.isfile(path):
@@ -90,7 +90,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
                     res = analyzer.analyze(path, **analyze_kwargs)
             except Exception as exc:   # un module en échec ne doit ni arrêter le scan ni disparaître du rapport
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
-                errors.append(f"{analyzer.name} sur {path} : {type(exc).__name__} : {exc}")
+                errors.append(AnalysisError.of(analyzer.name, path, exc))
                 continue
             if isinstance(res, list):
                 results.extend(r for r in res if r is not None)

@@ -10,8 +10,14 @@ from forensic_analyzer.output import ui
 # un dépôt git, sa configuration (core.fsmonitor, alias...) ferait exécuter du code à git.
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Commits non signés acceptés seulement sur demande explicite (dépôt de développement, fork)
+_ALLOW_UNSIGNED = "FORENSIC_UPDATE_ALLOW_UNSIGNED"
+
+
 def _git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], capture_output=True, text=True, cwd=_REPO)
+    # GIT_TERMINAL_PROMPT=0 : un dépôt qui demande un identifiant échoue au lieu d'attendre une saisie invisible
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
+    return subprocess.run(["git", *args], capture_output=True, text=True, cwd=_REPO, env=env, timeout=60)
 
 
 class Updater:
@@ -21,7 +27,8 @@ class Updater:
         """
         Récupère les commits distants, en avance rapide seulement. La décision se fonde sur
         `git rev-list` (jamais sur le texte traduit de `git status`), et la mise à jour est
-        refusée si le dépôt local a des modifications ou a divergé.
+        refusée si le dépôt local a des modifications ou a divergé, ou si un commit à récupérer
+        n'a pas de signature valide (sauf FORENSIC_UPDATE_ALLOW_UNSIGNED=1).
         """
         ui.info("Recherche de mises à jour en cours...")
         if not os.path.isdir(os.path.join(_REPO, ".git")):
@@ -49,7 +56,14 @@ class Updater:
                 return
             log = _git("log", "--oneline", "HEAD..@{u}").stdout.strip()
             ui.info(f"{behind} commit(s) à récupérer :\n{log}")
-            pull = _git("merge", "--ff-only", "@{u}")
+            signed = os.environ.get(_ALLOW_UNSIGNED) != "1"
+            if signed:
+                states = _git("log", "--format=%G?", "HEAD..@{u}").stdout.split()
+                if any(s != "G" for s in states):
+                    ui.error(f"{sum(s != 'G' for s in states)} commit(s) sans signature valide : mise à jour refusée "
+                             f"({_ALLOW_UNSIGNED}=1 pour l'accepter en connaissance de cause).")
+                    return
+            pull = _git("merge", "--ff-only", *(["--verify-signatures"] if signed else []), "@{u}")
             if pull.returncode == 0:
                 ui.success("Mise à jour terminée avec succès !")
                 ui.warning("Il est recommandé de redémarrer l'application pour appliquer les changements.")
@@ -57,3 +71,7 @@ class Updater:
                 ui.error(f"Erreur lors de la mise à jour : {pull.stderr.strip()}")
         except FileNotFoundError:
             ui.error("La commande 'git' n'est pas installée ou non reconnue.")
+        except subprocess.TimeoutExpired as exc:
+            ui.error(f"git ne répond pas (plus de {exc.timeout:.0f} s) : mise à jour abandonnée.")
+        except ValueError:
+            ui.error("Réponse inattendue de git rev-list : mise à jour abandonnée.")

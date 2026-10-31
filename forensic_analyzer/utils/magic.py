@@ -1,5 +1,6 @@
 """Détection du type de fichier via Magic Bytes (En-têtes)."""
 import os
+import zipfile
 
 def get_file_magic_extension(filepath: str) -> str:
     """Renvoie une pseudo-extension (.pdf, .exe) basée sur les magic bytes du fichier."""
@@ -25,9 +26,13 @@ def get_file_magic_extension(filepath: str) -> str:
         if header.startswith(b'%PDF'):
             return '.pdf'
             
-        # Archive ZIP / DOCX / XLSX / JAR
+        # ZIP : document Office (OOXML) s'il décrit ses types de contenu, sinon archive
         if header.startswith(b'PK\x03\x04'):
-            return '.zip'
+            try:
+                with zipfile.ZipFile(filepath) as z:
+                    return '.ooxml' if '[Content_Types].xml' in z.namelist() else '.zip'
+            except (zipfile.BadZipFile, OSError):
+                return '.zip'
             
         # PCAP (Magic number: A1 B2 C3 D4 ou D4 C3 B2 A1)
         if header.startswith(b'\xa1\xb2\xc3\xd4') or header.startswith(b'\xd4\xc3\xb2\xa1'):
@@ -49,9 +54,9 @@ def get_file_magic_extension(filepath: str) -> str:
         if header.startswith(b'\x89PNG\r\n\x1A\n'):
             return '.png'
             
-        # MSI Installer / OLE2 (Composite Document File V2)
+        # OLE2 (Composite Document File V2) : .doc, .xls, .ppt, .msg, mais aussi MSI ou Thumbs.db
         if header.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
-            return '.msi'
+            return '.ole'
             
         # Script Bash / Shebang
         if header.startswith(b'#!'):

@@ -24,7 +24,8 @@ _BENIGN_DOMAINS = {"www.debian.org", "debian.org", "gnu.org", "www.gnu.org", "ex
                    "www.example.com", "schemas.microsoft.com", "www.w3.org", "w3.org"}
 
 # Types de résultats dont le fichier analysé est lui-même un indicateur (empreinte, nom)
-_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "webshell_analysis"}
+_FILE_ARTIFACT_TYPES = {"elf_analysis", "malware_analysis", "pe_analysis", "pdf_analysis", "webshell_analysis",
+                        "office_analysis"}
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,11 @@ def _pe(c: _Collector, f: FindingModel) -> None:
     for url in f.extra.get("pdf_urls", []):
         c.add("url", url, "URL du document")
     _behaviour(c, f)
+
+
+def _office(c: _Collector, f: FindingModel) -> None:
+    for url in f.extra.get("office_urls", []):
+        c.add("url", url, "URL chargée ou appelée par le document Office")
 
 
 def _pcap(c: _Collector, f: FindingModel) -> None:
@@ -300,6 +306,7 @@ def _webshell(c: _Collector, f: FindingModel) -> None:
 _EXTRACTORS: dict[str, Callable[[_Collector, FindingModel], None]] = {
     "elf_analysis": _elf,
     "malware_analysis": _pe, "pe_analysis": _pe, "pdf_analysis": _pe,
+    "office_analysis": _office,
     "pcap": _pcap,
     "memory": _memory,
     "linux_artifacts": _linux,

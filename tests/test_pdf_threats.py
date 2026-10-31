@@ -115,10 +115,24 @@ def test_incremental_updates_are_reported(tmp_path):
     assert meta["Révisions"].startswith("2 (mises à jour incrémentales), 1 objet(s) redéfini(s)")
 
 
-@pytest.mark.parametrize("unit", [b"stream\n" + b"A" * 200, b"1 0 obj (" + b"A" * 200, b"1 0 obj << /A [ " + b"1 " * 100])
+@pytest.mark.parametrize("unit", [b"stream\n" + b"A" * 200, b"1 0 obj (" + b"A" * 200, b"1 0 obj << /A [ " + b"1 " * 100,
+                                  b"1 0 obj % " * 20, b"1 0 obj <4142 " * 20, b"trailer<< /A [ 1 1 1 1 1 1 "])
 def test_hostile_structure_costs_linear_time(tmp_path, unit):
-    path = tmp_path / "dos.pdf"
-    path.write_bytes(b"%PDF-1.5\n" + unit * 10000)       # ~2 Mo : 7 min avec l'ancien découpage
-    start = time.monotonic()
-    PDFAnalyzer().analyze(str(path))
-    assert time.monotonic() - start < 5
+    """Quadrupler la taille ne doit pas multiplier le temps par 16 (quadratique), quelle que soit la machine."""
+    def duration(count: int) -> float:
+        path = tmp_path / f"dos{count}.pdf"
+        path.write_bytes(b"%PDF-1.5\n" + unit * count)
+        start = time.perf_counter()
+        PDFAnalyzer().analyze(str(path))
+        return time.perf_counter() - start
+
+    small, large = duration(1500), duration(6000)
+    assert large < 8 * small + 0.2, (small, large)
+
+
+def test_url_opened_without_click_is_flagged(tmp_path):
+    phishing = b"1 0 obj<</Type/Catalog/OpenAction<</S/URI/URI(https://login.example.net/verify)>>>>endobj"
+    score, meta, extra = _analyze(_pdf(tmp_path, "phish.pdf", phishing))
+    assert score == 30 and meta["Score de menace"] == "30/100 (Élevé)"
+    assert "login.example.net/verify" in meta["Justification du score"]
+    assert extra["pdf_urls"] == ["https://login.example.net/verify"]

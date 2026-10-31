@@ -39,4 +39,6 @@ class IntegrityAnalyzer(BaseAnalyzer):
         else:
             meta["Verdict"] = (f"Vérification incomplète : {others} (aucune empreinte différente ; "
                                "vérifier les chemins du manifeste ou --evidence-dir)")
-        return FindingModel(type="evidence_integrity", file=path, metadata=meta, extra=res)
+        unverified = [f"{r['file']} : {r['status'].lower()}" for r in results if r["status"] in ("ABSENT", "HORS PÉRIMÈTRE")]
+        return FindingModel(type="evidence_integrity", file=path, metadata=meta, extra=res,
+                            severity="critique" if diff_count else "info", incomplete=unverified)
