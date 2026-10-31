@@ -40,6 +40,7 @@ class StringsAnalyzer(BaseAnalyzer):
                 if file_size == 0:
                     return FindingModel(
                         type="strings",
+                        severity="info",
                         file=os.path.abspath(path),
                         metadata={
                             "total_trouvées": 0,
@@ -70,6 +71,7 @@ class StringsAnalyzer(BaseAnalyzer):
                         
             return FindingModel(
                 type="strings",
+                severity="info",
                 file=os.path.abspath(path),
                 metadata={
                     "total_trouvées": len(strings),

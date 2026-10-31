@@ -328,8 +328,8 @@ def finding_header(finding_type: str, filename: str) -> None:
     print()
 
 
-def kv(key: str, value, indent: int = 3) -> None:
-    """Affiche une paire cle-valeur en appliquant un retour à la ligne si besoin."""
+def kv(key: str, value, indent: int = 3, tone: str | None = None) -> None:
+    """Affiche une paire clé-valeur ; `tone` (une gravité) impose la couleur."""
     pad = " " * indent
     val_str = str(value)
 
@@ -349,7 +349,7 @@ def kv(key: str, value, indent: int = 3) -> None:
         t = re.sub(r'\((\d+)\)', f'{C.C_STRUCT}({C.C_USER}\\1{C.C_STRUCT}){C.C_RESULT}', t)
         return t
 
-    severity = _severity(f"{key} {val_str}")
+    severity = _TONES.get(tone, "") if tone else _severity(key, val_str)
     value_color = severity or C.C_RESULT
     shown = [colorize(line) if not severity else line for line in lines]
     if len(key) > 28:
@@ -363,15 +363,16 @@ def kv(key: str, value, indent: int = 3) -> None:
         print(f"{MARGIN}{' ' * offset}{value_color}{line}{C.RS}")
 
 # Couleur des lignes seulement : la gravité d'un résultat est son champ severity, pas ce texte
-_CRITICAL = ("CRITIQUE", "Critique", "[ALERTE]", "DÉTECTÉ", "DÉTECTE", "STEGO CONFIRMÉE", "MODIFIE", "ALTÉRÉ")
-_WARNING = ("Élevé", "Élevé", "Avertissement", "SUSPECT", "STEGO PROBABLE", "illisible")
+# La couleur suit les marques posées par les modules ([ALERTE], [ATTENTION]) ou le champ severity,
+# jamais des mots trouvés dans les libellés : une seule source de vérité pour la gravité
+_TONES = {"critique": C.HR, "élevé": C.HR, "moyen": C.C_WARN}
 
 
-def _severity(text: str) -> str:
-    """Couleur d'une ligne selon sa gravité ("" si neutre)."""
-    if any(m in text for m in _CRITICAL):
+def _severity(key: str, value: str) -> str:
+    """Couleur d'une ligne d'après les marques du module ("" si neutre)."""
+    if key.startswith("[ALERTE]") or value.startswith("[ALERTE]"):
         return C.HR
-    if any(m in text for m in _WARNING):
+    if key.startswith("[ATTENTION]"):
         return C.C_WARN
     return ""
 
@@ -385,7 +386,7 @@ def render_finding(finding) -> None:
     finding_header(finding.type, fname)
 
     if finding.severity:
-        kv("Gravité", finding.severity.capitalize())
+        kv("Gravité", finding.severity.capitalize(), tone=finding.severity)
     for k, v in finding.metadata.items():
         kv(k, v)
 
@@ -604,7 +605,7 @@ def render_conclusion(report) -> None:
     print()
     for level, label in (("critique", "critique"), ("élevé", "élevée"), ("moyen", "moyenne")):
         if graded.get(level):
-            kv(f"Gravité {label}", f"{len(graded[level])} : " + ", ".join(graded[level][:6]))
+            kv(f"Gravité {label}", f"{len(graded[level])} : " + ", ".join(graded[level][:6]), tone=level)
     if alerts:
         detail = ", ".join(f"{name} {n}" for name, n in sorted(alerts.items(), key=lambda x: -x[1]))
         kv("Alertes", f"{sum(alerts.values())} ({detail})")

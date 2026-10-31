@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.version import tool_identity
 
 log = get_logger("finding")
 
@@ -131,7 +132,7 @@ def recheck(records: list[EvidenceRecord]) -> list[EvidenceRecord]:
 
 class ReportModel(BaseModel):
     """Rapport global d'une session d'analyse complète."""
-    tool: str = "Forensic Analyzer v1.0"
+    tool: str = Field(default_factory=tool_identity)   # version et commit exacts de l'outil
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
     total: int = 0
     findings: list[FindingModel] = Field(default_factory=list)

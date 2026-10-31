@@ -29,7 +29,8 @@ class GPSAnalyzer(BaseAnalyzer):
                     type="gps",
                     file=os.path.abspath(path),
                     metadata=metadata,
-                    extra={}
+                    extra={},
+                    severity="info",
                 )
             case Err(error=msg):
                 if "Aucune coordonnée" not in msg:

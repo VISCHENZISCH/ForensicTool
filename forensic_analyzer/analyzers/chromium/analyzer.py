@@ -154,5 +154,6 @@ class ChromiumAnalyzer(BaseAnalyzer):
             type="chromium_artifacts",
             file=filepath,
             metadata=metadata,
-            extra=extra
+            extra=extra,
+            severity="info",   # historique et identifiants enregistrés : des traces, pas une menace
         )

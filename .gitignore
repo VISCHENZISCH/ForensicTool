@@ -16,11 +16,10 @@ pip-wheel-metadata/
 env/
 venv/
 
-# Forensic evidence (ne jamais committer de preuves)
+# Preuves : jamais dans le dépôt (captures, images disque, mémoire, journaux Windows, bases)
 *.pcap
 *.pcapng
 *.cap
-*.rules
 *.binary
 *.memory
 *.mem
@@ -37,7 +36,6 @@ venv/
 *.evtx
 *.registry
 *.linux
-*.yar
 *.image
 *.disque
 *.timel
@@ -46,10 +44,51 @@ venv/
 *.lnk
 *.DAT
 
+# Documents et archives (cours, rapports de TP, pièces jointes) : jamais dans le dépôt
+*.doc
+*.docx
+*.docm
+*.dot
+*.dotm
+*.xls
+*.xlsx
+*.xlsm
+*.ppt
+*.pptx
+*.pptm
+*.odt
+*.ods
+*.odp
+*.rtf
+*.msg
+*.eml
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+__MACOSX/
+~$*
+TEST_FORENSICTOOL/
+lab/*
+
+# Rapports générés : dans export/ (dossier d'affaire), lib/ (sortie pyvis) ou à la racine
+export/
+lib/
+/*.json
+/*.csv
+/*.html
+/*.pdf
+/*.png
+/*.yar
+/*.rules
+
 # Tests
 /test_samples/*
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Editor and OS files
@@ -64,23 +103,6 @@ Thumbs.db
 *.log
 *.pid
 *.sqlite3
-lab/*
-
-# Rapports générés (export/, sortie pyvis lib/) et fichiers produits par les analyses
-export/
-lib/
-*.json
-*.csv
-*.html
-*.HTML
-*.pdf
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tiff
-*.webp
 
 # Notes personnelles
 agent.md
@@ -91,5 +113,6 @@ INTEGRATION.md
 
 # Fixtures de tests (versionnées malgré les règles ci-dessus)
 !tests/**
+# ... sauf leurs caches (la règle ci-dessus les ré-inclurait)
 __pycache__/
-TEST_FORENSICTOOL/
+*.py[cod]

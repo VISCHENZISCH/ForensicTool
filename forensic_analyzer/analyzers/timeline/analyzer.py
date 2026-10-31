@@ -360,4 +360,5 @@ class TimelineAnalyzer(BaseAnalyzer):
             file="multi-source",
             metadata=meta,
             extra={"events": events[:2000], "facts": facts[:2000], "source_stats": sources},
+            severity="info",   # vue transverse : la gravité est portée par les constats sources
         )

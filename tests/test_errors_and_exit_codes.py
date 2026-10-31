@@ -149,3 +149,21 @@ def test_oversized_pcap_is_reported_not_loaded(tmp_path, monkeypatch):
     capture.write_bytes(b"\xd4\xc3\xb2\xa1" + b"\0" * 100)
     f = pcap_mod.PCAPAnalyzer().analyze(str(capture))
     assert f.incomplete and "tshark" in f.metadata["[ATTENTION] Non analysé"]
+
+
+def test_every_analyzer_sets_a_severity():
+    """Garde-fou : un nouveau module qui ne renseigne pas severity serait invisible pour le code de sortie."""
+    import glob
+    import os
+
+    root = os.path.join(os.path.dirname(__file__), "..", "forensic_analyzer", "analyzers")
+    sources = {os.path.basename(os.path.dirname(p)): open(p, encoding="utf-8").read()
+               for p in glob.glob(os.path.join(root, "*", "analyzer.py"))}
+    assert sources and not [name for name, code in sources.items() if "severity" not in code]
+
+
+def test_report_names_the_exact_tool_version():
+    from forensic_analyzer import __version__
+    from forensic_analyzer.models.finding import ReportModel
+
+    assert ReportModel.from_findings([]).tool.startswith(f"Forensic Analyzer {__version__}")

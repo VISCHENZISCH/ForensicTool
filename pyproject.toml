@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forensic-analyzer"
+dynamic = ["version", "dependencies"]
+description = "Suite forensique modulaire de tri DFIR : disque, mémoire, réseau, journaux, documents, binaires"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "VISCHENZISCH" }]
+
+[project.scripts]
+forensic-analyzer = "forensic_analyzer.cli.main:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "forensic_analyzer.__version__" }   # une seule source : forensic_analyzer/__init__.py
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["forensic_analyzer*"]
+
+[tool.setuptools.package-data]
+"forensic_analyzer.output" = ["fonts/*.woff2", "fonts/*.txt"]   # polices embarquées dans les rapports
+
+# Lint : d'abord « aucune erreur réelle » (syntaxe, noms indéfinis, imports inutiles), bloquant en CI.
+# Les règles de style et de complexité seront ajoutées module par module, en réduisant le stock existant.
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.coverage.run]
+source = ["forensic_analyzer"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true

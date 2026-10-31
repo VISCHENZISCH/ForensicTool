@@ -6,17 +6,31 @@ on:
   pull_request:
 
 jobs:
-  pytest:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: "Ruff : erreurs réelles (syntaxe, noms indéfinis, imports inutiles)"
+        run: pip install ruff && ruff check forensic_analyzer tests
+
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfuzzy-dev
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Run tests
-        run: pytest -v
+        run: pip install -r requirements-dev.txt pytest-cov
+      - name: Run tests with coverage
+        run: pytest -v --cov --cov-report=term-missing:skip-covered

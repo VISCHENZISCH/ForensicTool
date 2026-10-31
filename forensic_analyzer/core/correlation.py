@@ -15,6 +15,7 @@ SOURCE_LABELS = {
     "malware_analysis": "Binaire PE", "pdf_analysis": "PDF", "office_analysis": "Office", "pcap": "Réseau (PCAP)", "evtx": "Journaux Windows",
     "registry": "Registre", "chromium_artifacts": "Navigateur Chromium", "firefox_places": "Navigateur Firefox",
     "prefetch": "Prefetch", "lnk_shortcut": "Raccourci LNK", "ids_alerts": "IDS", "ioc": "Extraction IOC",
+    "log_analysis": "Journaux", "webshell_analysis": "Webshell", "network_recon": "Nmap", "yara": "YARA",
 }
 # Poids des types d'indicateurs pour classer les corrélations
 _KIND_WEIGHT = {"sha256": 5, "md5": 5, "ipv4": 4, "domain": 4, "url": 4, "ja3": 4,

@@ -385,6 +385,8 @@ class CarvingAnalyzer(BaseAnalyzer):
                     "polyglots": polyglots,
                     "zip_repairs": zip_repairs,
                 },
+                # Fichier polyglotte ou exécutable caché dans un autre : technique de dissimulation
+                severity="moyen" if polyglots or any(e["type"] == "ELF" for e in embedded) else "info",
             )
         except Exception as exc:
             log.error("Erreur carving '%s' : %s", os.path.basename(path), exc)

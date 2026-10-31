@@ -8,6 +8,8 @@ Couche CLI pour Forensic Analyzer.
 import argparse
 import os
 
+from forensic_analyzer.utils.version import tool_identity
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -78,6 +80,8 @@ Code de sortie : 0 rien à signaler, 1 analyse ou vérification incomplète,
     g4.add_argument("--yara", metavar="RÈGLES", help="Règles YARA (.yar ou dossier)")
     g4.add_argument("--ioc",  metavar="FICHIER", help="Extraction IOC automatique")
     g4.add_argument("--update", action="store_true", help="Mettre à jour l'application depuis le dépôt distant")
+    g4.add_argument("--version", action="version", version=tool_identity(),
+                    help="Version et commit de l'outil (aussi inscrits dans chaque rapport)")
     g4.add_argument("--online", action="store_true",
                     help="Autoriser les services en ligne : MalwareBazaar, VirusTotal, géocodage OSM")
 
