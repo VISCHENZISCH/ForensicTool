@@ -12,7 +12,7 @@ from forensic_analyzer.analyzers.disk import layout, tsk_image
 from forensic_analyzer.analyzers.linux import bodyfile as bf
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 from forensic_analyzer.utils.exports import export_root
 
@@ -381,6 +381,7 @@ class DiskAnalyzer(BaseAnalyzer):
                 file=os.path.abspath(path),
                 metadata=meta,
                 extra=extra,
+                severity=severity_if_alerts(meta, "élevé"),
             )
             return [finding, *nested] if nested else finding
         except Exception as exc:

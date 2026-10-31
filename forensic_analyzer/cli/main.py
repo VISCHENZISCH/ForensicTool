@@ -26,6 +26,9 @@ Exemples :
   python main.py --pcap capture.pcap --export-json rapport.json
   python main.py --stego image.png
   python main.py --yara rules/ --scan ./samples
+
+Code de sortie : 0 rien à signaler, 1 analyse ou vérification incomplète,
+2 preuve altérée, 3 menace de gravité élevée ou critique.
         """,
     )
 
@@ -125,7 +128,7 @@ def cli_dispatch():
     from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
     from forensic_analyzer.core.correlation import correlate
     from forensic_analyzer.core.scanner import auto_scan, default_registry, files_for
-    from forensic_analyzer.models.finding import AnalysisError, ReportModel
+    from forensic_analyzer.models.finding import AnalysisError, ReportModel, fingerprint, recheck
     from forensic_analyzer.output.csv_exporter import CSVExporter
     from forensic_analyzer.output.graph_renderer import render_correlation_graph
     from forensic_analyzer.output.html_exporter import HTMLExporter
@@ -173,10 +176,12 @@ def cli_dispatch():
     skipped: list[str] = []
     notes: list[str] = []
     errors: list = []
+    evidence: dict = {}
     if args.scan:
         report = auto_scan(args.scan, registry)
         findings.extend(report.findings)
         skipped, notes, errors = report.skipped_files, report.scan_notes, list(report.analysis_errors)
+        evidence.update((r.file, r) for r in report.evidence)
 
     simple_analyzers = [
         (args.pdf,     PDFAnalyzer),
@@ -205,6 +210,8 @@ def cli_dispatch():
     def run(analyzer, path: str, **kwargs) -> None:
         """Fichier, ou dossier filtre sur le type de l'analyzer (--pdf DOSSIER : seulement les PDF)."""
         for f in files_for(analyzer, path):
+            if os.path.isfile(f) and f not in evidence:
+                evidence[f] = fingerprint(f)   # empreinte avant analyse
             try:
                 res = analyzer.analyze(f, **kwargs)
             except Exception as exc:   # garder les résultats déjà obtenus et le dire dans le rapport
@@ -251,11 +258,13 @@ def cli_dispatch():
     correlation = correlate(findings) if findings else None
     if correlation:
         findings.append(correlation)
-    report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes, analysis_errors=errors)
+    records = recheck([r for r in evidence.values() if r])
+    context = dict(skipped_files=skipped, scan_notes=notes, analysis_errors=errors, evidence=records)
+    report = ReportModel.from_findings(findings, **context)
     tl = TimelineAnalyzer().build_from_report(report) if findings else None
     if tl and tl.extra.get("events"):
         findings.append(tl)
-        report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes, analysis_errors=errors)
+        report = ReportModel.from_findings(findings, **context)
 
     renderer.render_report(report)
 
@@ -287,12 +296,15 @@ def cli_dispatch():
 
 def exit_code(report, export_failed: bool = False) -> int:
     """
-    0 : tout a été analysé et vérifié ; 1 : quelque chose n'a pas pu l'être (preuve introuvable,
-    PDF chiffré, module ou export en échec) ; 2 : preuve altérée, prioritaire.
-    Fondé sur les champs severity / incomplete, jamais sur les libellés affichés.
+    Par priorité : 2 preuve altérée (manifeste, ou modifiée pendant l'analyse) ; 3 menace de gravité élevée ou critique ; 1 quelque chose n'a
+    pas pu être analysé ou vérifié (preuve introuvable, PDF chiffré, module ou export en échec) ;
+    0 rien à signaler. Fondé sur les champs severity / incomplete, jamais sur les libellés affichés.
     """
-    if any(f.type == "evidence_integrity" and f.severity == "critique" for f in report.findings):
+    if any(f.type == "evidence_integrity" and f.severity == "critique" for f in report.findings) or \
+            any(r.changed_during_analysis for r in report.evidence):
         return 2
+    if any(f.severity in ("élevé", "critique") for f in report.findings if f.type != "evidence_integrity"):
+        return 3
     incomplete = any(f.incomplete for f in report.findings)
     return 1 if export_failed or report.analysis_errors or incomplete else 0
 

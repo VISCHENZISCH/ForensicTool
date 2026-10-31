@@ -74,7 +74,6 @@ class OfficeAnalyzer(BaseAnalyzer):
         head = {"Format": _format(path)}
         if reasons and severity in ("élevé", "critique"):
             head["[ALERTE] Verdict"] = f"Document Office malveillant probable : {reasons[0][1]}"
-        head["Sévérité"] = severity.capitalize()
         if reasons:
             head["Raisons"] = "\n".join(f"[{s}] {r}" for s, r in sorted(reasons, key=lambda x: -_LEVELS.index(x[0])))
         if incomplete:

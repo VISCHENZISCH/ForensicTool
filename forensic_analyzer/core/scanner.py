@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import os
 
-from forensic_analyzer.core.archives import expand_archives
+from forensic_analyzer.core.archives import expand_archives, is_archive
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
-from forensic_analyzer.models.finding import ReportModel
+from forensic_analyzer.models.finding import ReportModel, fingerprint, recheck
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("scanner")
@@ -84,8 +84,12 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         return ReportModel(total=0, findings=[])
 
     log.info("%d fichier(s) collecté(s) depuis '%s'", len(targets), path)
+    archives = [r for r in map(fingerprint, (t for t in targets if is_archive(t))) if r]   # avant extraction
     targets, origins, notes = expand_archives(targets)
     report = run_pipeline(targets, registry)
+    for record in report.evidence:
+        record.origin = origins.get(record.file)
+    report.evidence = recheck(archives) + report.evidence
     report.scan_notes = notes
     for f in report.findings:
         if f.file in origins:

@@ -6,7 +6,7 @@ import os
 import re
 
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("ioc")
@@ -264,6 +264,7 @@ class IOCAnalyzer(BaseAnalyzer):
                     "occurrences": occurrences,
                     "offensive_ips": offensive,
                 },
+                severity=severity_if_alerts(meta, "élevé"),
             )
         except Exception as exc:
             log.error("Erreur IOC '%s' : %s", os.path.basename(path), exc)

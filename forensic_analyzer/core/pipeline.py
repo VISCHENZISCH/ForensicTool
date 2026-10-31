@@ -6,7 +6,7 @@ import os
 import threading
 
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import AnalysisError, FindingModel, ReportModel
+from forensic_analyzer.models.finding import AnalysisError, FindingModel, ReportModel, fingerprint, recheck
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("pipeline")
@@ -118,7 +118,13 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
                     len(skipped), ", ".join(os.path.basename(f) for f in skipped[:15]))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
-        results = executor.map(process_path, supported_paths)
+        # Empreinte de chaque preuve collectée AVANT toute analyse (traçabilité), analysée ou non
+        existing = [p for p in paths if os.path.isfile(p)]
+        evidence = [r for r in executor.map(fingerprint, existing) if r]
+        results = list(executor.map(process_path, supported_paths))
 
     findings = [res for per_path in results for res in per_path]
-    return ReportModel.from_findings(findings, skipped_files=skipped, analysis_errors=errors)
+    for record in recheck(evidence):
+        if record.changed_during_analysis:
+            log.error("Preuve modifiée pendant l'analyse : %s", record.file)
+    return ReportModel.from_findings(findings, skipped_files=skipped, analysis_errors=errors, evidence=evidence)

@@ -5,7 +5,7 @@ import os
 from typing import Any
 
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 from .parsers import (
     detect_log_type,
@@ -151,6 +151,7 @@ class LogAnalyzer(BaseAnalyzer):
                 file=os.path.abspath(path),
                 metadata=meta,
                 extra=extra,
+                severity=severity_if_alerts(meta, "élevé"),
             )
         except Exception as exc:
             log.error("Erreur d'analyse sur le journal '%s' : %s", path, exc)

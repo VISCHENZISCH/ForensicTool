@@ -178,6 +178,7 @@ class ELFAnalyzer(BaseAnalyzer):
         if techniques:
             meta["MITRE ATT&CK"] = mitre.summary(techniques)
 
+        severity = "critique" if yara_hits else ("élevé" if ips or paths else "info")
         return FindingModel(
             type="elf_analysis",
             file=os.path.abspath(path),
@@ -191,4 +192,5 @@ class ELFAnalyzer(BaseAnalyzer):
                 "capa": capa,
                 "mitre": mitre.describe(techniques),
             },
+            severity=severity,
         )

@@ -81,9 +81,12 @@ class IDSAnalyzer(BaseAnalyzer):
             logger.error(f"Erreur de parsing IDS: {e}")
             return None
             
+        # Une alerte IDS signale une tentative, pas une compromission avérée
+        severity = "élevé" if "Alertes Critiques" in metadata else "moyen"
         return FindingModel(
             type="ids_alerts",
             file=filepath,
             metadata=metadata,
-            extra=extra
+            extra=extra,
+            severity=severity,
         )

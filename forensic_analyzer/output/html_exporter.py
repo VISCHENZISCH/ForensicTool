@@ -130,6 +130,15 @@ def _synthese(report: ReportModel, alerts) -> str:
         block = _note("warning", f"<p><strong>{len(alerts)} alerte(s)</strong> relevée(s) par l'analyse.</p><ul>{items}</ul>")
     else:
         block = _note("tip", "<p>Aucune alerte relevée par les modules exécutés.</p>")
+    # Verdict par résultat, tiré du champ severity (le même que le code de sortie)
+    graded = [(f.severity, i, f) for i, f in enumerate(report.findings) if f.severity in ("critique", "élevé", "moyen")]
+    if graded:
+        rank = {"critique": 0, "élevé": 1, "moyen": 2}
+        rows = "".join(f'<tr><td><strong>{_e(sev.capitalize())}</strong></td><td><a href="#{_anchor(i)}">{_e(_label(f))}</a></td>'
+                       f'<td><code>{_e(os.path.basename(f.file))}</code></td></tr>'
+                       for sev, i, f in sorted(graded, key=lambda g: (rank[g[0]], g[1])))
+        block = ("<h3>Résultats par gravité</h3><table><thead><tr><th>Gravité</th><th>Module</th><th>Fichier</th></tr></thead>"
+                 f"<tbody>{rows}</tbody></table>") + block
     mitre_block = ""
     if techniques:
         rows = "".join(f"<tr><td><code>{_e(t['id'])}</code></td><td>{_e(t['name'])}</td><td>{_e(t.get('tactic', ''))}</td></tr>"
@@ -150,6 +159,18 @@ def _perimetre(report: ReportModel) -> str:
         for f in evidence)
     table = (f'<div class="defile"><table><thead><tr><th>Preuve</th><th>Module</th><th>SHA-256</th><th>MD5</th></tr></thead>'
              f"<tbody>{rows}</tbody></table></div>") if rows else "<p>Aucune preuve fichier.</p>"
+    if report.evidence:   # empreintes prises à la collecte, avant analyse : elles font foi
+        changed = [r for r in report.evidence if r.changed_during_analysis]
+        rows = "".join(
+            f"<tr><td><code>{_e(os.path.basename(r.file))}</code><br><small>{_e(r.origin or r.file)}</small></td>"
+            f"<td>{r.size:,}</td><td><code>{_e(r.sha256)}</code></td><td><code>{_e(r.md5)}</code></td>"
+            f"<td class=\"fixe\">{_e(r.hashed_at.replace('T', ' ').replace('+00:00', ' UTC'))}</td>"
+            f"<td>{'<strong>MODIFIÉE</strong>' if r.changed_during_analysis else 'inchangée'}</td></tr>"
+            for r in report.evidence)
+        table = ((_note("warning", f"<p><strong>{len(changed)} preuve(s) modifiée(s) pendant l'analyse</strong>.</p>") if changed else "")
+                 + "<p>Empreintes prises à la collecte, avant toute analyse, puis recalculées à la fin.</p>"
+                 f'<div class="defile"><table><thead><tr><th>Preuve</th><th>Octets</th><th>SHA-256</th><th>MD5</th>'
+                 f"<th>Hachée le</th><th>Après analyse</th></tr></thead><tbody>{rows}</tbody></table></div>")
     integrity = "".join(
         _note("warning" if "[ALERTE]" in str(f.metadata.get("Verdict", "")) else "tip",
               f"<p><strong>{_e(f.metadata.get('Phase', 'Vérification'))}</strong> : {_e(f.metadata.get('Verdict', ''))}</p>")
@@ -224,7 +245,7 @@ def _constats(report: ReportModel, toc: list[tuple[str, str, int]]) -> str:
             out.append(
                 f'<h4 id="{_anchor(i)}">{_e(name)}</h4>'
                 f'<p class="chemin"><code>{_e(f.file)}</code></p>'
-                f"{_kv_table(f.metadata)}"
+                f"{_kv_table({'Gravité': f.severity.capitalize(), **f.metadata} if f.severity else f.metadata)}"
                 + (f'<details><summary>Données détaillées</summary>{details}</details>' if details else ""))
     return "".join(out)
 

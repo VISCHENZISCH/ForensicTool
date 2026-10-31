@@ -1,12 +1,22 @@
 """Détection du type de fichier via Magic Bytes (En-têtes)."""
 import os
 import zipfile
+from functools import lru_cache
 
 def get_file_magic_extension(filepath: str) -> str:
     """Renvoie une pseudo-extension (.pdf, .exe) basée sur les magic bytes du fichier."""
+    try:
+        st = os.stat(filepath)
+    except OSError:
+        return ""
     if not os.path.isfile(filepath):
         return ""
-        
+    # Chaque module appelle can_handle : sans cache, un ZIP serait ouvert une quarantaine de fois
+    return _detect(filepath, st.st_size, st.st_mtime_ns)
+
+
+@lru_cache(maxsize=4096)
+def _detect(filepath: str, _size: int, _mtime_ns: int) -> str:
     try:
         with open(filepath, 'rb') as f:
             header = f.read(16)

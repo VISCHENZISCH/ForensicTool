@@ -142,9 +142,11 @@ class WindowsExecutionAnalyzer(BaseAnalyzer):
         if not metadata:
             metadata["Statut"] = "Aucun indicateur de compromission trouvé"
 
+        severity = "élevé" if {"Furtivité", "Téléchargement", "Exécutables Suspects"} & set(metadata) else "info"
         return FindingModel(
             type=artifact_type,
             file=filepath,
             metadata=metadata,
-            extra=extra
+            extra=extra,
+            severity=severity,
         )

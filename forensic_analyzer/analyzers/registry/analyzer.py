@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("registry")
@@ -213,6 +213,7 @@ class RegistryAnalyzer(BaseAnalyzer):
                     "persistence": persistence,
                     "hive_type": basename,
                 },
+                severity=severity_if_alerts(meta, "élevé"),
             )
         except Exception as exc:
             log.error("Erreur Registry '%s' : %s", os.path.basename(path), exc)

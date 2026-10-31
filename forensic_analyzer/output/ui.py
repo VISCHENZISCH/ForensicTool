@@ -362,7 +362,8 @@ def kv(key: str, value, indent: int = 3) -> None:
     for line in shown[1:]:
         print(f"{MARGIN}{' ' * offset}{value_color}{line}{C.RS}")
 
-_CRITICAL = ("CRITIQUE", "Critique", "[ALERTE]", "DÉTECTÉ", "DÉTECTE", "STEGO CERTAINE", "MODIFIE", "ALTÉRÉ")
+# Couleur des lignes seulement : la gravité d'un résultat est son champ severity, pas ce texte
+_CRITICAL = ("CRITIQUE", "Critique", "[ALERTE]", "DÉTECTÉ", "DÉTECTE", "STEGO CONFIRMÉE", "MODIFIE", "ALTÉRÉ")
 _WARNING = ("Élevé", "Élevé", "Avertissement", "SUSPECT", "STEGO PROBABLE", "illisible")
 
 
@@ -383,6 +384,8 @@ def render_finding(finding) -> None:
     fname = os.path.basename(finding.file)
     finding_header(finding.type, fname)
 
+    if finding.severity:
+        kv("Gravité", finding.severity.capitalize())
     for k, v in finding.metadata.items():
         kv(k, v)
 
@@ -591,9 +594,17 @@ def render_conclusion(report) -> None:
     corr = next((f for f in findings if f.type == "correlation"), None)
     timeline = next((f for f in findings if f.type == "timeline"), None)
 
+    graded: dict[str, list[str]] = {}
+    for f in findings:
+        if f.severity in ("critique", "élevé", "moyen"):
+            graded.setdefault(f.severity, []).append(f"{MODULE_NAMES.get(f.type, f.type)} ({os.path.basename(f.file)})")
+
     print()
-    separator("CONCLUSION DE L'ANALYSE", custom_color=C.HR if alerts else C.G)
+    separator("CONCLUSION DE L'ANALYSE", custom_color=C.HR if graded.get("critique") or graded.get("élevé") else C.G)
     print()
+    for level, label in (("critique", "critique"), ("élevé", "élevée"), ("moyen", "moyenne")):
+        if graded.get(level):
+            kv(f"Gravité {label}", f"{len(graded[level])} : " + ", ".join(graded[level][:6]))
     if alerts:
         detail = ", ".join(f"{name} {n}" for name, n in sorted(alerts.items(), key=lambda x: -x[1]))
         kv("Alertes", f"{sum(alerts.values())} ({detail})")
@@ -619,6 +630,12 @@ def render_conclusion(report) -> None:
                 for line in textwrap.wrap(fact["description"], width=77, break_long_words=False):
                     print(f"{MARGIN}      {C.W}{line}{C.RS}")
     partial = [(f, reason) for f in report.findings for reason in f.incomplete]
+    if report.evidence:
+        changed = [r for r in report.evidence if r.changed_during_analysis]
+        kv("Empreintes", f"{len(report.evidence)} preuve(s) hachée(s) à la collecte (SHA-256, UTC), "
+                         + ("inchangées après analyse" if not changed else f"{len(changed)} MODIFIÉE(S)"))
+        for r in changed:
+            kv("[ALERTE] Preuve modifiée", r.file)
     if report.skipped_files or report.scan_notes or report.analysis_errors or partial:
         print()
         separator("Limites")

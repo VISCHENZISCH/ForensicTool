@@ -80,3 +80,72 @@ def test_exit_code_ignores_wording():
     assert exit_code(ReportModel.from_findings([renamed])) == 2
     partial = FindingModel(type="pdf_analysis", file="/p", metadata={}, incomplete=["PDF chiffré"])
     assert exit_code(ReportModel.from_findings([partial])) == 1
+
+
+def test_exit_code_signals_detected_threats():
+    from forensic_analyzer.cli.main import exit_code
+    from forensic_analyzer.models.finding import ReportModel
+
+    webshell = FindingModel(type="webshell_analysis", file="/x.php", metadata={}, severity="critique")
+    assert exit_code(ReportModel.from_findings([webshell])) == 3
+    clean = FindingModel(type="webshell_analysis", file="/y.php", metadata={}, severity="info")
+    assert exit_code(ReportModel.from_findings([clean])) == 0
+
+
+def test_every_alerting_module_sets_a_severity(tmp_path):
+    from forensic_analyzer.analyzers.webshell import WebshellAnalyzer
+
+    shell = tmp_path / "x.php"
+    shell.write_text("<?php system($_GET['c']); ?>")
+    benign = tmp_path / "index.php"
+    benign.write_text("<?php echo 'bonjour'; ?>")
+    assert WebshellAnalyzer().analyze(str(shell)).severity == "critique"
+    assert WebshellAnalyzer().analyze(str(benign)).severity == "info"
+
+
+def test_evidence_is_hashed_before_analysis_and_rechecked(tmp_path):
+    from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
+
+    class _Tampering(BaseAnalyzer):   # module défectueux qui écrit dans la preuve
+        name = "modifie"
+        supported_extensions = (".bin",)
+
+        def analyze(self, path):
+            with open(path, "ab") as f:
+                f.write(b"!")
+            return None
+
+    evidence = tmp_path / "preuve.bin"
+    evidence.write_bytes(b"original")
+    report = run_pipeline([str(evidence)], AnalyzerRegistry().register(_Tampering()))
+    record, = report.evidence
+    assert record.sha256 == hashlib.sha256(b"original").hexdigest() and record.hashed_at.endswith("+00:00")
+    assert record.changed_during_analysis
+
+    from forensic_analyzer.cli.main import exit_code
+    assert exit_code(report) == 2
+
+
+def test_file_type_is_detected_once_per_file(tmp_path, monkeypatch):
+    import zipfile
+    from forensic_analyzer.utils import magic
+
+    archive = tmp_path / "a.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("x.txt", "x")
+    opened = []
+    real = zipfile.ZipFile
+    monkeypatch.setattr(magic.zipfile, "ZipFile", lambda *a, **k: opened.append(1) or real(*a, **k))
+    for _ in range(40):
+        magic.get_file_magic_extension(str(archive))
+    assert len(opened) == 1
+
+
+def test_oversized_pcap_is_reported_not_loaded(tmp_path, monkeypatch):
+    import pytest
+    pcap_mod = pytest.importorskip("forensic_analyzer.analyzers.pcap.analyzer")
+    monkeypatch.setattr(pcap_mod, "MAX_PCAP_BYTES", 10)
+    capture = tmp_path / "gros.pcap"
+    capture.write_bytes(b"\xd4\xc3\xb2\xa1" + b"\0" * 100)
+    f = pcap_mod.PCAPAnalyzer().analyze(str(capture))
+    assert f.incomplete and "tshark" in f.metadata["[ATTENTION] Non analysé"]

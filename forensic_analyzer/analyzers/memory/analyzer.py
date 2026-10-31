@@ -10,7 +10,7 @@ import subprocess
 from forensic_analyzer.analyzers.disk import layout
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("memory")
@@ -436,4 +436,5 @@ class MemoryAnalyzer(BaseAnalyzer):
             file=os.path.abspath(path),
             metadata=meta,
             extra=extra,
+            severity=severity_if_alerts(meta, "critique"),
         )

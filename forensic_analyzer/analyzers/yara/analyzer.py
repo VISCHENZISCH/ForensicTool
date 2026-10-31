@@ -76,4 +76,5 @@ class YARAAnalyzer(BaseAnalyzer):
                 "rules_path": self._rules_path,
                 "unique_rules": list(rules_matched),
             },
+            severity="élevé" if matches else "info",
         )

@@ -127,6 +127,7 @@ class NmapAnalyzer(BaseAnalyzer):
                     "iocs": {"ips": sorted(list(all_ips))},
                     "timeline_events": events,
                 },
+                severity="faible",   # trace de reconnaissance, pas une compromission
             )
         except Exception as exc:
             log.error("Erreur lors de l'analyse du rapport Nmap '%s' : %s", path, exc)

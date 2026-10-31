@@ -123,7 +123,8 @@ class FirefoxHistoryAnalyzer(BaseAnalyzer):
                     "bookmarks": bookmarks,
                     "downloads": downloads,
                     "suspects": list(suspects)
-                }
+                },
+                severity="faible" if suspects else "info",
             )
         except Exception as exc:
             log.error("Erreur Firefox DB '%s' : %s", os.path.basename(path), exc)

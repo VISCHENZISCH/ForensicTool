@@ -112,6 +112,7 @@ class WebshellAnalyzer(BaseAnalyzer):
             if signatures_hit:
                 meta["[ALERTE] Signatures reconnues"] = ", ".join(signatures_hit)
 
+            severity = "critique" if is_webshell else ("élevé" if findings_exec else ("moyen" if findings_obfuscation else "info"))
             return FindingModel(
                 type="webshell_analysis",
                 file=os.path.abspath(path),
@@ -123,6 +124,7 @@ class WebshellAnalyzer(BaseAnalyzer):
                     "inputs": findings_inputs,
                     "signatures": signatures_hit,
                 },
+                severity=severity,
             )
         except Exception as exc:
             log.error("Erreur lors de l'analyse du webshell '%s' : %s", path, exc)

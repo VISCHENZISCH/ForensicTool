@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, max_severity
 from forensic_analyzer.utils.logger import get_logger
 from forensic_analyzer.utils.exports import export_root
 from forensic_analyzer.utils.spreadsheet import neutralize_formula
@@ -232,6 +232,10 @@ class EVTXAnalyzer(BaseAnalyzer):
                 
             meta["Timeline Exportée"] = csv_path
 
+            # Détections classées par le moteur ; un journal d'audit effacé est critique en soi
+            levels = {"critique": "critique", "haute": "élevé", "moyenne": "moyen"}
+            severity = max_severity("critique" if audit_cleared else None, "moyen" if failed_logons or new_services else None,
+                                    *(levels.get(a["severity"]) for a in detections)) or "info"
             return FindingModel(
                 type="evtx",
                 file=os.path.abspath(path),
@@ -248,6 +252,7 @@ class EVTXAnalyzer(BaseAnalyzer):
                     "detections": detections,
                     "mitre": sorted(detector.techniques),
                 },
+                severity=severity,
             )
         except Exception as exc:
             log.error("Erreur EVTX '%s' : %s", os.path.basename(path), exc)

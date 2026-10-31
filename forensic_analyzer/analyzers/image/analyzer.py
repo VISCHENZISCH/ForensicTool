@@ -29,7 +29,8 @@ class ImageAnalyzer(BaseAnalyzer):
                     type="image",
                     file=os.path.abspath(path),
                     metadata=metadata,
-                    extra={}
+                    extra={},
+                    severity="moyen" if "Alerte Format (Spoof)" in metadata else "info",
                 )
             case Err(error=msg):
                 short_msg = msg.split(':')[-1].strip() if ':' in msg else msg

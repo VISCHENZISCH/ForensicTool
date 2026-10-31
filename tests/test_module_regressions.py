@@ -45,8 +45,9 @@ def test_stego_finds_message_spread_over_rgb(tmp_path):
     path = tmp_path / "logo.png"
     img.save(path)
 
-    meta = StegoAnalyzer().analyze(str(path)).metadata
-    assert meta["Verdict"].startswith("STEGO CERTAINE")
+    finding = StegoAnalyzer().analyze(str(path))
+    meta = finding.metadata
+    assert meta["Verdict"] == "STEGO CONFIRMÉE (message lisible extrait)" and finding.severity == "élevé"
     assert "flag{lsb_hidden_message}" in meta["Strings LSB (RGB entrelace)"]
 
 
@@ -243,7 +244,7 @@ def test_stego_finds_message_in_wav_lsb(tmp_path):
 
     meta = StegoAnalyzer().analyze(str(path)).metadata
     assert "flag{audio_lsb_message}" in meta["Message LSB (audio)"]
-    assert meta["Verdict"] == "STEGO PROBABLE"
+    assert meta["Verdict"] == "STEGO CONFIRMÉE (message lisible extrait)"
 
 
 def test_folder_keeps_only_files_of_the_chosen_type(tmp_path):

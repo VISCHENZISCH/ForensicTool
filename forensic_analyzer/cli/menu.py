@@ -48,7 +48,8 @@ _MENU_DISPATCH = {
 # Fichiers que le scan automatique n'a pu attribuer à aucun module pendant la session
 _SESSION_SKIPPED: list[str] = []
 _SESSION_NOTES: list[str] = []
-_SESSION_ERRORS: list[str] = []
+_SESSION_ERRORS: list = []
+_SESSION_EVIDENCE: dict = {}   # chemin -> empreinte prise à la collecte
 
 # Classes chargées par _boot_sequence ; une option absente est indisponible
 _LOADED: dict[str, type] = {}
@@ -136,7 +137,7 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     if timeline.extra.get("events"):
         enriched.append(timeline)
     report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED), scan_notes=list(_SESSION_NOTES),
-                                       analysis_errors=list(_SESSION_ERRORS))
+                                       analysis_errors=list(_SESSION_ERRORS), evidence=list(_SESSION_EVIDENCE.values()))
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -297,6 +298,7 @@ def interactive_loop() -> None:
             _SESSION_SKIPPED.extend(f for f in report.skipped_files if f not in _SESSION_SKIPPED)
             _SESSION_NOTES.extend(n for n in report.scan_notes if n not in _SESSION_NOTES)
             _SESSION_ERRORS.extend(e for e in report.analysis_errors if e not in _SESSION_ERRORS)
+            _SESSION_EVIDENCE.update((r.file, r) for r in report.evidence)
 
             ui.render_summary(report)
             # Vue transverse de la session : corrélation puis chronologie, reprises dans les exports
@@ -310,7 +312,8 @@ def interactive_loop() -> None:
                 session_findings.append(timeline)
             ui.render_conclusion(ReportModel.from_findings(session_findings, skipped_files=list(_SESSION_SKIPPED),
                                                            scan_notes=list(_SESSION_NOTES),
-                                                           analysis_errors=list(_SESSION_ERRORS)))
+                                                           analysis_errors=list(_SESSION_ERRORS),
+                                                           evidence=list(_SESSION_EVIDENCE.values())))
             ui.wait_for_key()
             continue
 

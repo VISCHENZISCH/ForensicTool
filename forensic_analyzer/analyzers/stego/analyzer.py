@@ -237,8 +237,11 @@ class StegoAnalyzer(BaseAnalyzer):
                 except Exception as e:
                     flat_meta["Audio LSB"] = f"Erreur: {e}"
                     
-                flat_meta["Verdict"] = "STEGO PROBABLE" if suspicion_score >= 3 else "CLEAN"
-                return FindingModel(type="stego_audio", file=os.path.abspath(path), metadata=flat_meta, extra={})
+                proven = "Message LSB (audio)" in flat_meta   # message lisible extrait : preuve
+                flat_meta["Verdict"] = ("STEGO CONFIRMÉE (message lisible extrait)" if proven else
+                                        "STEGO PROBABLE (indices statistiques seuls)" if suspicion_score >= 3 else "CLEAN")
+                return FindingModel(type="stego_audio", file=os.path.abspath(path), metadata=flat_meta, extra={},
+                                    severity="élevé" if proven else "moyen" if suspicion_score >= 3 else "info")
 
             # --- ANALYSE IMAGE ---
             if not HAS_PIL:
@@ -342,10 +345,18 @@ class StegoAnalyzer(BaseAnalyzer):
             if results.get("alpha_analysis", {}).get("suspicious"): suspicion_score += 2
             if results.get("dct_analysis", {}).get("chi_square", {}).get("detected"): suspicion_score += 3
 
-            if suspicion_score >= 5: verdict = "STEGO CERTAINE (Outil trouvé/Strings LSB)"
-            elif suspicion_score >= 3: verdict = "STEGO PROBABLE"
-            elif suspicion_score >= 1: verdict = "SUSPECT"
-            else: verdict = "CLEAN"
+            # Preuve : message lisible extrait, outil identifié (steghide ouvert, signature en clair).
+            # Les statistiques (chi², alpha, DCT) ne donnent qu'une présomption, quel que soit le score
+            proof = [label for label, hit in (("message lisible extrait", rgb_strs), ("signature d'outil", sigs),
+                                              ("steghide ouvert", "Outil Détecté" in flat_meta)) if hit]
+            if proof:
+                verdict, severity = f"STEGO CONFIRMÉE ({', '.join(proof)})", "élevé"
+            elif suspicion_score >= 3:
+                verdict, severity = "STEGO PROBABLE (indices statistiques seuls)", "moyen"
+            elif suspicion_score >= 1:
+                verdict, severity = "SUSPECT", "faible"
+            else:
+                verdict, severity = "CLEAN", "info"
 
             flat_meta.update({
                 "Format": results.get("format", "?"),
@@ -367,6 +378,7 @@ class StegoAnalyzer(BaseAnalyzer):
                 file=os.path.abspath(path),
                 metadata=flat_meta,
                 extra=results,
+                severity=severity,
             )
         except Exception as exc:
             log.error("Erreur stego '%s' : %s", os.path.basename(path), exc)

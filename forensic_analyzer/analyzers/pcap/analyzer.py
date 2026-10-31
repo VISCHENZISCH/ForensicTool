@@ -3,10 +3,13 @@ import datetime
 import os
 from collections import Counter
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 
 from .credentials import extract_credentials
+
+# rdpcap charge toute la capture en objets scapy (~10x sa taille en mémoire)
+MAX_PCAP_BYTES = int(os.environ.get("FORENSIC_PCAP_MAX_MB", "512")) * 2**20
 from .http import analyze_http_attack, extract_http_transactions
 from .streams import (
     rebuild_tcp_streams,
@@ -43,6 +46,14 @@ class PCAPAnalyzer(BaseAnalyzer):
         if not HAS_SCAPY:
             log.error("scapy requis pour l'analyse PCAP - pip install scapy")
             return None
+        size = os.path.getsize(path)
+        if size > MAX_PCAP_BYTES:
+            return FindingModel(
+                type="pcap", file=os.path.abspath(path),
+                metadata={"[ATTENTION] Non analysé": f"capture de {size / 2**20:.0f} Mo au-delà du plafond de "
+                                                     f"{MAX_PCAP_BYTES // 2**20} Mo (FORENSIC_PCAP_MAX_MB) : utiliser "
+                                                     "tshark ou Zeek, ou découper avec editcap -c"},
+                incomplete=[f"capture trop volumineuse ({size / 2**20:.0f} Mo) pour un chargement en mémoire"])
         try:
             packets = rdpcap(path)
             total = len(packets)
@@ -279,6 +290,7 @@ class PCAPAnalyzer(BaseAnalyzer):
                     "http_attack": http_attack,
                     "tls_decrypted": tls_decrypted
                 },
+                severity=severity_if_alerts(meta, "élevé"),
             )
         except Exception as exc:
             log.error("Erreur PCAP '%s' : %s", os.path.basename(path), exc)

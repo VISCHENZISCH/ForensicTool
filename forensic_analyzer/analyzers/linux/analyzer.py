@@ -10,7 +10,7 @@ from forensic_analyzer.analyzers.linux import bodyfile as bf
 from forensic_analyzer.analyzers.linux import logs, packages, persistence
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
-from forensic_analyzer.models.finding import FindingModel
+from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("linux_artifacts")
@@ -697,6 +697,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 file=os.path.abspath(path),
                 metadata=meta,
                 extra=extra,
+                severity=severity_if_alerts(meta, "élevé"),
             )
         except Exception as exc:
             log.error("Erreur Linux artifacts '%s' : %s", path, exc)
