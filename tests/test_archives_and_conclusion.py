@@ -150,3 +150,14 @@ def test_webshell_command_yields_a_single_timeline_event(tmp_path):
     log.write_text(f'{ATTACKER} - - [25/Oct/2026:07:08:00 +0000] "GET /wp-content/uploads/x.php?c=whoami HTTP/1.1" 200 455 "-" "axios/0.21.1"\n')
     events = parse_web_access_log(str(log))["events"]
     assert [e["event_type"] for e in events] == ["webshell_command"]
+
+
+def test_same_named_archives_do_not_overwrite_each_other(case):
+    from forensic_analyzer.core.archives import expand_archives
+
+    for folder, content in (("a", b"premier"), ("b", b"second")):
+        (case / folder).mkdir()
+        with zipfile.ZipFile(case / folder / "evidence.zip", "w") as z:
+            z.writestr("note.txt", content)
+    files, _, _ = expand_archives([str(case / "a" / "evidence.zip"), str(case / "b" / "evidence.zip")])
+    assert sorted(open(f, "rb").read() for f in files) == [b"premier", b"second"]

@@ -36,6 +36,7 @@ except ImportError:
 class PCAPAnalyzer(BaseAnalyzer):
     """Analyse de fichiers PCAP - reconstruction, credentials, C2, DNS exfil."""
     name = "pcap"
+    heavy = True   # rdpcap charge toute la capture en mémoire : une à la fois
     supported_extensions = ('.pcap', '.pcapng', '.cap')
 
     def analyze(self, path: str) -> FindingModel | None:

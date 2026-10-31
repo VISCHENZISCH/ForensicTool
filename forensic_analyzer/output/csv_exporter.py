@@ -8,7 +8,7 @@ from forensic_analyzer.analyzers.timeline.analyzer import align_pcap_clock
 from forensic_analyzer.core.timeline import consolidate
 from forensic_analyzer.models.finding import ReportModel
 from forensic_analyzer.utils.logger import get_logger
-from forensic_analyzer.utils.exports import export_root
+from forensic_analyzer.utils.exports import output_path as resolve_output
 from forensic_analyzer.utils.spreadsheet import neutralize_formula
 
 log = get_logger("csv_exporter")
@@ -20,15 +20,8 @@ _FIELDNAMES = ["timestamp", "source", "event_type", "description", "file", "deta
 class CSVExporter:
     """Exporte la timeline en CSV compatible Plaso/DFIR."""
 
-    def export(self, report: ReportModel, output_path: str) -> None:
-        import os
-        target_dir = os.path.dirname(output_path)
-        if target_dir:
-            os.makedirs(target_dir, exist_ok=True)
-            target_path = output_path
-        else:
-            os.makedirs(export_root(), exist_ok=True)
-            target_path = os.path.join(export_root(), output_path)
+    def export(self, report: ReportModel, output_path: str) -> str:
+        target_path = resolve_output(output_path)
         events = build_timeline(report)
         align_pcap_clock(events)  # même recalage que la chronologie du rapport
         # Confiance du fait consolide auquel appartient chaque événement
@@ -41,3 +34,4 @@ class CSVExporter:
             writer.writeheader()
             writer.writerows({k: neutralize_formula(v) for k, v in e.items()} for e in events)
         log.info("Timeline CSV exportée -> %s (%d événements)", target_path, len(events))
+        return target_path

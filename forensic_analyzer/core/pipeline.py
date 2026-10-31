@@ -68,6 +68,8 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
     # Plusieurs Volatility ou pytsk3 en parallèle saturent la RAM
     heavy_lock = threading.Lock()
 
+    errors: list[str] = []
+
     def process_path(path: str) -> list[FindingModel]:
         if not os.path.isfile(path):
             log.warning("Fichier introuvable, ignoré : %s", path)
@@ -86,8 +88,9 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
                         res = analyzer.analyze(path, **analyze_kwargs)
                 else:
                     res = analyzer.analyze(path, **analyze_kwargs)
-            except Exception as exc:
+            except Exception as exc:   # un module en échec ne doit ni arrêter le scan ni disparaître du rapport
                 log.error("Erreur dans %s sur '%s' : %s", analyzer.name, fname, exc)
+                errors.append(f"{analyzer.name} sur {path} : {type(exc).__name__} : {exc}")
                 continue
             if isinstance(res, list):
                 results.extend(r for r in res if r is not None)
@@ -118,4 +121,4 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
         results = executor.map(process_path, supported_paths)
 
     findings = [res for per_path in results for res in per_path]
-    return ReportModel.from_findings(findings, skipped_files=skipped)
+    return ReportModel.from_findings(findings, skipped_files=skipped, analysis_errors=errors)

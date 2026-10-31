@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
@@ -70,14 +70,16 @@ class FindingModel(BaseModel):
 class ReportModel(BaseModel):
     """Rapport global d'une session d'analyse complète."""
     tool: str = "Forensic Analyzer v1.0"
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
     total: int = 0
     findings: list[FindingModel] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
     scan_notes: list[str] = Field(default_factory=list)  # archives extraites ou refusées, etc.
+    analysis_errors: list[str] = Field(default_factory=list)  # module en échec sur un fichier : à dire, pas à taire
 
     @classmethod
     def from_findings(cls, findings: list[FindingModel], skipped_files: list[str] | None = None,
-                      scan_notes: list[str] | None = None) -> "ReportModel":
+                      scan_notes: list[str] | None = None,
+                      analysis_errors: list[str] | None = None) -> "ReportModel":
         return cls(total=len(findings), findings=findings, skipped_files=skipped_files or [],
-                   scan_notes=scan_notes or [])
+                   scan_notes=scan_notes or [], analysis_errors=analysis_errors or [])

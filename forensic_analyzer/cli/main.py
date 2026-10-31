@@ -134,6 +134,7 @@ def cli_dispatch():
     from forensic_analyzer.utils.deps import HAS_RICH
     from forensic_analyzer.utils.network import set_online
     from forensic_analyzer.utils.exports import export_root
+    from forensic_analyzer.output import ui
 
     parser = build_parser()
     args = parser.parse_args()
@@ -169,10 +170,11 @@ def cli_dispatch():
 
     skipped: list[str] = []
     notes: list[str] = []
+    errors: list[str] = []
     if args.scan:
         report = auto_scan(args.scan, registry)
         findings.extend(report.findings)
-        skipped, notes = report.skipped_files, report.scan_notes
+        skipped, notes, errors = report.skipped_files, report.scan_notes, list(report.analysis_errors)
 
     simple_analyzers = [
         (args.pdf,     PDFAnalyzer),
@@ -200,7 +202,12 @@ def cli_dispatch():
     def run(analyzer, path: str, **kwargs) -> None:
         """Fichier, ou dossier filtre sur le type de l'analyzer (--pdf DOSSIER : seulement les PDF)."""
         for f in files_for(analyzer, path):
-            res = analyzer.analyze(f, **kwargs)
+            try:
+                res = analyzer.analyze(f, **kwargs)
+            except Exception as exc:   # garder les résultats déjà obtenus et le dire dans le rapport
+                ui.error(f"{analyzer.name} a échoué sur {f} : {exc}")
+                errors.append(f"{analyzer.name} sur {f} : {type(exc).__name__} : {exc}")
+                continue
             findings.extend(r for r in (res if isinstance(res, list) else [res]) if r)
 
     for arg_val, cls in simple_analyzers:
@@ -208,9 +215,7 @@ def cli_dispatch():
             run(cls(), arg_val)
 
     if args.linux:
-        res = LinuxArtifactsAnalyzer().analyze(args.linux, bodyfile=args.bodyfile)
-        if res:
-            findings.append(res)
+        run(LinuxArtifactsAnalyzer(), args.linux, bodyfile=args.bodyfile)
 
     if args.mem:
         plugins = args.mem_plugins.split(",") if args.mem_plugins else None
@@ -223,11 +228,15 @@ def cli_dispatch():
         if targets:
             yara = YARAAnalyzer(args.yara)
             for target in dict.fromkeys(targets):
-                res = yara.analyze(target)
+                try:
+                    res = yara.analyze(target)
+                except Exception as exc:
+                    ui.error(f"YARA a échoué sur {target} : {exc}")
+                    errors.append(f"yara sur {target} : {type(exc).__name__} : {exc}")
+                    continue
                 if res:
                     findings.append(res)
         else:
-            from forensic_analyzer.output import ui
             ui.info("Indiquez une cible à scanner avec YARA (--scan ou une autre option d'analyse).")
 
     if args.verify_hashes:
@@ -239,22 +248,27 @@ def cli_dispatch():
     correlation = correlate(findings) if findings else None
     if correlation:
         findings.append(correlation)
-    report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes)
+    report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes, analysis_errors=errors)
     tl = TimelineAnalyzer().build_from_report(report) if findings else None
     if tl and tl.extra.get("events"):
         findings.append(tl)
-        report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes)
+        report = ReportModel.from_findings(findings, skipped_files=skipped, scan_notes=notes, analysis_errors=errors)
 
     renderer.render_report(report)
 
-    if args.export_json and report.findings:
-        JSONExporter().export(report, args.export_json)
-    if args.export_html and report.findings:
-        HTMLExporter().export(report, args.export_html)
-    if args.export_csv and report.findings:
-        CSVExporter().export(report, args.export_csv)
-    if args.export_pdf and report.findings:
-        PDFExporter().export(report, args.export_pdf)
+    export_failed = False
+    for wanted, exporter in ((args.export_json, JSONExporter), (args.export_html, HTMLExporter),
+                             (args.export_csv, CSVExporter), (args.export_pdf, PDFExporter)):
+        if not wanted:
+            continue
+        if not report.findings:
+            ui.warning(f"Aucun résultat : {wanted} n'a pas été écrit.")
+            continue
+        try:
+            ui.success(f"Exporté : {exporter().export(report, wanted)}")
+        except (OSError, RuntimeError) as exc:
+            ui.error(f"Export {wanted} impossible : {exc}")
+            export_failed = True
     export_dir = export_root()
     if args.export_graph and correlation:
         out_graph = args.export_graph if os.path.dirname(args.export_graph) else os.path.join(export_dir, args.export_graph)
@@ -265,6 +279,17 @@ def cli_dispatch():
         from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
         DefenseRulesGenerator().generate(report, output_dir=os.path.join(export_dir, "rules"))
 
+    return exit_code(report, export_failed)
+
+
+def exit_code(report, export_failed: bool = False) -> int:
+    """0 : rien à signaler ; 1 : échec d'analyse ou d'export ; 2 : preuve altérée (prioritaire)."""
+    altered = any(f.type == "evidence_integrity" and str(f.metadata.get("Verdict", "")).startswith("[ALERTE]")
+                  for f in report.findings)
+    if altered:
+        return 2
+    return 1 if export_failed or report.analysis_errors else 0
+
 def main():
     """Point d'entrée : menu interactif par défaut, CLI si arguments."""
     import sys
@@ -274,7 +299,7 @@ def main():
     sys.stderr = MarginStdout(sys.stderr, margin=4)
 
     if len(sys.argv) > 1:
-        cli_dispatch()
+        sys.exit(cli_dispatch() or 0)
     else:
         from forensic_analyzer.cli.menu import interactive_loop
         interactive_loop()

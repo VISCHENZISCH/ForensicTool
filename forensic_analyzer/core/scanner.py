@@ -91,6 +91,7 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
         if f.file in origins:
             f.metadata = {"Origine (archive)": origins[f.file], **f.metadata}
     report.skipped_files = [origins.get(s, s) for s in report.skipped_files]
+    report.analysis_errors = [_with_origin(e, origins) for e in report.analysis_errors]
     return report
 
 
@@ -126,3 +127,11 @@ def default_registry() -> AnalyzerRegistry:
         WindowsExecutionAnalyzer(), IDSAnalyzer(),
         LinuxArtifactsAnalyzer(), LogAnalyzer(), WebshellAnalyzer(), NmapAnalyzer(),
     )
+
+
+def _with_origin(error: str, origins: dict[str, str]) -> str:
+    """Erreur sur un fichier extrait d'archive : citer l'archive plutôt que le dossier d'extraction."""
+    for extracted, origin in origins.items():
+        if extracted in error:
+            return error.replace(extracted, origin)
+    return error

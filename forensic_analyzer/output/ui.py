@@ -618,9 +618,11 @@ def render_conclusion(report) -> None:
                 print(f"{MARGIN}    {C.MG6}{ts}{C.RS}  {C.D}{' + '.join(fact.get('sources', []))}{C.RS}")
                 for line in textwrap.wrap(fact["description"], width=77, break_long_words=False):
                     print(f"{MARGIN}      {C.W}{line}{C.RS}")
-    if report.skipped_files or report.scan_notes:
+    if report.skipped_files or report.scan_notes or report.analysis_errors:
         print()
         separator("Limites")
+        for i, err in enumerate(report.analysis_errors, 1):
+            kv(f"[ALERTE] Échec d'analyse #{i}", err)
         if report.skipped_files:
             names = ", ".join(os.path.basename(p) for p in report.skipped_files[:12])
             kv("Fichiers non analysés", f"{len(report.skipped_files)} : {names}")

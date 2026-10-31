@@ -22,6 +22,10 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
     """
     Vérifie chaque ligne « empreinte  fichier » du manifeste.
 
+    Un chemin relatif se résout depuis `evidence_dir`, sinon depuis le dossier du manifeste, et
+    nulle part ailleurs : vérifier un homonyme trouvé ailleurs attesterait l'intégrité d'un autre
+    fichier. Un homonyme est seulement signalé comme piste. `confined` (manifeste trouvé parmi
+    les preuves) refuse en plus les chemins qui sortent du dossier.
     """
     manifest_dir = os.path.dirname(os.path.abspath(manifest))
     base = os.path.abspath(evidence_dir) if evidence_dir else manifest_dir
@@ -34,42 +38,18 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
                 continue
             expected, name = m.group(1).lower(), m.group(2)
             algo = _ALGOS[len(expected)]
-
-            if os.path.isabs(name):
-                path = name
-            else:
-                candidate = os.path.join(base, name)
-                if os.path.isfile(candidate):
-                    path = candidate
-                elif not confined:
-                    cwd_candidate = os.path.join(os.getcwd(), name)
-                    man_candidate = os.path.join(manifest_dir, name)
-                    parent_candidate = os.path.join(os.path.dirname(base), name)
-                    basename_candidate = os.path.join(base, os.path.basename(name))
-
-                    if os.path.isfile(cwd_candidate):
-                        path = cwd_candidate
-                    elif os.path.isfile(man_candidate):
-                        path = man_candidate
-                    elif os.path.isfile(parent_candidate):
-                        path = parent_candidate
-                    elif os.path.isfile(basename_candidate):
-                        path = basename_candidate
-                    else:
-                        path = candidate
-                else:
-                    path = candidate
+            path = name if os.path.isabs(name) else os.path.join(base, name)
+            entry = {"file": name, "path": os.path.abspath(path), "algo": algo, "expected": expected, "actual": ""}
 
             if confined and not os.path.realpath(path).startswith(real_base + os.sep):
-                results.append({"file": name, "algo": algo, "expected": expected, "actual": "",
-                                "status": "HORS PÉRIMÈTRE"})
+                results.append({**entry, "status": "HORS PÉRIMÈTRE"})
                 continue
             if not os.path.isfile(path):
-                results.append({"file": name, "algo": algo, "expected": expected, "actual": "", "status": "ABSENT"})
+                lookalike = _lookalike(name, base, manifest_dir)
+                results.append({**entry, "status": "ABSENT", **({"lookalike": lookalike} if lookalike else {})})
                 continue
             actual = _digest(path, algo)
-            results.append({"file": name, "algo": algo, "expected": expected, "actual": actual,
-                            "size": os.path.getsize(path),
+            results.append({**entry, "actual": actual, "size": os.path.getsize(path),
                             "status": "OK" if actual == expected else "DIFFÉRENT"})
     return {
         "manifest": os.path.abspath(manifest),
@@ -77,3 +57,12 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
         "results": results,
         "all_ok": bool(results) and all(r["status"] == "OK" for r in results),
     }
+
+
+def _lookalike(name: str, base: str, manifest_dir: str) -> str | None:
+    """Fichier du même nom ailleurs : piste pour l'analyste, jamais vérifié à la place de la preuve."""
+    for folder in (manifest_dir, os.path.dirname(base), os.getcwd(), base):
+        for candidate in (os.path.join(folder, name), os.path.join(folder, os.path.basename(name))):
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+    return None

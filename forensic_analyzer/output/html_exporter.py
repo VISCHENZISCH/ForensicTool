@@ -14,7 +14,7 @@ from forensic_analyzer.core import iocs as ioc_mod
 from forensic_analyzer.core import mitre
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output.ui import MODULE_NAMES
-from forensic_analyzer.utils.exports import export_root
+from forensic_analyzer.utils.exports import export_root, output_path as resolve_output
 from forensic_analyzer.utils.logger import get_logger
 from forensic_analyzer.utils.network import online_enabled
 
@@ -231,6 +231,10 @@ def _constats(report: ReportModel, toc: list[tuple[str, str, int]]) -> str:
 
 def _limites(report: ReportModel) -> str:
     items = []
+    if report.analysis_errors:
+        lis = "".join(f"<li><code>{_e(e)}</code></li>" for e in report.analysis_errors)
+        items.append(_note("important", f"<p><strong>{len(report.analysis_errors)} échec(s) d'analyse</strong> : "
+                                        f"ces fichiers n'ont pas été analysés par le module indiqué.</p><ul>{lis}</ul>"))
     if report.skipped_files:
         files = "".join(f"<li><code>{_e(p)}</code></li>" for p in report.skipped_files)
         items.append(_note("warning", f"<p><strong>{len(report.skipped_files)} fichier(s) non analysé(s)</strong> "
@@ -435,9 +439,9 @@ def build_interactive_html(report: ReportModel) -> str:
 class HTMLExporter:
     """Rapport HTML hors ligne au design « documentation » (aussi utilisé pour le PDF)."""
 
-    def export(self, report: ReportModel, output_path: str) -> None:
-        os.makedirs(export_root(), exist_ok=True)
-        target_path = os.path.join(export_root(), os.path.basename(output_path))
+    def export(self, report: ReportModel, output_path: str) -> str:
+        target_path = resolve_output(output_path)
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(build_interactive_html(report))
         log.info("Rapport HTML exporté -> %s", target_path)
+        return target_path

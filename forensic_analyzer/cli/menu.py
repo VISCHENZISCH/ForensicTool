@@ -48,6 +48,7 @@ _MENU_DISPATCH = {
 # Fichiers que le scan automatique n'a pu attribuer à aucun module pendant la session
 _SESSION_SKIPPED: list[str] = []
 _SESSION_NOTES: list[str] = []
+_SESSION_ERRORS: list[str] = []
 
 # Classes chargées par _boot_sequence ; une option absente est indisponible
 _LOADED: dict[str, type] = {}
@@ -134,7 +135,8 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
     timeline = TimelineAnalyzer().build_from_report(ReportModel.from_findings(enriched))
     if timeline.extra.get("events"):
         enriched.append(timeline)
-    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED), scan_notes=list(_SESSION_NOTES))
+    report = ReportModel.from_findings(enriched, skipped_files=list(_SESSION_SKIPPED), scan_notes=list(_SESSION_NOTES),
+                                       analysis_errors=list(_SESSION_ERRORS))
     ui.export_menu()
 
     choice = ui.prompt("export").upper()
@@ -152,8 +154,11 @@ def _handle_export(session_findings: list[FindingModel]) -> None:
         module, cls, what, label = exporters[choice]
         path = ui.prompt_input(f"Entrez le chemin du fichier {what}")
         if path:
-            getattr(importlib.import_module(module), cls)().export(report, path)
-            ui.success(f"{label} exporté dans : {os.path.join(export_root(), os.path.basename(path))}")
+            try:
+                target = getattr(importlib.import_module(module), cls)().export(report, path)
+                ui.success(f"{label} exporté dans : {target}")
+            except (OSError, RuntimeError) as exc:
+                ui.error(f"{label} non exporté : {exc}")
 
     elif choice == "G":
         path = ui.prompt_input("Entrez le chemin du graphe HTML de sortie (.html)")
@@ -291,6 +296,7 @@ def interactive_loop() -> None:
                 session_findings.append(finding)
             _SESSION_SKIPPED.extend(f for f in report.skipped_files if f not in _SESSION_SKIPPED)
             _SESSION_NOTES.extend(n for n in report.scan_notes if n not in _SESSION_NOTES)
+            _SESSION_ERRORS.extend(e for e in report.analysis_errors if e not in _SESSION_ERRORS)
 
             ui.render_summary(report)
             # Vue transverse de la session : corrélation puis chronologie, reprises dans les exports
@@ -303,7 +309,8 @@ def interactive_loop() -> None:
             if timeline.extra.get("events"):
                 session_findings.append(timeline)
             ui.render_conclusion(ReportModel.from_findings(session_findings, skipped_files=list(_SESSION_SKIPPED),
-                                                           scan_notes=list(_SESSION_NOTES)))
+                                                           scan_notes=list(_SESSION_NOTES),
+                                                           analysis_errors=list(_SESSION_ERRORS)))
             ui.wait_for_key()
             continue
 

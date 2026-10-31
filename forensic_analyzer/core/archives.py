@@ -6,7 +6,9 @@ dossier de l'affaire, jamais à côté de la preuve, et un seul niveau est ouver
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
 import tarfile
 import zipfile
 
@@ -47,7 +49,7 @@ def _human(n: int) -> str:
 def extract_archive(path: str) -> tuple[list[str], str]:
     """Extrait l'archive ; retourne (fichiers extraits, note pour le rapport)."""
     base = os.path.basename(path)
-    dest = os.path.realpath(os.path.join(export_root(), "extractions", "archives", base))
+    dest = os.path.realpath(_destination(path))
     if dest.startswith(os.path.realpath(os.path.dirname(path)) + os.sep):
         return [], f"{base} : non extraite (le dossier de sortie est dans le dossier des preuves)"
     try:
@@ -55,8 +57,15 @@ def extract_archive(path: str) -> tuple[list[str], str]:
             return _extract_zip(path, dest)
         return _extract_tar(path, dest)
     except (OSError, tarfile.TarError, zipfile.BadZipFile, ValueError) as exc:
+        shutil.rmtree(dest, ignore_errors=True)   # pas de contenu à moitié extrait laissé pour un autre scan
         log.warning("Archive illisible '%s' : %s", base, exc)
         return [], f"{base} : archive illisible ({exc})"
+
+
+def _destination(path: str) -> str:
+    """Dossier d'extraction propre à chaque archive : deux evidence.zip de dossiers différents ne s'écrasent pas."""
+    tag = hashlib.sha256(os.path.abspath(path).encode()).hexdigest()[:8]
+    return os.path.join(export_root(), "extractions", "archives", f"{os.path.basename(path)}-{tag}")
 
 
 def _refusal(base: str, count: int, total: int, names: list[str]) -> str | None:
@@ -138,7 +147,7 @@ def expand_archives(targets: list[str]) -> tuple[list[str], dict[str, str], list
             continue
         files, note = extract_archive(target)
         notes.append(note)
-        root = os.path.join(export_root(), "extractions", "archives", os.path.basename(target))
+        root = _destination(target)
         for f in files:
             origins[f] = f"{os.path.basename(target)}:{os.path.relpath(f, os.path.realpath(root))}"
         expanded.extend(files)

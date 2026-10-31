@@ -404,3 +404,17 @@ def test_updater_runs_git_in_the_tool_repository(monkeypatch, tmp_path):
     monkeypatch.setattr(updater.os.path, "isdir", lambda p: True)
     updater.Updater().check_and_update()
     assert calls and all(c == updater._REPO for c in calls)
+
+
+def test_manifest_never_verifies_a_lookalike_file(tmp_path, monkeypatch):
+    import hashlib
+    from forensic_analyzer.core.integrity import verify_manifest
+
+    (tmp_path / "a.bin").write_bytes(b"autre fichier")          # homonyme hors du chemin attendu
+    manifest = tmp_path / "manifeste" / "m.sha256"
+    manifest.parent.mkdir()
+    manifest.write_text(f"{hashlib.sha256(b'autre fichier').hexdigest()}  disque/preuve_originale/a.bin\n")
+    monkeypatch.chdir(tmp_path)
+    res = verify_manifest(str(manifest))
+    assert not res["all_ok"] and res["results"][0]["status"] == "ABSENT"
+    assert res["results"][0]["lookalike"] == str(tmp_path / "a.bin")
