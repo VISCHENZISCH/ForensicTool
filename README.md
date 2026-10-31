@@ -34,7 +34,7 @@ Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mé
 
 ```bash
 git clone https://github.com/VISCHENZISCH/ForensicTool && cd ForensicTool
-./run.sh --install          # Windows : .\run.ps1 --install
+./run.sh --install
 ```
 
 ## Utilisation

@@ -191,7 +191,8 @@ def test_pdf_scoring_flags_malicious_documents(tmp_path):
     assert s >= 90 and "Noms obfusqués" in meta and "Shellcode" in meta
 
     launch = _pdf(tmp_path, "launch.pdf", b"1 0 obj<</Type/Catalog/OpenAction<</S/Launch/F(cmd.exe)>>>>endobj")
-    assert score(launch)[0] >= 40
+    s, meta = score(launch)
+    assert s >= 50 and "cmd.exe" in meta["Lancement de programme"]
 
     attached = _pdf(tmp_path, "att.pdf", b"1 0 obj<</Type/Catalog/Names<</EmbeddedFiles 2 0 R>>>>endobj")
     assert "Fichiers Embarqués" in score(attached)[1]
@@ -205,7 +206,7 @@ def test_pdf_scoring_ignores_benign_structures(tmp_path):
                   + _flate(2, b"BT /F1 12 Tf (Rapport annuel) Tj ET\n" * 200 + b"\x90" * 64)  # octets 0x90 bruts
                   + b"4 0 obj<</Length 4096/Filter/DCTDecode>>stream\n" + os.urandom(4096) + b"\nendstream endobj\n")
     meta = PDFAnalyzer().analyze(benign).metadata
-    assert meta["Score de menace"].startswith("5/100")
+    assert meta["Score de menace"].startswith("0/100")
     assert "Shellcode" not in meta and "/JS" not in meta.get("Tags PDF Suspects", "")
 
 

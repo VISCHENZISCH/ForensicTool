@@ -1,77 +1,50 @@
-"""Logique d'extraction avancée (pypdf et fallback) pour les fichiers PDF."""
+"""Métadonnées d'un PDF via pypdf (dictionnaire /Info, pages, chiffrement)."""
 from __future__ import annotations
 
 import logging
-import warnings
 import re
-from dataclasses import dataclass
-from typing import Generic, TypeVar
 
 from forensic_analyzer.utils.deps import HAS_PYPDF, PdfReader
-from forensic_analyzer.utils.logger import get_logger
 
-warnings.filterwarnings("ignore", category=UserWarning, module="pypdf")
+# pypdf journalise chaque défaut de structure ; l'analyse de menace les traite elle-même
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
-log = get_logger("pdf")
+_PDF_DATE = re.compile(r"D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(Z|[+-]\d{2}'?\d{2}'?)?")
 
-T = TypeVar('T')
-E = TypeVar('E')
 
-@dataclass(frozen=True)
-class Ok(Generic[T]):
-    value: T
-    ok: bool = True
+def read_metadata(path: str) -> tuple[dict[str, str], object | None, str | None]:
+    """
+    Retourne (champs, lecteur pypdf lisible ou None, erreur ou None).
+    Un PDF chiffré n'est lisible que si le mot de passe utilisateur est vide (cas courant :
+    seul le mot de passe propriétaire, qui restreint l'impression ou la copie, est posé).
+    """
+    if not HAS_PYPDF:
+        return {}, None, "pypdf absent"
+    try:
+        reader = PdfReader(path)
+        data: dict[str, str] = {}
+        if reader.is_encrypted:
+            if not reader.decrypt(""):
+                return {"Chiffrement": "Chiffré, mot de passe requis (contenu illisible)"}, None, None
+            data["Chiffrement"] = "Chiffré, mot de passe utilisateur vide (contenu lisible)"
+        else:
+            data["Chiffrement"] = "Non chiffré"
+        for key, value in (reader.metadata or {}).items():
+            data[key.lstrip("/")] = str(value)
+        data["Nombre de pages"] = str(len(reader.pages))
+        data["Version PDF"] = reader.pdf_header
+        return data, reader, None
+    except Exception as exc:
+        return {}, None, f"structure illisible par pypdf ({exc})"
 
-@dataclass(frozen=True)
-class Err(Generic[E]):
-    error: E
-    ok: bool = False
 
-Result = Ok[T] | Err[E]
-
-class PDFParser:
-    """Extracteur de métadonnées PDF avec gestion d'erreurs avancée."""
-    def __init__(self, filepath: str):
-        self.filepath = filepath
-
-    def parse(self) -> Result[dict[str, str], str]:
-        if not HAS_PYPDF:
-            log.warning("Bibliothèque 'pypdf' manquante. Mode dégradation actif.")
-            return self._fallback_parse()
-            
-        try:
-            reader = PdfReader(self.filepath)
-            meta = reader.metadata or {}
-            
-            data: dict[str, str] = {k.lstrip("/"): str(v) for k, v in meta.items()}
-            data["Nombre de pages"] = str(len(reader.pages))
-            data["Chiffrement"] = "Chiffré" if reader.is_encrypted else "Non chiffré"
-            if reader.pdf_header:
-                data["Version PDF"] = str(reader.pdf_header)
-                
-            return Ok(data)
-        except Exception as exc:
-            return Err(f"Échec du parsing PyPDF: {exc}")
-
-    def _fallback_parse(self) -> Result[dict[str, str], str]:
-        """Méthode de secours utilisant les expressions régulières."""
-        metadata: dict[str, str] = {}
-        try:
-            with open(self.filepath, "rb") as f:
-                header = f.readline().decode("utf-8", errors="ignore").strip()
-                if header.startswith("%PDF-"):
-                    metadata["Version PDF"] = header
-                
-                # Lire les 100 premiers Ko
-                content = f.read(102400).decode("utf-8", errors="ignore")
-                for key in ["Title", "Author", "Creator", "Producer", "CreationDate"]:
-                    match = re.search(r"/" + key + r"\s*\(([^)]+)\)", content)
-                    if match:
-                        metadata[key] = match.group(1)
-                        
-            metadata["Nombre de pages"] = "Inconnu (pypdf manquant)"
-            metadata["Chiffrement"] = "Inconnu (pypdf manquant)"
-            return Ok(metadata)
-        except Exception as exc:
-            return Err(f"Échec du fallback regex: {exc}")
+def format_pdf_date(value: str) -> str:
+    """D:20230102101500+01'00' -> 2023-01-02 10:15:00 +01:00 (D:20230102101500+01'00')."""
+    m = _PDF_DATE.match(value.strip())
+    if not m:
+        return value
+    y, mo, d, h, mi, s, tz = m.groups()
+    out = f"{y}-{mo or '01'}-{d or '01'} {h or '00'}:{mi or '00'}:{s or '00'}"
+    if tz:
+        out += " UTC" if tz == "Z" else f" {tz[:3]}:{tz.replace(chr(39), '')[3:5] or '00'}"
+    return f"{out} ({value.strip()})"
