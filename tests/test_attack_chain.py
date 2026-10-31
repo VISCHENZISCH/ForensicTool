@@ -4,6 +4,7 @@ reprenant les faiblesses constatées sur le TP Sentinelle."""
 from __future__ import annotations
 
 import os
+import re
 
 import pytest
 
@@ -193,8 +194,9 @@ def test_each_analysis_gets_its_own_export_folder():
 
     before = exports.export_root()
     try:
-        path = exports.new_case_dir("/preuves/affaire 42/")
-        assert path.startswith(os.path.join("export", "")) and path.endswith("_affaire_42")
+        path = exports.new_case_dir("/preuves/affaire_42 é/")
+        assert re.fullmatch(r"FT-\d{8}-\d{6}-AFFAIRE-42-E", os.path.basename(path))
+        assert os.path.dirname(path) == "export"
     finally:
         exports.set_export_root(before)
 

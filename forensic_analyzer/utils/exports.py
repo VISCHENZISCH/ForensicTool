@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
+import unicodedata
 
 _root = "export"
 
@@ -30,7 +31,8 @@ def output_path(path: str) -> str:
 
 
 def new_case_dir(label: str) -> str:
-    """export/AAAAMMJJ-HHMMSS_<libellé> pour une nouvelle analyse."""
-    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", os.path.basename(os.path.normpath(label or "analyse"))).strip("_.")
+    """export/FT-AAAAMMJJ-HHMMSS-LIBELLÉ pour une nouvelle analyse (FT : Forensic Tool)."""
+    name = unicodedata.normalize("NFKD", os.path.basename(os.path.normpath(label or "analyse")))
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", name.encode("ascii", "ignore").decode()).strip("-").upper()
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    return set_export_root(os.path.join("export", f"{stamp}_{slug or 'analyse'}"))
+    return set_export_root(os.path.join("export", f"FT-{stamp}-{slug or 'ANALYSE'}"))

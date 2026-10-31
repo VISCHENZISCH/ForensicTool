@@ -57,7 +57,7 @@ Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls
 | `--verify-hashes MANIFESTE`      | Contrôle d'intégrité des preuves avant et après l'analyse |
 | `--evidence-dir DOSSIER`         | Dossier de référence des chemins relatifs du manifeste    |
 
-Chaque analyse écrit dans son propre dossier, `export/AAAAMMJJ-HHMMSS_<preuves>/` (ou `--export-dir`), jamais dans le dossier des preuves.
+Chaque analyse écrit dans son propre dossier, `export/FT-AAAAMMJJ-HHMMSS-<PREUVES>/` (FT : Forensic Tool) (ou `--export-dir`), jamais dans le dossier des preuves.
 
 ## Hors ligne par défaut
 

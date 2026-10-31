@@ -478,7 +478,7 @@ h5 { font-size:.82rem; font-weight:600; text-transform:uppercase; letter-spacing
 a { color:var(--lien); text-decoration:none; }
 a:hover { text-decoration:underline; }
 
-.couverture { background:var(--carte); border-top:4px solid var(--sarcelle); padding:1.6rem 1.8rem 1.2rem; margin-bottom:.6rem;
+.couverture { background:var(--carte); padding:1.6rem 1.8rem 1.2rem; margin-bottom:.6rem;
               box-shadow:0 1px 2px rgba(0,0,0,.08); }
 .surtitre { text-transform:uppercase; letter-spacing:.1em; font-size:.72rem; font-weight:600; color:var(--sarcelle); margin:0; }
 .couverture h1 { font-size:2rem; font-weight:700; margin:.2rem 0 1rem; overflow-wrap:anywhere; string-set:affaire content(text); }
@@ -486,12 +486,12 @@ dl.meta { display:flex; flex-wrap:wrap; gap:.4rem 2rem; margin:0 0 1.2rem; }
 dl.meta dt, dl.methode dt { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--texte-doux); font-weight:600; }
 dl.meta dd, dl.methode dd { margin:0; font-weight:600; }
 .chiffres { display:flex; flex-wrap:wrap; margin:0 -.3rem .9rem; }
-.chiffre { flex:1 1 28%; min-width:9rem; margin:.3rem; background:var(--cellule); border-left:3px solid var(--gris-moyen);
+.chiffre { flex:1 1 28%; min-width:9rem; margin:.3rem; background:var(--cellule);
            padding:.55rem .8rem; display:flex; flex-direction:column; }
 .chiffre .valeur { font-size:1.35rem; font-weight:700; font-feature-settings:'tnum'; line-height:1.2; }
 .chiffre .intitule { font-size:.72rem; color:var(--texte-doux); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
-.chiffre.g-critique { border-color:var(--rose); } .chiffre.g-critique .valeur { color:var(--rose); }
-.chiffre.g-eleve { border-color:var(--ambre); } .chiffre.g-moyen { border-color:var(--acier); }
+.chiffre.g-critique .valeur { color:var(--rose); }
+.chiffre.g-eleve .valeur { color:var(--ambre); } .chiffre.g-moyen .valeur { color:var(--acier); }
 html.dark .chiffre.g-critique .valeur { color:#E58A94; }
 .note.verdict { margin:0; }
 .note.verdict p { font-size:.95rem; margin:0; }
@@ -531,9 +531,7 @@ td.nombre { white-space:nowrap; text-align:right; }
 .gravite.g-moyen { background:var(--acier); color:#fff; }
 .gravite.g-faible { background:#B9C2CC; color:#1D1D21; }
 
-.constat { background:var(--carte); border-left:3px solid var(--filet); padding:1rem 1.2rem .6rem; margin:0 0 1.1rem; box-shadow:0 1px 2px rgba(0,0,0,.06); }
-.constat:has(.g-critique) { border-left-color:var(--rose); }
-.constat:has(.g-eleve) { border-left-color:var(--ambre); }
+.constat { background:var(--carte); padding:1rem 1.2rem .6rem; margin:0 0 1.1rem; box-shadow:0 1px 2px rgba(0,0,0,.06); }
 .constat-tete { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem .7rem; }
 .constat-tete h4 { white-space:nowrap; }
 .constat-tete code.nom { font-size:.82rem; }
@@ -588,7 +586,7 @@ footer.page { background:var(--pied); color:var(--pied-texte); padding:.8rem 2re
   .couverture { box-shadow:none; padding:1rem 0 0; background:#fff; }
   .chiffre, td, tbody tr:nth-child(even) td { background:#F6F6F8; }
   table, .constat, dl.methode { background:#fff; }
-  .constat { box-shadow:none; border:1px solid #D4D4DA; border-left-width:3px; padding:.6rem .8rem .3rem; }
+  .constat { box-shadow:none; border-bottom:1px solid #D4D4DA; padding:.6rem 0 .3rem; }
   h2 { break-before:page; } h2#synthese { break-before:auto; } h3, h4, .constat-tete { break-after:avoid; }
   tr { break-inside:avoid; }
   .surplus { display:none !important; }
