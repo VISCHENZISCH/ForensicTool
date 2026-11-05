@@ -27,6 +27,7 @@
 | **Web**           | Webshells PHP, rapports nmap (`-oX`)                                                  |
 | **Binaires**      | PE et ELF : désassemblage des appels sensibles, YARA, capa                            |
 | **Documents**     | PDF (déclencheurs suivis jusqu'au JavaScript), Office : macros, DDE, modèles distants |
+| **Ransomware**    | Audit `clé=valeur` (renommages de masse), fichiers marqués, copies saines, manifeste  |
 | **Fichiers**      | EXIF/GPS, stéganographie, carving, navigateurs Chrome/Edge/Firefox                    |
 
 Les résultats sont **corrélés** (un même indicateur vu sur le disque, en mémoire et dans un binaire) et fusionnés dans une **chronologie** avec un niveau de confiance. Un décalage d'horloge entre capture réseau et journaux est détecté et recalé, l'heure d'origine restant conservée.

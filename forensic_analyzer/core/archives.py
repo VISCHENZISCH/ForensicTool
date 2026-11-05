@@ -86,7 +86,7 @@ def _extract_tar(path: str, dest: str) -> tuple[list[str], str]:
         refused = _refusal(base, len(members), sum(m.size for m in members), [m.name for m in tar.getmembers()])
         if refused:
             return [], refused
-        skipped = len(tar.getmembers()) - len(members)
+        skipped = sum(not m.isdir() for m in tar.getmembers()) - len(members)
         files = []
         for m in members:
             target = os.path.join(dest, _safe_name(m.name))

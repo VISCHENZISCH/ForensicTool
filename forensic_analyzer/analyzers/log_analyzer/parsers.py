@@ -7,9 +7,12 @@ import gzip
 import os
 import re
 import urllib.parse
+import zlib
+from dataclasses import dataclass, field
 from typing import Any, Generator
 
 from forensic_analyzer.analyzers.linux.analyzer import _syslog_iso
+from forensic_analyzer.core.timeline import parse_ts
 
 
 # Regex Web Access (Combined Log Format & Common Log Format)
@@ -52,6 +55,20 @@ _WP_NOTABLE = [
         "Extension {0} autorisée dans les téléversements (mauvaise configuration)",
     ),
 ]
+
+# Audit « horodatage CATÉGORIE clé=valeur... » (partage de fichiers, SIEM, pare-feu)
+_AUDIT_LINE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:?\d{2})?)\s+([A-Za-z][\w-]*)\s+(\w[\w.-]*=.*)$"
+)
+_AUDIT_FIELD = re.compile(r'([\w.-]+)=("[^"]*"|\S+)')
+_MIN_AUDIT_FIELDS = 2
+_REFUSED = {"deny", "denied", "refused", "failure", "failed", "blocked"}
+_RESPONSE_CATEGORIES = {"SYSTEM", "RESPONSE"}
+_IP_FIELDS = ("ip", "src", "src_ip", "client", "client_ip")
+MASS_RENAME_THRESHOLD = 20  # renommages par un même compte et poste dans la fenêtre
+MASS_RENAME_WINDOW = 300  # secondes
+_MAX_RENAME_EVENTS = 20  # lignes nominatives gardées en chronologie, par compte et poste
+_MAX_DENIED = 500  # accès refusés détaillés ; un balayage peut en produire des millions
 
 # Attaques web courantes dans les URI / requêtes
 _WEB_ATTACKS = [
@@ -153,6 +170,8 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
     scanner_ips: set[str] = set()
 
     for line in _open_log(path):
+        if not line.strip():
+            continue
         total_lines += 1
         m = _ACCESS_LOG_REGEX.match(line.strip())
         if not m:
@@ -333,6 +352,164 @@ def parse_web_access_log(path: str) -> dict[str, Any]:
         "attackers": sorted(attackers),
         "scanners": sorted(scanners_detected),
         "events": events,  # faits d'attaque uniquement (les tentatives de connexion sont regroupées)
+    }
+
+
+def _audit_entry(line: str) -> tuple[datetime.datetime, str, dict[str, str]] | None:
+    """(horodatage, catégorie, champs) d'une ligne d'audit, ou None si elle n'en est pas une."""
+    m = _AUDIT_LINE.match(line.strip())
+    if not m:
+        return None
+    ts = parse_ts(m.group(1).replace(" ", "T", 1))
+    fields = {k: v.strip('"') for k, v in _AUDIT_FIELD.findall(m.group(3))}
+    return (ts, m.group(2), fields) if ts and len(fields) >= _MIN_AUDIT_FIELDS else None
+
+
+def _rename_count(fields: dict[str, str]) -> int:
+    """Une ligne agrégée (path=/reports/*, count=179) compte pour autant de fichiers."""
+    count = fields.get("count", "1")
+    return int(count) if count.isdigit() and int(count) > 0 else 1
+
+
+def _peak_renames(renames: list[dict[str, Any]]) -> int:
+    """Plus grand nombre de renommages dans une fenêtre glissante de MASS_RENAME_WINDOW secondes."""
+    peak = total = start = 0
+    for item in renames:
+        total += item["count"]
+        while (item["dt"] - renames[start]["dt"]).total_seconds() > MASS_RENAME_WINDOW:
+            total -= renames[start]["count"]
+            start += 1
+        peak = max(peak, total)
+    return peak
+
+
+def _mass_rename(user: str, host: str, renames: list[dict[str, Any]]) -> dict[str, Any]:
+    named = [r for r in renames if r["new_name"]]
+    return {
+        "user": user,
+        "host": host,
+        "shares": sorted({r["share"] for r in renames if r["share"]}),
+        "total": sum(r["count"] for r in renames),
+        "named": len(named),
+        "aggregated": [{"path": r["path"], "count": r["count"]} for r in renames if not r["new_name"]],
+        "new_names": [r["new_name"] for r in named],
+        "extensions": sorted({os.path.splitext(r["new_name"])[1].lower() for r in named} - {""}),
+        "first": renames[0]["dt"].isoformat(),
+        "last": renames[-1]["dt"].isoformat(),
+        "seconds": int((renames[-1]["dt"] - renames[0]["dt"]).total_seconds()),
+    }
+
+
+def _audit_event(dt: datetime.datetime, kind: str, description: str, path: str) -> dict[str, Any]:
+    return {"timestamp": dt.isoformat(), "source": "file_audit", "event_type": kind, "description": description, "file": path}
+
+
+def _response_text(category: str, fields: dict[str, str]) -> str:
+    who = fields.get("actor") or fields.get("host") or category
+    target = next((f"{k}={fields[k]}" for k in ("user", "host", "share") if k in fields and fields[k] != who), "")
+    reason = fields.get("reason") or fields.get("result") or ""
+    details = ", ".join(x for x in (target, reason) if x)
+    return f"{who} : {fields.get('action', '?')}" + (f" ({details})" if details else "")
+
+
+@dataclass
+class _AuditState:
+    """Ce qu'on retient d'un journal d'audit au fil de sa lecture."""
+
+    path: str
+    denied_total: int = 0
+    renames: dict[tuple[str, str], list[dict[str, Any]]] = field(default_factory=dict)
+    first_seen: dict[tuple[str, str], tuple[datetime.datetime, str]] = field(default_factory=dict)
+    ips: dict[tuple[str, str], set[str]] = field(default_factory=dict)
+    denied: list[dict[str, Any]] = field(default_factory=list)
+    responses: list[dict[str, Any]] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _record_refusal(state: _AuditState, dt: datetime.datetime, actor: tuple[str, str], fields: dict[str, str]) -> None:
+    state.denied_total += 1
+    if state.denied_total > _MAX_DENIED:
+        return
+    user, host = actor
+    share, target = fields.get("share", ""), fields.get("path", "")
+    state.denied.append({"timestamp": dt.isoformat(), "user": user, "host": host, "share": share, "path": target})
+    text = f"Accès refusé à {target} (partage {share or '?'}) pour {user} sur {host}"
+    state.events.append(_audit_event(dt, "access_denied", text, state.path))
+
+
+def _record_audit_entry(state: _AuditState, dt: datetime.datetime, category: str, fields: dict[str, str]) -> None:
+    if category.upper() in _RESPONSE_CATEGORIES:
+        text = _response_text(category, fields)
+        state.responses.append({"timestamp": dt.isoformat(), "description": text})
+        state.events.append(_audit_event(dt, "containment", f"Réaction {text}", state.path))
+        return
+    actor = (fields.get("user", ""), fields.get("host", ""))
+    if not actor[0]:
+        return
+    target = fields.get("path", "")
+    state.first_seen.setdefault(actor, (dt, target))
+    state.ips.setdefault(actor, set()).update(fields[k] for k in _IP_FIELDS if k in fields)
+    if fields.get("result", "").lower() in _REFUSED:
+        _record_refusal(state, dt, actor, fields)
+    elif fields.get("action", "").lower() == "rename":
+        state.renames.setdefault(actor, []).append(
+            {
+                "dt": dt,
+                "path": target,
+                "share": fields.get("share", ""),
+                "count": _rename_count(fields),
+                "new_name": fields.get("new_name", ""),
+            }
+        )
+
+
+def _mass_rename_events(state: _AuditState, user: str, host: str, items: list[dict[str, Any]]) -> None:
+    seen_at, seen_path = state.first_seen[(user, host)]
+    if seen_at < items[0]["dt"]:
+        text = f"Premier accès de {user} sur {host} : {seen_path}"
+        state.events.append(_audit_event(seen_at, "first_access", text, state.path))
+    for r in [r for r in items if r["new_name"]][:_MAX_RENAME_EVENTS]:
+        text = f"Renommage de {r['path']} en {r['new_name']} par {user} sur {host} (partage {r['share'] or '?'})"
+        state.events.append(_audit_event(r["dt"], "rename", text, state.path))
+    for r in items:
+        if not r["new_name"]:
+            text = f"Renommage groupé de {r['count']} fichiers ({r['path']}) par {user} sur {host}"
+            state.events.append(_audit_event(r["dt"], "mass_rename", text, state.path))
+
+
+def parse_file_audit_log(path: str) -> dict[str, Any]:
+    """Audit clé=valeur : renommages de masse par compte et poste, accès refusés, actions de confinement."""
+    state = _AuditState(path)
+    total_lines = valid = 0
+    for line in _open_log(path):
+        if not line.strip():
+            continue
+        total_lines += 1
+        entry = _audit_entry(line)
+        if entry:
+            valid += 1
+            _record_audit_entry(state, *entry)
+
+    mass = []
+    for (user, host), items in state.renames.items():
+        items.sort(key=lambda r: r["dt"])
+        if _peak_renames(items) >= MASS_RENAME_THRESHOLD:
+            mass.append(_mass_rename(user, host, items))
+            _mass_rename_events(state, user, host, items)
+    mass.sort(key=lambda m: -m["total"])
+    state.events.sort(key=lambda e: e["timestamp"])
+    offenders = {(m["user"], m["host"]) for m in mass}
+    return {
+        "log_type": "file_audit",
+        "total_lines": total_lines,
+        "valid_entries": valid,
+        "accounts": sorted(f"{u}@{h}" if h else u for u, h in state.first_seen),
+        "mass_renames": mass,
+        "denied": state.denied,
+        "denied_total": state.denied_total,
+        "responses": state.responses,
+        "offender_ips": sorted(ip for actor in offenders for ip in state.ips.get(actor, ())),
+        "events": state.events,
     }
 
 
@@ -608,38 +785,49 @@ def parse_wp_debug_log(path: str) -> dict[str, Any]:
     }
 
 
+def _sample_lines(path: str, limit: int = 50, max_chars: int = 64 * 1024) -> list[str]:
+    """Premières lignes non vides, en lecture bornée : `can_handle` passe aussi sur des images disque."""
+    opener = gzip.open if path.endswith(".gz") else open
+    try:
+        with opener(path, "rt", encoding="utf-8", errors="replace") as f:
+            text = f.read(max_chars)
+    except (OSError, EOFError, zlib.error):  # gzip corrompu : le fichier ne doit pas arrêter le scan
+        return []
+    lines = text.splitlines()
+    if len(text) == max_chars and lines:
+        lines.pop()  # dernière ligne coupée par la borne
+    return [line.strip() for line in lines if line.strip()][:limit]
+
+
 def detect_log_type(path: str) -> str:
-    """Détecte le type de journal par son nom et ses premières lignes."""
+    """Détecte le type de journal : le contenu prime, car le nom n'est qu'un indice (« access.log » d'un audit SMB)."""
     basename = os.path.basename(path).lower()
     if basename.endswith(".gz"):
         basename = basename[:-3]
 
+    sample = _sample_lines(path)
+    if sample and sum(1 for line in sample if _audit_entry(line)) > len(sample) / 2:
+        return "file_audit"
     if "access" in basename:
-        return "web_access"
-    if "error" in basename:
+        # Un fichier vide reste classé par son nom ; un contenu d'un autre format, non
+        if not sample or any(_ACCESS_LOG_REGEX.match(line) for line in sample):
+            return "web_access"
+    elif "error" in basename:
         return "web_error"
-    if "wp-debug" in basename or "debug.log" in basename:
+    elif "wp-debug" in basename or "debug.log" in basename:
         return "wp_debug"
-    if "auth" in basename or "syslog" in basename or "messages" in basename or "secure" in basename:
+    elif "auth" in basename or "syslog" in basename or "messages" in basename or "secure" in basename:
         return "syslog"
 
-    # Détection par le contenu
-    try:
-        sample = []
-        for i, line in enumerate(_open_log(path)):
-            if i >= 10:
-                break
-            sample.append(line)
-        content = "".join(sample)
-        if _ACCESS_LOG_REGEX.search(content):
-            return "web_access"
-        if _NGINX_ERROR_REGEX.search(content) or _APACHE_ERROR_REGEX.search(content):
-            return "web_error"
-        if _WP_DEBUG_REGEX.search(content):
-            return "wp_debug"
-        if _SYSLOG_RFC3164.search(content) or _SYSLOG_RFC5424.search(content):
-            return "syslog"
-    except Exception:
-        pass
+    def matches(*patterns: re.Pattern[str]) -> bool:
+        return any(p.match(line) for p in patterns for line in sample)
 
+    if matches(_ACCESS_LOG_REGEX):
+        return "web_access"
+    if matches(_NGINX_ERROR_REGEX, _APACHE_ERROR_REGEX):
+        return "web_error"
+    if matches(_WP_DEBUG_REGEX):
+        return "wp_debug"
+    if matches(_SYSLOG_RFC3164, _SYSLOG_RFC5424):
+        return "syslog"
     return "unknown"

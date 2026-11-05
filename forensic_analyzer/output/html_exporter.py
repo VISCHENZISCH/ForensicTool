@@ -41,9 +41,23 @@ _CATEGORIES = [
     (
         "malware",
         "Binaires, scripts et menaces",
-        {"pe_analysis", "malware_analysis", "elf_analysis", "webshell_analysis", "yara", "ioc", "carving", "strings"},
+        {
+            "ransomware_impact",
+            "pe_analysis",
+            "malware_analysis",
+            "elf_analysis",
+            "webshell_analysis",
+            "yara",
+            "ioc",
+            "carving",
+            "strings",
+        },
     ),
-    ("files", "Fichiers et métadonnées", {"pdf", "pdf_analysis", "office_analysis", "image", "gps", "stego", "stego_audio"}),
+    (
+        "files",
+        "Fichiers et métadonnées",
+        {"pdf", "pdf_analysis", "office_analysis", "image", "gps", "stego", "stego_audio", "text_triage"},
+    ),
 ]
 _SECTIONS = [
     ("synthese", "Synthèse"),
@@ -58,7 +72,7 @@ _PRINT_ROWS = 25  # au-delà, lignes masquées à l'impression (PDF) avec mentio
 _SYNTH_FACTS = 12  # faits de la chaîne d'attaque repris en synthèse (la chronologie les a tous)
 _SYNTH_IOCS = 10
 # Données déjà restituées ailleurs (chronologie, graphe) : pas de doublon dans les constats
-_SKIP_KEYS = {"events", "facts", "graph", "timeline_events", "timeline"}
+_SKIP_KEYS = {"events", "facts", "graph", "timeline_events", "timeline", "chronology", "headline"}
 
 _GRAVITES = ("critique", "élevé", "moyen", "faible", "info")
 _GRAVITE_LIBELLE = {"critique": "Critique", "élevé": "Élevée", "moyen": "Moyenne", "faible": "Faible", "info": "Info"}

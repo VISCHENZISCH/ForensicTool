@@ -291,6 +291,8 @@ MODULE_TAGS = {
     "elf_analysis": "ELF",
     "evidence_integrity": "INT",
     "correlation": "COR",
+    "ransomware_impact": "RAN",
+    "text_triage": "TXT",
 }
 
 MODULE_NAMES = {
@@ -327,6 +329,8 @@ MODULE_NAMES = {
     "elf_analysis": "Binaire Linux (ELF)",
     "evidence_integrity": "Intégrité des preuves",
     "correlation": "Corrélation multi-sources",
+    "ransomware_impact": "Impact ransomware",
+    "text_triage": "Lecture des fichiers texte",
 }
 
 MODULE_COLORS = {
@@ -363,6 +367,8 @@ MODULE_COLORS = {
     "elf_analysis": "\033[38;5;160m",
     "evidence_integrity": C.G,
     "correlation": C.HR,
+    "ransomware_impact": C.HR,
+    "text_triage": C.D,
 }
 
 
@@ -402,9 +408,11 @@ def kv(key: str, value, indent: int = 3, tone: str | None = None) -> None:
         wrap_width = 50
 
     # Empreintes, URL et chemins jamais coupés : ils doivent rester copiables d'un bloc
-    lines = textwrap.wrap(val_str, width=wrap_width, break_long_words=False, break_on_hyphens=False)
-    if not lines:
-        lines = [""]
+    lines = [
+        wrapped
+        for part in val_str.split("\n")
+        for wrapped in textwrap.wrap(part, width=wrap_width, break_long_words=False, break_on_hyphens=False)
+    ] or [""]
 
     def colorize(t):
         t = re.sub(r"\[([^\]]+)\]", f"[{C.C_DNS}\\1{C.C_RESULT}]", t)
@@ -764,6 +772,7 @@ def render_conclusion(report) -> None:
                 print(f"{MARGIN}    {C.MG6}{ts}{C.RS}  {C.D}{' + '.join(fact.get('sources', []))}{C.RS}")
                 for line in textwrap.wrap(fact["description"], width=77, break_long_words=False):
                     print(f"{MARGIN}      {C.W}{line}{C.RS}")
+    _render_incident(findings)
     partial = [(f, reason) for f in report.findings for reason in f.incomplete]
     if report.evidence:
         changed = [r for r in report.evidence if r.changed_during_analysis]
@@ -780,14 +789,30 @@ def render_conclusion(report) -> None:
         for i, err in enumerate(report.analysis_errors, 1):
             kv(f"[ALERTE] Échec d'analyse #{i}", str(err))
         for f, reason in partial:
-            kv(f"Non analysé : {os.path.basename(f.file)}"[:28], reason)
+            kv("Limite", neutralize(f"{os.path.basename(f.file)} : {reason}"))
         if report.skipped_files:
             names = ", ".join(os.path.basename(p) for p in report.skipped_files[:12])
-            kv("Fichiers non analysés", f"{len(report.skipped_files)} : {names}")
+            more = len(report.skipped_files) - 12
+            kv("Fichiers non analysés", f"{len(report.skipped_files)} : {names}" + (f" et {more} autre(s)" if more > 0 else ""))
         for i, note in enumerate(report.scan_notes, 1):
             kv(f"Archive #{i}", note)
     print()
     info("Rapport complet : option 99 du menu, ou --export-html / --export-pdf en ligne de commande.")
+
+
+def _render_incident(findings) -> None:
+    """Scénario ransomware : l'essentiel du constat et sa chronologie, repris en conclusion."""
+    for f in findings:
+        if f.type != "ransomware_impact":
+            continue
+        print()
+        separator("Incident : chiffrement ou renommage de masse", custom_color=C.HR)
+        for key in f.extra.get("headline", []):
+            if key in f.metadata:
+                kv(neutralize(key), neutralize(str(f.metadata[key])))
+        for event in f.extra.get("chronology", [])[:20]:
+            ts = str(event["timestamp"])[:19].replace("T", " ")
+            print(f"{MARGIN}    {C.MG6}{ts}{C.RS}  {C.W}{neutralize(event['description'])}{C.RS}")
 
 
 # Écran de démarrage : chaque ligne correspond à une vérification effectuée

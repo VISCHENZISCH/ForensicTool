@@ -26,7 +26,8 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
     Un chemin relatif se résout depuis `evidence_dir`, sinon depuis le dossier du manifeste, et
     nulle part ailleurs : vérifier un homonyme trouvé ailleurs attesterait l'intégrité d'un autre
     fichier. Un homonyme est seulement signalé comme piste. `confined` (manifeste trouvé parmi
-    les preuves) refuse en plus les chemins qui sortent du dossier.
+    les preuves) refuse en plus les chemins qui sortent du dossier. `locate_in_evidence` traite
+    ensuite, pour un scan, le manifeste rangé à l'écart des fichiers qu'il décrit.
     """
     manifest_dir = os.path.dirname(os.path.abspath(manifest))
     base = os.path.abspath(evidence_dir) if evidence_dir else manifest_dir
@@ -59,6 +60,73 @@ def verify_manifest(manifest: str, confined: bool = False, evidence_dir: str | N
         "results": results,
         "all_ok": bool(results) and all(r["status"] == "OK" for r in results),
     }
+
+
+def locate_in_evidence(res: dict, files: list[str], labels: dict[str, str] | None = None) -> bool:
+    """
+    Retrouve parmi les preuves du scan la racine d'un manifeste dont les chemins ne partent pas de son dossier.
+
+    Une racine n'est retenue que si au moins une empreinte y correspond : une empreinte identique
+    prouve le contenu, où qu'il soit. Sans cela, un homonyme reste une simple piste et l'entrée
+    reste absente, sinon un fichier sans rapport passerait pour une preuve altérée.
+    """
+    absent = [r for r in res["results"] if r["status"] == "ABSENT" and not os.path.isabs(r["file"])]
+    trees = _candidate_trees(absent, files, res["manifest"])
+    if not trees:
+        return False
+    expected = {r["file"]: r["expected"] for r in absent}
+
+    def matches(root: str) -> int:
+        return sum(digest == expected[name] for name, (_f, digest) in trees[root].items())
+
+    root = max(sorted(trees), key=matches)
+    if not matches(root):
+        for entry in absent:
+            found = next((t[entry["file"]][0] for t in trees.values() if entry["file"] in t), None)
+            if found:
+                entry["lookalike"] = found
+        return False
+    _apply_tree(absent, trees[root])
+    _describe_root(res, root, files, labels or {})
+    return True
+
+
+def _candidate_trees(absent: list[dict], files: list[str], manifest: str) -> dict[str, dict[str, tuple[str, str]]]:
+    """Racines possibles → {entrée du manifeste : (fichier au même chemin relatif, son empreinte)}."""
+    trees: dict[str, dict[str, tuple[str, str]]] = {}
+    for entry in absent:
+        tail = os.sep + os.path.normpath(entry["file"])
+        for f in files:
+            if f.endswith(tail) and f != manifest:
+                trees.setdefault(f[: -len(tail)], {})[entry["file"]] = (f, _digest(f, entry["algo"]))
+    return trees
+
+
+def _apply_tree(absent: list[dict], tree: dict[str, tuple[str, str]]) -> None:
+    for entry in absent:
+        if entry["file"] in tree:
+            found, digest = tree[entry["file"]]
+            entry.pop("lookalike", None)
+            status = "OK" if digest == entry["expected"] else "DIFFÉRENT"
+            entry.update(path=found, actual=digest, size=os.path.getsize(found), status=status)
+
+
+def _describe_root(res: dict, root: str, files: list[str], labels: dict[str, str]) -> None:
+    listed = {r["path"] for r in res["results"]} | {res["manifest"]}
+    prefix = root + os.sep
+    res["base"] = root
+    res["base_label"] = _label(root, files, labels)
+    res["uncovered"] = sorted(labels.get(f, f) for f in files if f.startswith(prefix) and f not in listed)
+    res["all_ok"] = all(r["status"] == "OK" for r in res["results"])
+
+
+def _label(root: str, files: list[str], labels: dict[str, str]) -> str:
+    """Racine exprimée comme dans le reste du rapport (relative à l'archive ou au dossier scanné)."""
+    for f in files:
+        if f.startswith(root + os.sep) and f in labels:
+            inner = f[len(root) + 1 :]
+            return labels[f].removesuffix(inner).rstrip("/" + os.sep) or "."
+    return root
 
 
 def _lookalike(name: str, base: str, manifest_dir: str) -> str | None:

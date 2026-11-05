@@ -65,6 +65,12 @@ def _keep_ip(value: str) -> bool:
     return not (ip.is_loopback or ip.is_unspecified or ip.is_multicast or value == "255.255.255.255")
 
 
+def text_indicators(text: str) -> list[str]:
+    """IP et URL citées dans un texte libre, à vérifier par l'analyste (citer n'est pas compromettre)."""
+    ips = {ip for ip in _IP.findall(text) if _keep_ip(ip)}
+    return sorted(ips | set(_URL.findall(text)))
+
+
 def _filename(path: str) -> str:
     return (ntpath.basename(path) if "\\" in path else os.path.basename(path)).lower()
 

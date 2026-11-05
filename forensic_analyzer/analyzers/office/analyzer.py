@@ -23,7 +23,7 @@ log = get_logger("office")
 
 try:
     from oletools import crypto, msodde
-    from oletools.olevba import VBA_Parser
+    from oletools.olevba import TYPE_TEXT, VBA_Parser
 
     HAS_OLETOOLS = True
 except ImportError:
@@ -144,6 +144,9 @@ class OfficeAnalyzer(BaseAnalyzer):
             incomplete.append(f"structure illisible par olevba ({type(exc).__name__} : {exc})")
             return
         try:
+            if parser.type == TYPE_TEXT:  # olevba prend tout fichier texte pour du VBA : ce n'est pas une macro
+                _plain_text_document(parser, path, meta, reasons)
+                return
             if not parser.detect_vba_macros():
                 return
             modules = [(vba_name, code) for _f, _s, vba_name, code in parser.extract_macros() if code and code.strip()]
@@ -243,6 +246,17 @@ class OfficeAnalyzer(BaseAnalyzer):
         out["external"] = [{"type": k, "target": t, "part": s} for k, t, s in found]
 
 
+def _plain_text_document(parser, path: str, meta: dict, reasons: list) -> None:
+    """Texte sous une extension Office : anomalie à signaler, script déguisé s'il contient du code actif."""
+    extension = os.path.splitext(path)[1].lower()
+    active = sorted({w for k, w, _d in _safe(parser.analyze_macros) or [] if k in ("AutoExec", "Suspicious")})
+    if active:
+        meta["Mots-clés suspects"] = ", ".join(active)
+        reasons.append(("moyen", f"texte déguisé en {extension}, avec des mots-clés de script : {', '.join(active[:4])}"))
+    else:
+        reasons.append(("faible", f"texte brut sous une extension {extension} : pas un document Office, aucune macro"))
+
+
 def _safe(call):
     try:
         return call()
@@ -259,4 +273,7 @@ def _format(path: str) -> str:
     if zipfile.is_zipfile(path):
         return "OOXML (Office 2007+)"
     with open(path, "rb") as fh:
-        return "OLE2 (Office 97-2003)" if fh.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" else "inconnu"
+        head = fh.read(4096)
+    if head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        return "OLE2 (Office 97-2003)"
+    return "texte brut" if head and b"\0" not in head else "inconnu"

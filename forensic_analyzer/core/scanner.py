@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import os
 
+from forensic_analyzer.analyzers.integrity.analyzer import integrity_finding
 from forensic_analyzer.core.archives import expand_archives, is_archive
 from forensic_analyzer.core.base import BaseAnalyzer
+from forensic_analyzer.core.integrity import locate_in_evidence
 from forensic_analyzer.core.pipeline import AnalyzerRegistry, run_pipeline
+from forensic_analyzer.core.ransomware import assess_ransomware
+from forensic_analyzer.core.triage import triage_text_files
 from forensic_analyzer.models.finding import ReportModel, fingerprint, recheck
 from forensic_analyzer.utils.logger import get_logger
 
@@ -88,6 +92,7 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
     archives = [r for r in map(fingerprint, (t for t in targets if is_archive(t))) if r]  # avant extraction
     targets, origins, notes = expand_archives(targets)
     report = run_pipeline(targets, registry)
+    _cross_file_review(report, targets, _evidence_labels(path, targets, origins))
     for record in report.evidence:
         record.origin = origins.get(record.file)
     report.evidence = recheck(archives) + report.evidence
@@ -99,6 +104,25 @@ def auto_scan(path: str, registry: AnalyzerRegistry) -> ReportModel:
     for err in report.analysis_errors:  # fichier extrait : citer l'archive d'origine
         err.file = origins.get(err.file, err.file)
     return report
+
+
+def _evidence_labels(path: str, targets: list[str], origins: dict[str, str]) -> dict[str, str]:
+    """Chemin de chaque preuve tel que l'analyste le lit : dans l'archive, ou relatif au dossier scanné."""
+    root = path if os.path.isdir(path) else os.path.dirname(os.path.abspath(path))
+    return {t: origins[t].split(":", 1)[1] if t in origins else os.path.relpath(t, root) for t in targets}
+
+
+def _cross_file_review(report: ReportModel, targets: list[str], labels: dict[str, str]) -> None:
+    """Ce qu'aucun module ne voit fichier par fichier : manifeste rangé à part, chiffrement de masse, texte restant."""
+    for i, finding in enumerate(report.findings):
+        if finding.type == "evidence_integrity" and locate_in_evidence(finding.extra, targets, labels):
+            report.findings[i] = integrity_finding(finding.file, finding.extra)
+    impact, encrypted = assess_ransomware(targets, report.findings, labels)
+    triage, read = triage_text_files(targets, report.findings, labels, exclude=encrypted)
+    report.findings.extend(f for f in (impact, triage) if f)
+    report.total = len(report.findings)
+    handled = encrypted | read
+    report.skipped_files = [s for s in report.skipped_files if s not in handled]
 
 
 def default_registry() -> AnalyzerRegistry:

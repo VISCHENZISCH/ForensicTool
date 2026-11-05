@@ -15,6 +15,7 @@ TECHNIQUES: dict[str, tuple[str, str]] = {
     "T1078.003": ("Local Accounts", "Accès / Élévation"),
     "T1095": ("Non-Application Layer Protocol", "Commande et contrôle"),
     "T1098.004": ("SSH Authorized Keys", "Persistance"),
+    "T1486": ("Data Encrypted for Impact", "Impact"),
     "T1543.002": ("Systemd Service", "Persistance / Élévation"),
     "T1546.004": ("Unix Shell Configuration Modification", "Persistance"),
     "T1548.003": ("Sudo and Sudo Caching", "Élévation"),

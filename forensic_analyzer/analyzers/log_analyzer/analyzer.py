@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
 from forensic_analyzer.utils.logger import get_logger
 from .parsers import (
     detect_log_type,
+    parse_file_audit_log,
     parse_syslog_file,
     parse_web_access_log,
     parse_web_error_log,
@@ -17,6 +19,8 @@ from .parsers import (
 )
 
 log = get_logger("log_analyzer")
+
+_MAX_DENIED_SHOWN = 8
 
 
 class LogAnalyzer(BaseAnalyzer):
@@ -57,7 +61,7 @@ class LogAnalyzer(BaseAnalyzer):
         try:
             log_type = detect_log_type(path)
             if log_type == "unknown":
-                log.info("Type de log non reconnu pour '%s'", path)
+                log.debug("Type de log non reconnu pour '%s'", path)
                 return None
 
             log.info("Analyse du journal [%s] : %s", log_type, os.path.basename(path))
@@ -70,9 +74,23 @@ class LogAnalyzer(BaseAnalyzer):
                 "timeline_events": [],
                 "iocs": {"ips": set(), "urls": set()},
             }
+            incomplete: list[str] = []
+            level = "élevé"
 
-            if log_type == "web_access":
+            if log_type == "file_audit":
+                res = parse_file_audit_log(path)
+                _audit_metadata(res, meta)
+                extra["details"] = res
+                extra["timeline_events"] = res["events"]
+                extra["iocs"]["ips"] = set(res["offender_ips"])
+                if res["mass_renames"]:
+                    level = "critique"
+                    extra["mitre"] = mitre.describe(["T1486"])
+                incomplete.extend(_unparsed(res))
+
+            elif log_type == "web_access":
                 res = parse_web_access_log(path)
+                incomplete.extend(_unparsed(res))
                 meta["Total requêtes"] = f"{res['valid_entries']:,}"
                 meta["Adresses IP uniques"] = str(res["unique_ips"])
                 if res["top_ips"]:
@@ -170,8 +188,36 @@ class LogAnalyzer(BaseAnalyzer):
                 file=os.path.abspath(path),
                 metadata=meta,
                 extra=extra,
-                severity=severity_if_alerts(meta, "élevé"),
+                severity=severity_if_alerts(meta, level),
+                incomplete=incomplete,
             )
         except Exception as exc:
             log.error("Erreur d'analyse sur le journal '%s' : %s", path, exc)
             return None
+
+
+def _unparsed(res: dict[str, Any]) -> list[str]:
+    missed = res["total_lines"] - res["valid_entries"]
+    return [f"{missed} ligne(s) sur {res['total_lines']} au format non reconnu"] if missed else []
+
+
+def _audit_metadata(res: dict[str, Any], meta: dict[str, Any]) -> None:
+    meta["Lignes d'audit"] = f"{res['valid_entries']:,}"
+    if res["accounts"]:
+        meta["Comptes et postes"] = ", ".join(res["accounts"][:10])
+    offenders = set()
+    for m in res["mass_renames"]:
+        offenders.add(m["user"])
+        shares = ", ".join(m["shares"]) or "?"
+        extensions = f", extension {', '.join(m['extensions'])}" if m["extensions"] else ""
+        meta[f"[ALERTE] Renommage de masse par {m['user']}"] = (
+            f"{m['total']} fichiers sur le poste {m['host'] or '?'}, partage {shares}, "
+            f"en {m['seconds']} s ({m['first'][11:19]} → {m['last'][11:19]} UTC){extensions}"
+        )
+    for d in res["denied"][:_MAX_DENIED_SHOWN]:
+        key = "[ALERTE] Accès refusé" if d["user"] in offenders else "Accès refusé"
+        meta[f"{key} {d['timestamp'][11:19]}"] = f"{d['user']} sur {d['host']} : {d['path']} (partage {d['share'] or '?'})"
+    if res["denied_total"] > _MAX_DENIED_SHOWN:
+        meta["Accès refusés (total)"] = str(res["denied_total"])
+    if res["responses"]:
+        meta["Actions de confinement"] = "\n".join(f"{r['timestamp'][11:19]} {r['description']}" for r in res["responses"][:10])

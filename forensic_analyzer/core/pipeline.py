@@ -12,6 +12,8 @@ from forensic_analyzer.utils.logger import get_logger
 
 log = get_logger("pipeline")
 
+_MAX_NAMES_LOGGED = 15
+
 
 class AnalyzerRegistry:
     """
@@ -115,10 +117,12 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
             supported_paths.append(path)
 
     if skipped:
-        log.warning(
-            "%d fichier(s) ignoré(s) (aucun module adapté) : %s",
+        hidden = len(skipped) - _MAX_NAMES_LOGGED
+        log.info(
+            "%d fichier(s) sans module dédié : %s%s",
             len(skipped),
-            ", ".join(os.path.basename(f) for f in skipped[:15]),
+            ", ".join(os.path.basename(f) for f in skipped[:_MAX_NAMES_LOGGED]),
+            f" et {hidden} autre(s)" if hidden > 0 else "",
         )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:

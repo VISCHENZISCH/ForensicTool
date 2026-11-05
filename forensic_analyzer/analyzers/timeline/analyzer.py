@@ -295,7 +295,7 @@ def build_timeline(report: ReportModel) -> list[dict]:
     return events
 
 
-_HOST_SOURCES = {"syslog", "auth.log", "web_access", "web_error", "wp_debug"}
+_HOST_SOURCES = {"syslog", "auth.log", "web_access", "web_error", "wp_debug", "file_audit"}
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
