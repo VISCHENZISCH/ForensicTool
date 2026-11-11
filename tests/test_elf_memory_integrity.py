@@ -28,15 +28,15 @@ def test_elf_analyzer_rejects_non_elf(tmp_path):
 
 def test_hidden_system_paths_heuristic():
     strings = [
-        "/tmp/.X11-unix/.sysupd_lock",  # implant : fichier caché dans /tmp
+        "/tmp/.X11-unix/.sysupd_lock",  # implant : fichier caché dans /tmp  # nosec B108
         "/usr/lib/systemd/.cache/sysupdate",  # répertoire caché sous /usr
-        "/tmp/.X11-unix/X0",  # socket X11 standard
-        "/tmp/.X%d-lock",  # verrou X11 standard
+        "/tmp/.X11-unix/X0",  # socket X11 standard  # nosec B108
+        "/tmp/.X%d-lock",  # verrou X11 standard  # nosec B108
         "/usr/lib/debug/.dwz/x86_64/foo.debug",  # chemin de débogage
         "/usr/bin/.sysless",  # fichier caché légitime (less)
         "/home/user/.bashrc",  # hors répertoires système
     ]
-    assert _hidden_system_paths(strings) == ["/tmp/.X11-unix/.sysupd_lock", "/usr/lib/systemd/.cache/sysupdate"]
+    assert _hidden_system_paths(strings) == ["/tmp/.X11-unix/.sysupd_lock", "/usr/lib/systemd/.cache/sysupdate"]  # nosec B108
 
 
 def test_linux_memory_correlations():
@@ -56,7 +56,7 @@ def test_linux_memory_correlations():
         "psaux": ok([{"PID": 315, "PPID": 1, "COMM": "sysupdate", "ARGS": "/usr/lib/systemd/.cache/sysupdate"}]),
         "sockstat": ok(
             [
-                {"Family": "AF_INET", "Destination Addr": "0.0.0.0", "Destination Port": "0", "PID": 319},
+                {"Family": "AF_INET", "Destination Addr": "0.0.0.0", "Destination Port": "0", "PID": 319},  # nosec B104
                 {
                     "Family": "AF_INET",
                     "Destination Addr": "203.0.113.50",
@@ -88,7 +88,7 @@ def test_manifest_verification(tmp_path):
     manifest.write_text(
         f"{hashlib.sha256(b'disk').hexdigest()}  disk.raw\n"
         f"{hashlib.sha256(b'tampered').hexdigest()} *mem.raw\n"
-        f"{hashlib.md5(b'x').hexdigest()}  absent.raw\n"
+        f"{hashlib.md5(b'x', usedforsecurity=False).hexdigest()}  absent.raw\n"
     )
     res = verify_manifest(str(manifest))
     assert [r["status"] for r in res["results"]] == ["OK", "DIFFÉRENT", "ABSENT"]

@@ -1,5 +1,5 @@
 import struct
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 import json
 from collections import defaultdict
 from forensic_analyzer.utils.logger import get_logger
@@ -21,7 +21,7 @@ def extract_host_identities(packets, streams: dict[str, bytes], path: str) -> di
         mac = pkt[Ether].src
         if pkt.haslayer(IP):
             ip_src = pkt[IP].src
-            if ip_src not in ("0.0.0.0", "255.255.255.255"):
+            if ip_src not in ("0.0.0.0", "255.255.255.255"):  # nosec B104 - constante de détection, aucun socket ouvert
                 mac_info[mac]["ips"].add(ip_src)
                 ip_to_mac[ip_src] = mac
         if pkt.haslayer(UDP) and pkt[UDP].sport == 68 and pkt[UDP].dport == 67:
@@ -92,7 +92,7 @@ def extract_host_identities(packets, streams: dict[str, bytes], path: str) -> di
             "-e",
             "ldap.name",
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # nosec B603 - liste d'arguments, sans shell
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout)
             for packet in data:

@@ -1,8 +1,4 @@
-"""Intégrité des paquets Debian hors ligne (équivalent de `dpkg -V`) et fichiers hors paquet.
 
-Travaille sur une copie extraite (tsk_recover). Les chemins /bin, /sbin, /lib* sont
-lus sous /usr (Debian 12 « merged-usr » : liens que tsk_recover ne restaure pas).
-"""
 
 from __future__ import annotations
 
@@ -56,7 +52,7 @@ def owned_paths(root: str) -> set[str]:
 
 
 def _md5(path: str) -> str:
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
             h.update(block)

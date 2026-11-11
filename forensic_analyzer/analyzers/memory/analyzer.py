@@ -6,7 +6,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 
 from forensic_analyzer.analyzers.disk import layout
 from forensic_analyzer.core import mitre
@@ -54,7 +54,7 @@ _DEFAULT_WINDOWS = ["pslist", "pstree", "cmdline", "netscan", "dlllist", "malfin
 # Suite de triage Linux : processus (dont cachés), commandes, réseau et contrôles anti-rootkit
 _DEFAULT_LINUX = ["pslist", "psscan", "psaux", "bash", "sockstat", "malfind", "hidden_modules", "check_syscall", "ebpf"]
 
-_TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/")
+_TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/")  # nosec B108 - dossiers recherchés dans la preuve, rien n'y est écrit
 _SUSPICIOUS_PORTS = {4444, 4445, 1337, 31337, 6666, 6667, 8888, 9001}
 
 
@@ -108,7 +108,7 @@ def _run_vol3_plugin(
     cmd.append(plugin)
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - liste d'arguments, sans shell
             cmd,
             capture_output=True,
             text=True,
@@ -241,7 +241,8 @@ def analyze_linux_results(results: dict) -> tuple[dict, dict, set[str]]:
             dport = int(r.get("Destination Port", 0))
         except (TypeError, ValueError):
             dport = 0
-        if dst not in ("0.0.0.0", "::", "", "127.0.0.1", "::1") or dport in _SUSPICIOUS_PORTS:
+        # nosec B104 - adresses comparées, aucun socket ouvert
+        if dst not in ("0.0.0.0", "::", "", "127.0.0.1", "::1") or dport in _SUSPICIOUS_PORTS:  # nosec B104
             sockets.append(
                 {
                     "pid": r.get("PID"),

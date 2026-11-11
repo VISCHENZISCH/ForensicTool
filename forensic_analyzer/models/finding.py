@@ -33,7 +33,8 @@ def compute_hashes(filepath: str) -> dict[str, str]:
 @lru_cache(maxsize=1024)
 def _hash_file(filepath: str, _size: int, _mtime_ns: int) -> tuple[tuple[str, str], ...]:
     sha256 = hashlib.sha256()
-    md5 = hashlib.md5()
+    # MD5 identifie la preuve (convention des outils DFIR) ; l'intégrité repose sur SHA-256
+    md5 = hashlib.md5(usedforsecurity=False)
 
     try:
         # Lecture par chunks de 1 Mo : images disque et dumps de plusieurs Go

@@ -1,4 +1,4 @@
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 import json
 import os
 from forensic_analyzer.utils.logger import get_logger
@@ -39,7 +39,7 @@ def extract_decrypted_http(pcap_path: str, keylog_path: str) -> list[dict]:
             "http.file_data",
         ]
 
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # nosec B603 - liste d'arguments, sans shell
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout)
             for packet in data:

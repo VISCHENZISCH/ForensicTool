@@ -150,7 +150,7 @@ class ImageFS:
         f = self._open(path)
         if f is None:
             return None
-        h = hashlib.md5()
+        h = hashlib.md5(usedforsecurity=False)
         for block in self._chunks(f, 1 << 40):
             h.update(block)
         return h.hexdigest()

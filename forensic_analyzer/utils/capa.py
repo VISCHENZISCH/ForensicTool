@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 
 from forensic_analyzer.utils.logger import get_logger
 
@@ -20,7 +20,8 @@ def run_capa(path: str, timeout: int = 300) -> dict | None:
     if not capa:
         return None
     try:
-        proc = subprocess.run([capa, "-j", "-q", path], capture_output=True, text=True, timeout=timeout)
+        # Liste d'arguments, sans shell ; chemin de preuve absolu, jamais lu comme une option
+        proc = subprocess.run([capa, "-j", "-q", path], capture_output=True, text=True, timeout=timeout)  # nosec B603
         report = json.loads(proc.stdout)
     except subprocess.TimeoutExpired:
         log.warning("capa trop long sur '%s'", path)

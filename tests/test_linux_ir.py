@@ -54,7 +54,8 @@ def _fake_debian(root):
     _write(root, "/usr/bin/ls", ls_content)
     _write(root, "/etc/ssh/sshd_config", "PermitRootLogin no\n")
     _write(root, "/var/lib/dpkg/info/coreutils.list", "/bin/ls\n/etc/cron.d/.placeholder\n")
-    _write(root, "/var/lib/dpkg/info/coreutils.md5sums", f"{hashlib.md5(ls_content).hexdigest()}  bin/ls\n")
+    ls_md5 = hashlib.md5(ls_content, usedforsecurity=False).hexdigest()
+    _write(root, "/var/lib/dpkg/info/coreutils.md5sums", f"{ls_md5}  bin/ls\n")
     _write(root, "/var/lib/dpkg/info/openssh-server.list", "/etc/ssh/sshd_config\n")
     _write(
         root,
@@ -77,7 +78,7 @@ def test_bodyfile_parsing_and_anomalies(tmp_path):
     assert idx[LINK].is_link and idx[LINK].link_target == UNIT
     assert idx["/usr/share/old.dpkg-new"].deleted
     assert [e.path for e in bf.ownership_anomalies(entries)] == [UNIT, IMPLANT]
-    assert [e.path for e in bf.hidden_entries(entries)] == [IMPLANT, "/tmp/.X11-unix/.sysupd_lock"]
+    assert [e.path for e in bf.hidden_entries(entries)] == [IMPLANT, "/tmp/.X11-unix/.sysupd_lock"]  # nosec B108
 
 
 def test_systemd_unit_detection_with_bodyfile(tmp_path):

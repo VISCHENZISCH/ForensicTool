@@ -10,6 +10,7 @@ import itertools
 import os
 import re
 import shutil
+import sys
 import textwrap
 
 from forensic_analyzer.utils.terminal import neutralize, neutralize_data
@@ -74,8 +75,9 @@ def _width() -> int:
 
 
 def clear_screen() -> None:
-    """Efface complètement le terminal."""
-    os.system("cls" if os.name == "nt" else "clear")
+    """Efface le terminal et son historique de défilement, sans lancer de shell (séquences ANSI)."""
+    sys.stdout.write("\033[2J\033[3J\033[H")
+    sys.stdout.flush()
 
 
 # Bannière ASCII Art

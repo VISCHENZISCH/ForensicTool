@@ -130,7 +130,7 @@ def test_generated_yara_compiles_with_duplicate_binary(tmp_path):
     binary = {
         "type": "elf_analysis",
         "metadata": {"SHA-256": "a" * 64, "[ALERTE] Réseau": "connect()"},
-        "extra": {"iocs": {"ips": ["185.220.101.42"], "paths": ["/tmp/.x/kworkerd"]}},
+        "extra": {"iocs": {"ips": ["185.220.101.42"], "paths": ["/tmp/.x/kworkerd"]}},  # nosec B108
     }
     report = ReportModel.from_findings(
         [
@@ -446,7 +446,7 @@ def test_ioc_regexes_stay_linear_on_hostile_strings():
 
 
 def test_updater_runs_git_in_the_tool_repository(monkeypatch, tmp_path):
-    import subprocess
+    import subprocess  # nosec B404
     from forensic_analyzer.core import updater
 
     monkeypatch.chdir(tmp_path)

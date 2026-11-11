@@ -13,7 +13,7 @@ from forensic_analyzer.analyzers.linux.bodyfile import BodyEntry, utc
 
 _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".path")
 _UNIT_DIRS = ("etc/systemd/system", "etc/systemd/user")
-_TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/")
+_TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/")  # nosec B108 - lus dans la preuve
 
 # Répertoires où tout fichier non déclaré par un paquet est une persistance potentielle
 _WATCHED_DIRS = {

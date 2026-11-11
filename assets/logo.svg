@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Forensic Analyzer</title>
+  <!-- Fond arrondi -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="#161618"/>
+  <!-- Sources de preuves (disque, mémoire, réseau) qui convergent vers la loupe -->
+  <g fill="none" stroke="#8B8B93" stroke-width="18" stroke-linecap="round">
+    <path d="M70 156 H140"/>
+    <path d="M70 236 H120"/>
+    <path d="M70 316 H140"/>
+  </g>
+  <!-- Manche de la loupe -->
+  <path d="M342 338 L414 410" fill="none" stroke="#E6E6EA" stroke-width="46" stroke-linecap="round"/>
+  <!-- Lentille -->
+  <circle cx="252" cy="236" r="118" fill="#161618" stroke="#E6E6EA" stroke-width="30"/>
+  <!-- Chronologie unique : trois faits datés, celui du milieu corroboré -->
+  <path d="M178 236 H326" fill="none" stroke="#4FC1B1" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="190" cy="236" r="15" fill="#E6E6EA"/>
+  <circle cx="252" cy="236" r="26" fill="#4FC1B1"/>
+  <circle cx="314" cy="236" r="15" fill="#E6E6EA"/>
+</svg>

@@ -7,7 +7,7 @@ import mmap
 import os
 import shutil
 import struct
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 
 from forensic_analyzer.analyzers.disk import layout, tsk_image
 from forensic_analyzer.analyzers.linux import bodyfile as bf
@@ -274,7 +274,7 @@ def _scan_ext_partition(path: str, start_sector: int, meta: dict, extra: dict, l
         meta[f"{label} : bodyfile"] = f"The Sleuth Kit absent ; à générer avec : {command}"
         return set()
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603 - liste d'arguments, sans shell
             [fls, "-r", "-m", "/", "-o", str(start_sector), path], capture_output=True, text=True, errors="replace", timeout=600
         )
     except subprocess.TimeoutExpired:

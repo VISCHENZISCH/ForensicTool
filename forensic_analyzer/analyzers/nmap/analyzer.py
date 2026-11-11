@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import datetime
 import os
-import xml.etree.ElementTree as ET
 from typing import Any
+
+from defusedxml import ElementTree as ET  # rapport fourni avec les preuves : ni entités ni DTD externes
 
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel

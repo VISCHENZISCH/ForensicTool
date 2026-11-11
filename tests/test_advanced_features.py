@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 import struct
-import subprocess
+import subprocess  # nosec B404
 
 import pytest
 
@@ -42,7 +42,7 @@ def ext4_image(tmp_path):
     evidence = tmp_path / "evidence"
     evidence.mkdir()
     img = evidence / "disk.img"
-    subprocess.run(["mke2fs", "-q", "-t", "ext4", "-d", str(src), "-F", str(img), "8M"], check=True)
+    subprocess.run(["mke2fs", "-q", "-t", "ext4", "-d", str(src), "-F", str(img), "8M"], check=True)  # nosec B603 B607
     return img
 
 
@@ -217,7 +217,7 @@ def test_rules_generation_compiles_and_matches(tmp_path):
     elf = _finding(
         "elf_analysis",
         {
-            "iocs": {"ips": ["203.0.113.50"], "paths": ["/tmp/.X11-unix/.lock"]},
+            "iocs": {"ips": ["203.0.113.50"], "paths": ["/tmp/.X11-unix/.lock"]},  # nosec B108
             "network": [{"host": "203.0.113.50", "port": 4444}],
             "mitre": [{"id": "T1571", "name": "Non-Standard Port", "tactic": "C2"}],
         },

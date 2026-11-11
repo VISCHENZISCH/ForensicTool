@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
+import subprocess  # nosec B404
 
 import pytest
 
@@ -11,7 +11,7 @@ pytestmark = pytest.mark.skipif(not shutil.which("git"), reason="git absent")
 
 
 def _git(cwd, *args):
-    subprocess.run(
+    subprocess.run(  # nosec B603 B607
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
         cwd=cwd,
         check=True,

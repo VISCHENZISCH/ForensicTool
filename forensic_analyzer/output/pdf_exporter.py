@@ -25,11 +25,7 @@ class PDFExporter:
 
         # Aucune ressource chargée (ni réseau ni fichier local) : seules les polices embarquées
         # dans le rapport (data:) sont lues
-        def refuse(url, *args, **kwargs):
-            if url.startswith("data:"):
-                return weasyprint.default_url_fetcher(url, *args, **kwargs)
-            raise ValueError(f"ressource externe refusée : {url}")
-
-        weasyprint.HTML(string=build_interactive_html(report), url_fetcher=refuse).write_pdf(target_path)
+        fetcher = weasyprint.URLFetcher(allowed_protocols={"data"}, allow_redirects=False)
+        weasyprint.HTML(string=build_interactive_html(report), url_fetcher=fetcher).write_pdf(target_path)
         log.info("Rapport PDF exporté -> %s", target_path)
         return target_path

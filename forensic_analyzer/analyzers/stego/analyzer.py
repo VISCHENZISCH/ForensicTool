@@ -332,12 +332,15 @@ class StegoAnalyzer(BaseAnalyzer):
                 suspicion_score += 5
 
             if path.lower().endswith((".jpg", ".jpeg", ".bmp", ".wav")):
-                import subprocess
+                import subprocess  # nosec B404 - outils externes appelés sans shell
 
                 wordlist = ["", "password", "123456", "admin", "steghide", "secret", "hidden"]
                 for w in wordlist:
                     try:
-                        proc = subprocess.run(["steghide", "info", "-p", w, path], capture_output=True, text=True, timeout=2)
+                        # steghide résolu par le PATH, liste d'arguments sans shell
+                        proc = subprocess.run(  # nosec B603 B607
+                            ["steghide", "info", "-p", w, path], capture_output=True, text=True, timeout=2
+                        )
                         if "format:" in proc.stdout:
                             flat_meta["Outil Détecté"] = f"Steghide (Mot de passe: '{w}') (CRITIQUE)"
                             suspicion_score += 10

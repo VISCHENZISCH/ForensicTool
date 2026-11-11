@@ -29,7 +29,7 @@ SYSTEM_PREFIXES = (
     "/etc/pam.d/",
     "/etc/ld.so",
 )
-TEMP_PREFIXES = ("/tmp/", "/var/tmp/", "/dev/shm/")
+TEMP_PREFIXES = ("/tmp/", "/var/tmp/", "/dev/shm/")  # nosec B108 - dossiers recherchés dans la preuve, rien n'y est écrit
 # Emplacements où un fichier non déclaré par un paquet est suspect (hors fichiers générés : /boot, ld.so.cache...)
 PACKAGE_PREFIXES = ("/usr/", "/etc/systemd/", "/etc/cron", "/etc/profile.d/", "/etc/pam.d/", "/etc/sudoers.d/")
 

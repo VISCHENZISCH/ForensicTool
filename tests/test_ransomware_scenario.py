@@ -243,3 +243,20 @@ def test_multiline_values_keep_their_lines(capsys):
     ui.kv("Clé", "première\nseconde")
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 2 and "première" in lines[0] and "seconde" in lines[1]
+
+
+_ENTITY_BOMB = '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "{}">]><{root}>&a;</{root}>'.format("A" * 100, root="{root}")
+
+
+def test_nmap_report_with_entities_is_refused(tmp_path):
+    from forensic_analyzer.analyzers.nmap import NmapAnalyzer
+
+    report = tmp_path / "nmap.xml"
+    report.write_text(_ENTITY_BOMB.format(root="nmaprun"))
+    assert NmapAnalyzer().analyze(str(report)) is None  # entité refusée par defusedxml, pas développée
+
+
+def test_evtx_event_with_entities_is_refused():
+    from forensic_analyzer.analyzers.evtx.analyzer import _parse_evtx_event
+
+    assert _parse_evtx_event(_ENTITY_BOMB.format(root="Event")) is None

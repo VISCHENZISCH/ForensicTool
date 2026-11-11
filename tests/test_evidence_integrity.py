@@ -20,7 +20,7 @@ def test_finding_injects_hashes(tmp_path):
     finding = FindingModel(type="test", file=str(f))
 
     assert finding.metadata["SHA-256"] == hashlib.sha256(content).hexdigest()
-    assert finding.metadata["MD5"] == hashlib.md5(content).hexdigest()
+    assert finding.metadata["MD5"] == hashlib.md5(content, usedforsecurity=False).hexdigest()
 
 
 def test_entropy_bounds():

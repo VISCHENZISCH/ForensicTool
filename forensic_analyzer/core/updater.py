@@ -3,7 +3,7 @@ Module de mise à jour (Updater) pour Forensic Analyzer.
 """
 
 import os
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 
 from forensic_analyzer.output import ui
 
@@ -18,7 +18,8 @@ _ALLOW_UNSIGNED = "FORENSIC_UPDATE_ALLOW_UNSIGNED"
 def _git(*args: str) -> subprocess.CompletedProcess:
     # GIT_TERMINAL_PROMPT=0 : un dépôt qui demande un identifiant échoue au lieu d'attendre une saisie invisible
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
-    return subprocess.run(["git", *args], capture_output=True, text=True, cwd=_REPO, env=env, timeout=60)
+    # git résolu par le PATH, liste d'arguments sans shell
+    return subprocess.run(["git", *args], capture_output=True, text=True, cwd=_REPO, env=env, timeout=60)  # nosec B603 B607
 
 
 class Updater:

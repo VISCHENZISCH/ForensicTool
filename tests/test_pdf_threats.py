@@ -70,7 +70,7 @@ def test_encrypted_pdf_is_reported_as_partial_not_clean(tmp_path):
         writer.add_blank_page(200, 200)
         writer.add_js("app.launchURL('https://evil.example.com/x');")
         writer.add_metadata({"/Author": "Mallory"})
-        writer.encrypt(user_password=password, owner_password="owner", algorithm="RC4-128")
+        writer.encrypt(user_password=password, owner_password="owner", algorithm="RC4-128")  # nosec B106
         path = tmp_path / f"enc{bool(password)}.pdf"
         writer.write(path)
         score, meta, extra = _analyze(str(path))

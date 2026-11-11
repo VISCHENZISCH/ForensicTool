@@ -11,7 +11,7 @@ import json
 import os
 import re
 import struct
-import subprocess
+import subprocess  # nosec B404 - outils externes appelés sans shell
 
 from forensic_analyzer.utils.logger import get_logger
 
@@ -106,7 +106,7 @@ def parse_journal(journal_dir: str, units_of_interest: set[str] | None = None) -
     """
     cmd = ["journalctl", f"--directory={journal_dir}", "-o", "json", "--no-pager"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # nosec B603 - liste d'arguments, sans shell
     except FileNotFoundError:
         log.warning("journalctl introuvable : journal systemd non analysé.")
         return {}

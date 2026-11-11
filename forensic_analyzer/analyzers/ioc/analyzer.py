@@ -61,7 +61,7 @@ _PRIVATE_RANGES = (
     "172.31.",
     "192.168.",
     "127.",
-    "0.0.0.0",
+    "0.0.0.0",  # nosec B104 - constante de détection, aucun socket ouvert
     "255.255.255.255",
     "169.254.",
 )
@@ -149,8 +149,8 @@ def extract_iocs(data: str | bytes, include_private_ips: bool = False) -> dict:
 
 def compute_file_hashes(path: str) -> dict:
     """Calcule les hashes MD5, SHA1, SHA256 d'un fichier."""
-    md5 = hashlib.md5()
-    sha1 = hashlib.sha1()
+    md5 = hashlib.md5(usedforsecurity=False)
+    sha1 = hashlib.sha1(usedforsecurity=False)
     sha256 = hashlib.sha256()
 
     with open(path, "rb") as f:

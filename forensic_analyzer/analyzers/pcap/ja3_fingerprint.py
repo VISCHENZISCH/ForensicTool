@@ -12,7 +12,7 @@ def get_ja3_fingerprints(packets) -> dict:
         if not hasattr(packets, "filename") or not packets.filename:
             return {"ja3": {}, "sni": []}
 
-        import subprocess
+        import subprocess  # nosec B404 - outils externes appelés sans shell
         import json
 
         # On demande JA3 et SNI
@@ -38,7 +38,7 @@ def get_ja3_fingerprints(packets) -> dict:
             "tls.handshake.extensions_server_name",
         ]
 
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # nosec B603 - liste d'arguments, sans shell
         if res.returncode != 0:
             log.warning("tshark a échoué (JA3) : %s", res.stderr.strip()[:200])
         if res.returncode == 0 and res.stdout.strip():

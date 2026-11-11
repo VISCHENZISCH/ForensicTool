@@ -25,11 +25,11 @@ _IP = re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?
 _URL = re.compile(r"https?://[^\s\"'<>]+")
 # Chemins absolus sous un répertoire système ou temporaire
 _SYSTEM_PATH = re.compile(r"(?<![\w.])/(?:tmp|var|dev/shm|usr|etc|lib|lib64|opt)/[\w./%-]+")
-_TEMP_PREFIXES = ("/tmp/", "/var/tmp/", "/dev/shm/")
+_TEMP_PREFIXES = ("/tmp/", "/var/tmp/", "/dev/shm/")  # nosec B108 - dossiers recherchés dans la preuve, rien n'y est écrit
 # Sockets et verrous X11 standards dans /tmp
 _BENIGN_TEMP = re.compile(r"^\.(?:X(?:%d|\d+)-lock|X11-unix|ICE-unix|XIM-unix|font-unix|Test-unix)$")
 # Versions de bibliothèques et adresses non routables fréquentes dans les binaires légitimes
-_BENIGN_IPS = {"0.0.0.0", "127.0.0.1", "255.255.255.255"}
+_BENIGN_IPS = {"0.0.0.0", "127.0.0.1", "255.255.255.255"}  # nosec B104 - constante de détection, aucun socket ouvert
 # Domaines/URL courants dans les binaires légitimes (licences, code source, doc)
 _BENIGN_URL_DOMAINS = {
     "github.com",

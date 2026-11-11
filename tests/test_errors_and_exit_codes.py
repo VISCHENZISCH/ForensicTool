@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
+import subprocess  # nosec B404
 import sys
 
 from forensic_analyzer.core.base import BaseAnalyzer
@@ -53,7 +53,7 @@ def test_export_path_with_folder_is_respected(tmp_path, monkeypatch):
 
 
 def _cli(tmp_path, *args):
-    return subprocess.run(
+    return subprocess.run(  # nosec B603
         [sys.executable, "-m", "forensic_analyzer.cli.main", *args, "--export-dir", str(tmp_path / "out")],
         capture_output=True,
         text=True,

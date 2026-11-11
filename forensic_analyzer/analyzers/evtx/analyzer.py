@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
+
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as ET  # XML issu du journal, donc de la preuve : ni entités ni DTD externes
 
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
@@ -100,7 +102,7 @@ def _parse_evtx_event(xml_str: str) -> dict | None:
             "description": _SECURITY_EVENTS.get(event_id, "Autre"),
             "data": event_data,
         }
-    except ET.ParseError:
+    except (ET.ParseError, DefusedXmlException):
         return None
 
 

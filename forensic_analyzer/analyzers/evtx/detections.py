@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 SYSMON = "Microsoft-Windows-Sysmon"
 MAX_ALERTS = 500
 ADMIN_GROUPS = {"S-1-5-32-544", "S-1-5-32-555"}  # Administrateurs, Utilisateurs du Bureau à distance
-_LOCAL_IPS = {"", "-", "::1", "127.0.0.1", "0.0.0.0"}
+_LOCAL_IPS = {"", "-", "::1", "127.0.0.1", "0.0.0.0"}  # nosec B104 - constante de détection, aucun socket ouvert
 
 BRUTE_FORCE_THRESHOLD = 10  # échecs depuis une même source
 SPRAY_USERS_THRESHOLD = 5  # comptes distincts visés depuis une même source

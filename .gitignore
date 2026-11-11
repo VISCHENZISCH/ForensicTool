@@ -117,3 +117,7 @@ INTEGRATION.md
 # ... sauf leurs caches (la règle ci-dessus les ré-inclurait)
 __pycache__/
 *.py[cod]
+.securepipeline/
+docs/DOCUMENTATION.md
+docs/ForensicAnalyzer-CDCF.pdf
+docs/ForensicAnalyzer-CDCT.pdf
