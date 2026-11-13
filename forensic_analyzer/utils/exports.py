@@ -6,6 +6,8 @@ Le dossier n'est créé qu'à la première écriture.
 
 from __future__ import annotations
 
+import hashlib
+
 import datetime
 import os
 import re
@@ -37,3 +39,26 @@ def new_case_dir(label: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9]+", "-", name.encode("ascii", "ignore").decode()).strip("-").upper()
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     return set_export_root(os.path.join("export", f"FT-{stamp}-{slug or 'ANALYSE'}"))
+
+
+MANIFEST_NAME = "exports.sha256"
+
+
+def _sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_export_manifest(paths: list[str]) -> dict:
+    """
+    Empreintes SHA-256 des rapports produits (format sha256sum, vérifiable par `sha256sum -c`) :
+    un rapport remis à un tiers ou versé au dossier peut être prouvé intact.
+    """
+    files = [{"path": os.path.abspath(p), "sha256": _sha256(p), "size": os.path.getsize(p)} for p in paths if os.path.isfile(p)]
+    target = output_path(MANIFEST_NAME)
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.writelines(f"{f['sha256']}  {f['path']}\n" for f in files)
+    return {"path": os.path.abspath(target), "files": files}

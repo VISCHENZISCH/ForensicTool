@@ -118,7 +118,9 @@ def build_timeline(report: ReportModel) -> list[dict]:
                         "details": str(evt.get("data", {}))[:200],
                     }
                 )
-            for det in finding.extra.get("detections", []):
+            # L'evtx émet déjà ses détections en timeline_events : pas de doublon
+            detections = [] if finding.extra.get("timeline_events") else finding.extra.get("detections", [])
+            for det in detections:
                 if det.get("timestamp"):
                     events.append(
                         {

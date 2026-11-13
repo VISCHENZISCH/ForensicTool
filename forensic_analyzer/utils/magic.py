@@ -17,7 +17,7 @@ def get_file_magic_extension(filepath: str) -> str:
     return _detect(filepath, st.st_size, st.st_mtime_ns)
 
 
-@lru_cache(maxsize=4096)
+@lru_cache(maxsize=1 << 16)  # au-delà, chaque analyzer relirait l'en-tête des gros dossiers
 def _detect(filepath: str, _size: int, _mtime_ns: int) -> str:
     try:
         with open(filepath, "rb") as f:

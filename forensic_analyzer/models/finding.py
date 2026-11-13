@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from forensic_analyzer.utils.logger import get_logger
-from forensic_analyzer.utils.version import tool_identity
+from forensic_analyzer.utils.version import analysis_host, analysis_user, tool_identity
 
 log = get_logger("finding")
 
@@ -30,7 +30,9 @@ def compute_hashes(filepath: str) -> dict[str, str]:
     return dict(_hash_file(filepath, st.st_size, st.st_mtime_ns))
 
 
-@lru_cache(maxsize=1024)
+# Un cache trop petit fait rehacher chaque preuve (collecte, constat, revérification) au-delà
+# de sa taille : une entrée ne pèse que quelques centaines d'octets
+@lru_cache(maxsize=1 << 16)
 def _hash_file(filepath: str, _size: int, _mtime_ns: int) -> tuple[tuple[str, str], ...]:
     sha256 = hashlib.sha256()
     # MD5 identifie la preuve (convention des outils DFIR) ; l'intégrité repose sur SHA-256
@@ -151,6 +153,15 @@ class ReportModel(BaseModel):
     scan_notes: list[str] = Field(default_factory=list)  # archives extraites ou refusées, etc.
     analysis_errors: list[AnalysisError] = Field(default_factory=list)
     evidence: list[EvidenceRecord] = Field(default_factory=list)
+    # Chaîne de possession : qui a analysé quoi, où, quand et avec quelle commande
+    case_id: str | None = None  # identifiant d'affaire (ticket SOC, n° de procédure)
+    examiner: str | None = None
+    organization: str | None = None
+    analysis_host: str = Field(default_factory=analysis_host)
+    analysis_user: str | None = Field(default_factory=analysis_user)
+    started_at: str | None = None  # ISO UTC
+    finished_at: str | None = None  # ISO UTC
+    command_line: list[str] = Field(default_factory=list)  # options sensibles masquées
 
     @classmethod
     def from_findings(
@@ -160,6 +171,7 @@ class ReportModel(BaseModel):
         scan_notes: list[str] | None = None,
         analysis_errors: list[AnalysisError] | None = None,
         evidence: list[EvidenceRecord] | None = None,
+        **custody: Any,
     ) -> "ReportModel":
         return cls(
             total=len(findings),
@@ -168,4 +180,5 @@ class ReportModel(BaseModel):
             scan_notes=scan_notes or [],
             analysis_errors=analysis_errors or [],
             evidence=evidence or [],
+            **custody,  # champs de chaîne de possession (case_id, examiner, ...)
         )

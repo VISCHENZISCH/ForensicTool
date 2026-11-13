@@ -6,17 +6,21 @@ utilisent les destinations reconstruites par désassemblage (IP + port).
 
 from __future__ import annotations
 
+import csv
 import datetime
+import io
 import ipaddress
 import json
 import os
 import re
 import uuid
 
+from forensic_analyzer.core import assessment
 from forensic_analyzer.core import iocs as ioc_mod
 from forensic_analyzer.core import mitre
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.utils.logger import get_logger
+from forensic_analyzer.utils.spreadsheet import neutralize_formula
 
 logger = get_logger("forensic.rules")
 
@@ -68,6 +72,8 @@ class DefenseRulesGenerator:
             "stix": self._write(
                 output_dir, "stix_bundle.json", json.dumps(self.stix(all_iocs, findings, malicious), indent=2, ensure_ascii=False)
             ),
+            # Même tableau que la section Indicateurs du rapport (confiance, première / dernière vue)
+            "iocs": self._write(output_dir, "iocs.csv", ioc_csv(report, all_iocs)),
         }
         for name, content in self.sigma(all_iocs, findings).items():
             outputs[f"sigma/{name}"] = self._write(os.path.join(output_dir, "sigma"), name, content)
@@ -381,7 +387,7 @@ class DefenseRulesGenerator:
                 for m in malware_objs:
                     sdo("relationship", relationship_type="indicates", source_ref=ind["id"], target_ref=m["id"])
 
-        techniques = {t["id"] for f in findings for t in f.extra.get("mitre", []) if isinstance(t, dict)}
+        techniques = {tid for f in findings for tid in assessment.techniques_of(f)}
         for t in mitre.describe(techniques):
             ap = sdo(
                 "attack-pattern",
@@ -403,9 +409,25 @@ _LINUX_TYPES = {"linux_artifacts", "elf_analysis", "memory", "disk"}
 _WINDOWS_TYPES = {"malware_analysis", "evtx", "registry", "prefetch", "lnk_shortcut", "chromium_artifacts"}
 
 
+IOC_CSV_FIELDS = ("type", "valeur", "confiance", "sources", "premiere_vue", "derniere_vue", "contexte")
+
+
+def ioc_csv(report: ReportModel, all_iocs: list[ioc_mod.IOC]) -> str:
+    """Indicateurs en CSV (tableur, SIEM) ; cellules neutralisées contre l'injection de formules."""
+    if not all_iocs:
+        return ""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(IOC_CSV_FIELDS)
+    for r in assessment.ioc_rows(report, all_iocs):
+        row = (r.kind, r.value, r.confidence, "+".join(r.sources), r.first_seen, r.last_seen, r.context)
+        writer.writerow([neutralize_formula(v) for v in row])
+    return buf.getvalue()
+
+
 def _tags(findings: list[FindingModel], types: set[str]) -> list[str]:
     """Tags ATT&CK Sigma issus des résultats d'une plateforme."""
-    ids = {t["id"] for f in findings if f.type in types for t in f.extra.get("mitre", []) if isinstance(t, dict)}
+    ids = {tid for f in findings if f.type in types for tid in assessment.techniques_of(f)}
     return [f"attack.{t.lower()}" for t in sorted(ids)]
 
 

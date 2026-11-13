@@ -83,7 +83,7 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
             fname = fname[:40] + "..." + fname[-7:]
 
         results: list[FindingModel] = []
-        for analyzer in registry.get_all_for(path):
+        for analyzer in routes.get(path) or registry.get_all_for(path):
             log.info("[%s] → %s", analyzer.name.upper(), fname)
             try:
                 if analyzer.heavy:
@@ -104,12 +104,13 @@ def run_pipeline(paths: list[str], registry: AnalyzerRegistry, **analyze_kwargs)
     # Identifier les fichiers pris en charge vs ignorés
     skipped: list[str] = []
     supported_paths: list[str] = []
+    routes: dict[str, list[BaseAnalyzer]] = {}  # choix des modules fait une seule fois par fichier
     for path in paths:
         if not os.path.isfile(path):
             log.warning("Fichier introuvable, ignoré : %s", path)
             skipped.append(path)
             continue
-        analyzers = registry.get_all_for(path)
+        analyzers = routes[path] = registry.get_all_for(path)
         if not analyzers:
             log.debug("Fichier ignoré (aucun module adapté) : %s", os.path.basename(path))
             skipped.append(path)

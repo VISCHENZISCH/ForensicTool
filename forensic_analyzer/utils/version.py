@@ -6,6 +6,9 @@ jamais faire exécuter quoi que ce soit (voir core/updater.py).
 
 from __future__ import annotations
 
+import getpass
+import platform
+
 import os
 from functools import lru_cache
 
@@ -41,3 +44,16 @@ def git_commit() -> str | None:
 def tool_identity() -> str:
     commit = git_commit()
     return f"Forensic Analyzer {__version__}" + (f" (commit {commit})" if commit else "")
+
+
+def analysis_host() -> str:
+    """Machine d'analyse (chaîne de possession) : nom réseau local, jamais résolu en ligne."""
+    return platform.node() or "inconnu"
+
+
+def analysis_user() -> str | None:
+    """Compte système qui a lancé l'analyse ; None si l'environnement ne le donne pas (conteneur)."""
+    try:
+        return getpass.getuser()
+    except (OSError, KeyError):
+        return None

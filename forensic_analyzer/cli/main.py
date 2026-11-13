@@ -7,12 +7,29 @@ Couche CLI pour Forensic Analyzer.
 
 import argparse
 import os
+import sys
 
 from forensic_analyzer.utils.version import tool_identity
+from datetime import UTC
+
+# Codes de sortie (contrat pour l'orchestration : SOAR, cron, CI)
+EXIT_OK = 0  # rien à signaler
+EXIT_INCOMPLETE = 1  # analyse, vérification ou export incomplet
+EXIT_ALTERED = 2  # preuve altérée
+EXIT_THREAT = 3  # menace de gravité élevée ou critique
+EXIT_USAGE = 4  # option ou fichier de configuration invalide : rien n'a été analysé
+
+
+class _Parser(argparse.ArgumentParser):
+    """argparse sort en 2 sur une option invalide : 2 signifie ici « preuve altérée »."""
+
+    def error(self, message: str):  # type: ignore[override]
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_USAGE, f"{self.prog} : erreur : {message}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = _Parser(
         prog="forensic-analyzer",
         description="Forensic Analyzer -- Suite forensique modulaire",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -28,9 +45,11 @@ Exemples :
   python main.py --pcap capture.pcap --export-json rapport.json
   python main.py --stego image.png
   python main.py --yara rules/ --scan ./samples
+  python main.py --scan ./preuves --case-id INC-2026-042 --examiner j.dupont \\
+      --quiet --log-json run.jsonl --export-ecs constats.ndjson --export-misp iocs.misp.json
 
-Code de sortie : 0 rien à signaler, 1 analyse ou vérification incomplète,
-2 preuve altérée, 3 menace de gravité élevée ou critique.
+Code de sortie : 0 rien à signaler, 1 analyse, vérification ou export incomplet,
+2 preuve altérée, 3 menace de gravité élevée ou critique, 4 option ou configuration invalide.
         """,
     )
 
@@ -107,12 +126,91 @@ Code de sortie : 0 rien à signaler, 1 analyse ou vérification incomplète,
         "--export-rules", action="store_true", help="Règles YARA, Suricata, Sigma et bundle STIX 2.1 dans export/rules/"
     )
     g5.add_argument("--export-dir", metavar="DOSSIER", help="Dossier de destination pour les exports (défaut : export/)")
+    g5.add_argument("--export-ecs", metavar="NDJSON", help="Constats et chronologie au format Elastic Common Schema (SIEM)")
+    g5.add_argument("--export-misp", metavar="JSON", help="Événement MISP (indicateurs), fichier à importer, sans envoi réseau")
 
+    _add_enterprise_options(p)
     return p
 
 
-def cli_dispatch():
-    """Mode CLI avec argparse."""
+def _add_enterprise_options(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("Entreprise : traçabilité et automatisation")
+    g.add_argument(
+        "--case-id", metavar="ID", help="Identifiant d'affaire (ticket SOC, n° de procédure), inscrit dans les rapports"
+    )
+    g.add_argument("--examiner", metavar="NOM", help="Analyste responsable, inscrit dans les rapports")
+    g.add_argument("--organization", metavar="NOM", help="Organisation (SOC, CERT, cabinet), inscrite dans les rapports")
+    g.add_argument(
+        "--config", metavar="TOML", help="Valeurs par défaut d'entreprise (section [defaults]) ; aussi $FORENSIC_ANALYZER_CONFIG"
+    )
+    g.add_argument("--log-json", metavar="JSONL", help="Journal d'exécution structuré (une ligne JSON par événement, en ajout)")
+    g.add_argument("--quiet", action="store_true", help="Mode batch : pas d'affichage du rapport, une ligne de synthèse")
+
+
+def _utc_now() -> str:
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def parse_arguments(parser: argparse.ArgumentParser, argv: list[str] | None = None) -> argparse.Namespace:
+    """Options de la ligne de commande, complétées par le fichier de configuration (qui ne les écrase jamais)."""
+    from forensic_analyzer.utils.config import ConfigError, config_path, load_config
+
+    args = parser.parse_args(argv)
+    path = config_path(args.config)
+    if path:
+        try:
+            parser.set_defaults(**load_config(path))
+        except ConfigError as exc:
+            parser.exit(EXIT_USAGE, f"{parser.prog} : configuration : {exc}\n")
+        args = parser.parse_args(argv)  # les valeurs de la ligne de commande l'emportent
+    return args
+
+
+def custody_fields(args: argparse.Namespace, argv: list[str] | None = None) -> dict:
+    """Chaîne de possession inscrite dans le rapport : affaire, analyste, commande exacte (secrets masqués)."""
+    from forensic_analyzer.utils.logger import redact
+
+    words = sys.argv[1:] if argv is None else argv
+    return {
+        "case_id": args.case_id,
+        "examiner": args.examiner,
+        "organization": args.organization,
+        "started_at": _utc_now(),
+        "command_line": ["forensic-analyzer", *(redact(w) for w in words)],
+    }
+
+
+def cli_dispatch(argv: list[str] | None = None):
+    """Mode CLI : options, journal d'exécution JSON (--log-json), puis analyse."""
+    import logging
+
+    from forensic_analyzer.utils.logger import disable_json_log, enable_json_log, log_event, set_console_level
+    from forensic_analyzer.utils.version import analysis_host
+
+    parser = build_parser()
+    args = parse_arguments(parser, argv)
+    # Preuve introuvable : sans cela, l'analyse « vide » sortait en 0 (rien à signaler)
+    if args.scan and not os.path.exists(args.scan):
+        parser.exit(EXIT_USAGE, f"{parser.prog} : preuve introuvable : {args.scan}\n")
+    custody = custody_fields(args, argv)
+    journal = enable_json_log(args.log_json) if args.log_json else None
+    if args.quiet:
+        set_console_level(logging.WARNING)
+    log_event("run_start", "Début de l'analyse", tool=tool_identity(), host=analysis_host(), **custody)
+    try:
+        return _dispatch(args, custody)
+    except BaseException as exc:
+        log_event("run_failed", f"Analyse interrompue : {type(exc).__name__}", level=logging.ERROR, error=str(exc))
+        raise
+    finally:
+        if journal:
+            disable_json_log(journal)
+
+
+def _dispatch(args: argparse.Namespace, custody: dict):
+    """Analyse et exports."""
     # Imports ici : le menu interactif charge ses modules lui-même, à l'écran de démarrage
     from forensic_analyzer.analyzers.carving import CarvingAnalyzer
     from forensic_analyzer.analyzers.chromium import ChromiumAnalyzer
@@ -155,9 +253,6 @@ def cli_dispatch():
     from forensic_analyzer.utils.exports import export_root, output_path
     from forensic_analyzer.output import ui
 
-    parser = build_parser()
-    args = parser.parse_args()
-
     # Un sous-dossier par analyse dans export/ (ou --export-dir), pour ne pas mélanger les affaires
     from forensic_analyzer.utils.exports import new_case_dir, set_export_root
 
@@ -189,7 +284,7 @@ def cli_dispatch():
             ),
             "analyse",
         )
-        new_case_dir(target)
+        new_case_dir(args.case_id.replace("/", "-") if args.case_id else target)
 
     if getattr(args, "update", False):
         from forensic_analyzer.core.updater import Updater
@@ -316,22 +411,30 @@ def cli_dispatch():
     if correlation:
         findings.append(correlation)
     records = recheck([r for r in evidence.values() if r])
-    context = dict(skipped_files=skipped, scan_notes=notes, analysis_errors=errors, evidence=records)
+    context: dict = {"skipped_files": skipped, "scan_notes": notes, "analysis_errors": errors, "evidence": records}
+    context.update(custody, finished_at=_utc_now())
     report = ReportModel.from_findings(findings, **context)
     tl = TimelineAnalyzer().build_from_report(report) if findings else None
     if tl and tl.extra.get("events"):
         findings.append(tl)
         report = ReportModel.from_findings(findings, **context)
 
-    renderer.render_report(report)
+    if not args.quiet:
+        renderer.render_report(report)
+
+    from forensic_analyzer.output.ecs_exporter import ECSExporter
+    from forensic_analyzer.output.misp_exporter import MISPExporter
 
     export_failed = False
+    written: list[str] = []
     for wanted, exporter in (
         (args.export_json, JSONExporter),
         (args.export_html, HTMLExporter),
         (args.export_csv, CSVExporter),
         (args.export_pdf, PDFExporter),
         (args.export_timesketch, TimesketchExporter),
+        (args.export_ecs, ECSExporter),
+        (args.export_misp, MISPExporter),
     ):
         if not wanted:
             continue
@@ -339,13 +442,15 @@ def cli_dispatch():
             ui.warning(f"Aucun résultat : {wanted} n'a pas été écrit.")
             continue
         try:
-            ui.success(f"Exporté : {exporter().export(report, wanted)}")
+            written.append(exporter().export(report, wanted))
+            ui.success(f"Exporté : {written[-1]}")
         except Exception as exc:  # un exporteur en échec n'empêche pas les suivants
             ui.error(f"Export {wanted} impossible : {type(exc).__name__} : {exc}")
             export_failed = True
     try:
         if args.export_graph and correlation:
-            render_correlation_graph(correlation, output_path(args.export_graph))
+            written.append(output_path(args.export_graph))
+            render_correlation_graph(correlation, written[-1])
         if getattr(args, "export_rules", False) and report.findings:
             from forensic_analyzer.output.rules_generator import DefenseRulesGenerator
 
@@ -354,7 +459,35 @@ def cli_dispatch():
         ui.error(f"Export du graphe ou des règles impossible : {type(exc).__name__} : {exc}")
         export_failed = True
 
-    return exit_code(report, export_failed)
+    code = exit_code(report, export_failed)
+    _record_run(report, written, code, args.quiet)
+    return code
+
+
+def _record_run(report, written: list[str], code: int, quiet: bool) -> None:
+    """Empreintes des exports produits, journal d'exécution et synthèse batch."""
+    from collections import Counter
+
+    from forensic_analyzer.utils.exports import write_export_manifest
+    from forensic_analyzer.utils.logger import log_event
+
+    manifest = write_export_manifest(written) if written else None
+    for err in report.analysis_errors:
+        log_event("analysis_error", str(err), module=err.module, file=err.file, error=err.error)
+    severities = Counter(f.severity or "info" for f in report.findings)
+    log_event(
+        "run_end",
+        "Fin de l'analyse",
+        exit_code=code,
+        findings=report.total,
+        severities=dict(severities),
+        evidence=[{"file": r.file, "sha256": r.sha256, "changed": r.changed_during_analysis} for r in report.evidence],
+        exports=manifest["files"] if manifest else [],
+        export_manifest=manifest["path"] if manifest else None,
+    )
+    if quiet:
+        alerts = severities["élevé"] + severities["critique"]
+        print(f"{report.total} constat(s), {alerts} de gravité élevée ou critique, code de sortie {code}", file=sys.stderr)
 
 
 def exit_code(report, export_failed: bool = False) -> int:
@@ -375,8 +508,6 @@ def exit_code(report, export_failed: bool = False) -> int:
 
 def main():
     """Point d'entrée : menu interactif par défaut, CLI si arguments."""
-    import sys
-
     from forensic_analyzer.utils.margin import MarginStdout
 
     sys.stdout = MarginStdout(sys.stdout, margin=4)

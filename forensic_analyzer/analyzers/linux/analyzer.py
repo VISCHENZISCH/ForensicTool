@@ -8,7 +8,8 @@ import os
 import re
 
 from forensic_analyzer.analyzers.linux import bodyfile as bf
-from forensic_analyzer.analyzers.linux import logs, packages, persistence
+from forensic_analyzer.analyzers.linux import accounts, logs, packages, persistence
+from forensic_analyzer.analyzers.linux import commands as shell_commands
 from forensic_analyzer.core import mitre
 from forensic_analyzer.core.base import BaseAnalyzer
 from forensic_analyzer.models.finding import FindingModel, severity_if_alerts
@@ -89,45 +90,51 @@ _SUSPICIOUS_CMDS = [
 ]
 
 
-def parse_bash_history(path: str) -> dict:
-    """Parse un fichier bash_history et détecte les commandes suspectes."""
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+_MAX_HISTORY_BYTES = 16 * 1024 * 1024  # un historique réel tient en quelques Mo ; au-delà, preuve piégée
+_ZSH_EXTENDED = re.compile(r"^: (\d{9,11}):\d+;(.*)$")  # « : 1700000000:0;commande » (EXTENDED_HISTORY)
 
-        commands = []
+
+def _history_entries(path: str) -> tuple[list[tuple[str, str]], bool]:
+    """(horodatage ISO ou "", commande) d'un historique bash (#epoch) ou zsh étendu ; tronqué ?"""
+    with open(path, "rb") as f:
+        raw = f.read(_MAX_HISTORY_BYTES + 1)
+    truncated = len(raw) > _MAX_HISTORY_BYTES
+    entries: list[tuple[str, str]] = []
+    last_ts = ""
+    for line in raw[:_MAX_HISTORY_BYTES].decode("utf-8", "replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#") and line[1:].isdigit():
+            last_ts = _epoch_iso(line[1:])
+            continue
+        zsh = _ZSH_EXTENDED.match(line)
+        if zsh:
+            entries.append((_epoch_iso(zsh.group(1)), zsh.group(2)))
+            continue
+        entries.append((last_ts, line))
         last_ts = ""
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith("#") and line[1:].isdigit():
-                try:
-                    last_ts = datetime.datetime.fromtimestamp(int(line[1:]), tz=datetime.timezone.utc).isoformat()
-                except Exception:
-                    pass
-                continue
+    return entries, truncated
 
-            if last_ts:
-                commands.append(f"[{last_ts}] {line}")
-                last_ts = ""
-            else:
-                commands.append(line)
-        suspicious = []
 
+def _epoch_iso(value: str) -> str:
+    try:
+        return datetime.datetime.fromtimestamp(int(value), tz=datetime.timezone.utc).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return ""
+
+
+def parse_bash_history(path: str) -> dict:
+    """Parse un historique shell (bash, zsh) et classe les commandes par comportement offensif."""
+    try:
+        entries, truncated = _history_entries(path)
+        commands = [f"[{ts}] {cmd}" if ts else cmd for ts, cmd in entries]
         compiled = [(re.compile(p, re.IGNORECASE), p) for p in _SUSPICIOUS_CMDS]
-
+        suspicious = []
         for i, cmd in enumerate(commands):
-            for pattern, raw_pattern in compiled:
-                if pattern.search(cmd):
-                    suspicious.append(
-                        {
-                            "line": i + 1,
-                            "command": cmd[:200],
-                            "pattern": raw_pattern,
-                        }
-                    )
-                    break
+            raw_pattern = next((raw for pattern, raw in compiled if pattern.search(cmd)), None)
+            if raw_pattern:
+                suspicious.append({"line": i + 1, "command": cmd[:200], "pattern": raw_pattern})
 
         cleartext = []
         for cmd in commands:
@@ -143,6 +150,8 @@ def parse_bash_history(path: str) -> dict:
             "suspicious_commands": len(suspicious),
             "suspicious": suspicious[:100],
             "last_commands": commands[-20:] if commands else [],
+            "behaviors": shell_commands.analyze_commands(entries, "shell_history", path),
+            "truncated": truncated,
         }
     except Exception as exc:
         return {"error": str(exc)}
@@ -591,6 +600,33 @@ def _is_cron_file(path: str) -> bool:
     return basename in ("crontab", "anacrontab") or parent in _CRON_DIRS
 
 
+_DUPLICATE_ISSUES = {"Comptes UID 0 supplémentaires"}  # déjà signalé par « Comptes UID 0 (root) »
+
+
+def _apply_detections(meta: dict, extra: dict, behaviors: list[dict], account_check: dict | None) -> None:
+    """Comportements offensifs des historiques et anomalies de comptes : alertes, MITRE et chronologie."""
+    techniques = {t["id"] for t in extra.get("mitre", [])}
+    events = list(extra.get("timeline_events", []))
+    for found in behaviors:
+        for label, examples in found["alerts"].items():
+            key = f"[ALERTE] {label}"
+            shown = ([meta[key]] if key in meta else []) + examples[:3]
+            meta[key] = " ; ".join(dict.fromkeys(shown))
+        techniques.update(found["mitre"])
+        events.extend(found["events"])
+    for issue in (account_check or {}).get("issues", []):
+        if issue["label"] in _DUPLICATE_ISSUES:
+            continue
+        meta[f"{'[ALERTE]' if issue['alert'] else '[ATTENTION]'} {issue['label']}"] = issue["detail"]
+        techniques.add(issue["mitre"])
+    events.extend((account_check or {}).get("events", []))
+    if techniques:
+        meta["MITRE ATT&CK"] = mitre.summary(techniques)
+        extra["mitre"] = mitre.describe(techniques)
+    if events:
+        extra["timeline_events"] = sorted(events, key=lambda e: e["timestamp"])
+
+
 class LinuxArtifactsAnalyzer(BaseAnalyzer):
     """Analyse des artefacts forensiques Linux."""
 
@@ -640,6 +676,7 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                     if secrets:
                         meta["[ALERTE] Mots de passe en clair"] = ", ".join(secrets)
                     extra["bash_history"] = result
+                    _apply_detections(meta, extra, [result["behaviors"]], None)
 
                 elif "auth.log" in basename or "secure" in basename:
                     result = parse_auth_log(path)
@@ -730,6 +767,8 @@ class LinuxArtifactsAnalyzer(BaseAnalyzer):
                 extra["suid_sgid"] = suid
 
                 _analyze_incident_artifacts(path, bodyfile, meta, extra, entries, file_hasher)
+                behaviors = [h["behaviors"] for h in all_history.values() if h.get("behaviors")]
+                _apply_detections(meta, extra, behaviors, accounts.analyze_accounts(path))
 
             return FindingModel(
                 type="linux_artifacts",

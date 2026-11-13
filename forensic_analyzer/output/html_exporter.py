@@ -14,8 +14,8 @@ import os
 from collections import defaultdict
 from functools import lru_cache
 
+from forensic_analyzer.core import assessment as ax
 from forensic_analyzer.core import iocs as ioc_mod
-from forensic_analyzer.core import mitre
 from forensic_analyzer.models.finding import FindingModel, ReportModel
 from forensic_analyzer.output.ui import MODULE_NAMES
 from forensic_analyzer.utils.exports import export_root, output_path as resolve_output
@@ -60,8 +60,11 @@ _CATEGORIES = [
     ),
 ]
 _SECTIONS = [
-    ("synthese", "Synthèse"),
-    ("perimetre", "Périmètre et méthode"),
+    ("direction", "Synthèse pour la direction"),
+    ("synthese", "Synthèse technique"),
+    ("attack", "Matrice MITRE ATT&CK"),
+    ("etapes", "Prochaines étapes d'enquête"),
+    ("perimetre", "Périmètre et chaîne de possession"),
     ("chronologie", "Chronologie consolidée"),
     ("indicateurs", "Indicateurs de compromission"),
     ("constats", "Constats détaillés"),
@@ -71,6 +74,12 @@ _MAX_ROWS = 300  # lignes par tableau de données détaillées ; le reste est si
 _PRINT_ROWS = 25  # au-delà, lignes masquées à l'impression (PDF) avec mention du reste
 _SYNTH_FACTS = 12  # faits de la chaîne d'attaque repris en synthèse (la chronologie les a tous)
 _SYNTH_IOCS = 10
+_SYNTH_GRADED = 100  # constats repris en synthèse par gravité ; tous figurent dans les constats détaillés
+_SYNTH_ALERTS = 400  # alertes reprises en synthèse (rapport de 10 000 constats : lisible et léger)
+_MAX_IOCS = 2000  # indicateurs dans le rapport ; l'export iocs.csv et le JSON les ont tous
+_PRINT_IOCS = 150
+_TOC_FINDINGS = 150  # entrées du sommaire latéral pour les constats
+_PRIORITE = {1: ("P1", "Immédiat"), 2: ("P2", "Court terme"), 3: ("P3", "Suivi")}
 # Données déjà restituées ailleurs (chronologie, graphe) : pas de doublon dans les constats
 _SKIP_KEYS = {"events", "facts", "graph", "timeline_events", "timeline", "chronology", "headline"}
 
@@ -214,24 +223,14 @@ def _h2(sid: str) -> str:
 # ── Page de garde ────────────────────────────────────────────────────────────
 
 
-def _verdict(report: ReportModel) -> tuple[str, str]:
-    """(classe de la note, phrase de verdict) à partir des champs severity / incomplete."""
-    altered = [f for f in report.findings if f.type == "evidence_integrity" and f.severity == "critique"]
-    changed = [r for r in report.evidence if r.changed_during_analysis]
-    if altered or changed:
-        return "warning", "Preuve altérée : l'intégrité d'au moins une preuve n'est pas garantie (voir Périmètre)."
-    for level in ("critique", "élevé"):
-        hits = [f for f in report.findings if f.severity == level and f.type != "evidence_integrity"]
-        if hits:
-            names = ", ".join(f"{_label(f)} ({os.path.basename(f.file)})" for f in hits[:3])
-            more = f" et {len(hits) - 3} autre(s)" if len(hits) > 3 else ""
-            return "warning", f"Menace de gravité {_GRAVITE_LIBELLE[level].lower()} : {names}{more}."
-    if any(f.incomplete for f in report.findings) or report.analysis_errors:
-        return "important", "Aucune menace élevée, mais l'analyse est incomplète : voir Limites de l'analyse."
-    return "tip", "Aucune menace élevée relevée par les modules exécutés."
+_VERDICT_NOTE = {"alteree": "warning", "confirmee": "warning", "probable": "warning", "suspecte": "important", "aucune": "tip"}
 
 
-def _couverture(report: ReportModel, alerts, found, facts, case: str) -> str:
+def _case(report: ReportModel) -> str:
+    return getattr(report, "case_id", None) or os.path.basename(os.path.normpath(export_root())) or "analyse"
+
+
+def _couverture(report: ReportModel, alerts, found, facts, verdict: ax.Verdict) -> str:
     counts = {lvl: sum(f.severity == lvl for f in report.findings) for lvl in _GRAVITES}
     top = next((lvl for lvl in _GRAVITES if counts[lvl]), None)
     evidence = len(report.evidence) or sum(1 for f in report.findings if f.type not in _TRANSVERSE)
@@ -248,18 +247,142 @@ def _couverture(report: ReportModel, alerts, found, facts, case: str) -> str:
         f'<div class="chiffre {cls}"><span class="valeur">{_e(v)}</span><span class="intitule">{_e(t)}</span></div>'
         for t, v, cls in cards
     )
-    kind, sentence = _verdict(report)
+    custody = [
+        ("Affaire", getattr(report, "case_id", None)),
+        ("Organisation", getattr(report, "organization", None)),
+        ("Analyste", getattr(report, "examiner", None)),
+    ]
+    meta = "".join(f"<div><dt>{t}</dt><dd>{_e(v)}</dd></div>" for t, v in custody if v)
     return (
-        f'<section class="couverture">'
+        f'<section class="couverture" aria-label="Page de garde">'
         f'<p class="surtitre">Rapport d\'investigation numérique</p>'
-        f"<h1>{_e(case)}</h1>"
-        f'<dl class="meta"><div><dt>Généré le</dt><dd>{_e(_utc(report.timestamp))}</dd></div>'
+        f"<h1>{_e(_case(report))}</h1>"
+        f'<dl class="meta">{meta}<div><dt>Généré le</dt><dd>{_e(_utc(report.timestamp))}</dd></div>'
         f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
         f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés'}</dd></div>"
         f"<div><dt>Constats</dt><dd>{sum(1 for f in report.findings if f.type not in _TRANSVERSE)}</dd></div></dl>"
         f'<div class="chiffres">{tiles}</div>'
-        + _note(f"{kind} verdict", f"<p><strong>Verdict</strong> : {_e(sentence)}</p>")
+        + _note(
+            f"{_VERDICT_NOTE[verdict.level]} verdict",
+            f"<p><strong>Verdict : {_e(verdict.title)}</strong> (confiance {_e(verdict.confidence)}). {_e(verdict.sentence)}</p>",
+        )
         + "</section>"
+    )
+
+
+def _refs(refs: list[int], report: ReportModel) -> str:
+    """Liens vers les constats qui justifient une affirmation."""
+    return ", ".join(
+        f'<a href="#{_anchor(i)}">{_e(_label(report.findings[i]))} ({_e(os.path.basename(report.findings[i].file))})</a>'
+        for i in refs
+    )
+
+
+def _direction(report: ReportModel, ctx: ax.Context, verdict: ax.Verdict) -> str:
+    """Synthèse direction : verdict, périmètre, gravité, impact, actions immédiates, confiance."""
+    modules = sorted({_label(f) for f in report.findings if f.type not in _TRANSVERSE})
+    evidence = len(report.evidence) or len({f.file for f in report.findings if f.type not in _TRANSVERSE})
+    period = f"activité datée du {ax.utc(ctx.period[0])} au {ax.utc(ctx.period[1])}" if ctx.period else "aucune activité datée"
+    scope = f"{evidence} preuve(s), {len(modules)} module(s) d'analyse ; {period}."
+    impacts = ax.impacts(ctx)
+    actions = ax.immediate_actions(ctx)
+
+    def items(entries) -> str:
+        return "".join(
+            f"<li>{_e(text)}" + (f' <span class="refs">Constats : {_refs(refs, report)}</span>' if refs else "") + "</li>"
+            for text, refs in entries
+        )
+
+    impact_html = f'<ul class="liste">{items(impacts)}</ul>' if impacts else "<p>Aucun impact établi par les constats.</p>"
+    action_html = (
+        f'<ol class="actions">{items(actions)}</ol>'
+        if actions
+        else "<p>Aucune action d'endiguement ne découle des constats ; voir les prochaines étapes.</p>"
+    )
+    rows = [
+        ("Verdict", f"<strong>{_e(verdict.title)}</strong> - {_e(verdict.sentence)}"),
+        (
+            "Niveau de confiance",
+            f'<span class="confiance c-{_e(ax.fold(verdict.confidence))}">{_e(verdict.confidence)}</span> '
+            f"{_e(verdict.rationale)}",
+        ),
+        ("Gravité maximale", _pill(verdict.severity) or "Non évaluée"),
+        ("Périmètre", _e(scope)),
+    ]
+    dl = "".join(f"<div><dt>{t}</dt><dd>{v}</dd></div>" for t, v in rows)
+    return (
+        _h2("direction")
+        + f'<dl class="methode direction">{dl}</dl>'
+        + f"<h3>Impact</h3>{impact_html}"
+        + f"<h3>Actions immédiates recommandées</h3>{action_html}"
+        + _note(
+            "help",
+            "<p>Synthèse dérivée des constats de l'outil, sans interprétation ajoutée : chaque point renvoie au "
+            "constat qui le justifie. À valider par l'analyste avant diffusion.</p>",
+        )
+    )
+
+
+def _attack(report: ReportModel) -> str:
+    """Matrice ATT&CK : tactiques dans l'ordre de la chaîne d'attaque, techniques observées et sources."""
+    matrix = ax.attack_matrix(report.findings)
+    seen = [(tid, name, cells) for tid, name, cells in matrix if cells]
+    if not seen:
+        return _h2("attack") + "<p>Aucune technique MITRE ATT&amp;CK associée aux constats.</p>"
+    strip = "".join(
+        f'<li class="{"vue" if cells else "vide"}"><span class="ta">{_e(tid or "-")}</span>{_e(name)}'
+        + (f"<b>{len(cells)}</b>" if cells else "")
+        + "</li>"
+        for tid, name, cells in matrix
+    )
+    rows = []
+    for tid, name, cells in matrix:
+        if not cells:
+            rows.append(
+                f'<tr class="vide"><th scope="row">{_e(name)}<br><small>{_e(tid)}</small></th><td colspan="3">-</td></tr>'
+            )
+            continue
+        for n, hit in enumerate(cells):
+            head = (
+                f'<th scope="row" rowspan="{len(cells)}">{_e(name)}<br><small>{_e(tid or "hors référentiel")}</small></th>'
+                if n == 0
+                else ""
+            )
+            rows.append(
+                f"<tr>{head}<td><code>{_e(hit.id)}</code> {_e(hit.name)} {_pill(hit.severity)}</td>"
+                f'<td class="nombre">{len(hit.findings)}</td>'
+                f"<td>{_e(', '.join(sorted(_label_type(t) for t in hit.sources)))}<br>"
+                f'<span class="refs">{_refs(hit.findings[: ax.MAX_REFS], report)}</span></td></tr>'
+            )
+    techniques = sum(len(c) for _, _, c in seen)
+    return (
+        _h2("attack")
+        + f"<p>{techniques} technique(s) sur {len(seen)} tactique(s), dans l'ordre de la chaîne d'attaque "
+        "(ATT&amp;CK Enterprise).</p>"
+        + f'<ol class="killchain" aria-label="Tactiques observées">{strip}</ol>'
+        + _table(["Tactique", "Technique", "Constats", "Sources"], rows, "matrice")
+        + _note("info", "<p>Une tactique sans technique signifie « non détectée par les modules exécutés », pas « absente ».</p>")
+    )
+
+
+def _label_type(f_type: str) -> str:
+    return MODULE_NAMES.get(f_type, f_type.replace("_", " ").capitalize())
+
+
+def _etapes(report: ReportModel, ctx: ax.Context) -> str:
+    steps = ax.next_steps(ctx, online=online_enabled())
+    rows = [
+        f'<tr><td class="fixe"><span class="prio p{s.priority}">{_PRIORITE[s.priority][0]}</span> '
+        f"{_e(_PRIORITE[s.priority][1])}</td><td>{_e(s.action)}</td><td>{_e(s.reason)}"
+        + (f'<br><span class="refs">{_refs(s.refs, report)}</span>' if s.refs else "")
+        + "</td></tr>"
+        for s in steps
+    ]
+    return (
+        _h2("etapes")
+        + "<p>Pistes générées à partir des constats et des limites de l'analyse, par priorité "
+        "(P1 : avant toute remise en service).</p>"
+        + _table(["Priorité", "Piste", "Justification"], rows, "etapes")
     )
 
 
@@ -275,7 +398,7 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
     )
     if graded:
         rows = []
-        for sev, i, f in graded:
+        for sev, i, f in graded[:_SYNTH_GRADED]:
             reason = next(
                 (
                     f"{str(k).replace('[ALERTE]', '').strip()} : {v}"
@@ -289,6 +412,8 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
                 f'<td class="court"><code>{_e(os.path.basename(f.file))}</code></td><td>{_e(str(reason)[:220])}</td></tr>'
             )
         out.append("<h3>Résultats par gravité</h3>" + _table(["Gravité", "Module", "Fichier", "Motif principal"], rows))
+        if len(graded) > _SYNTH_GRADED:
+            out.append(f'<p class="reste">{len(graded) - _SYNTH_GRADED} constat(s) de plus dans les constats détaillés.</p>')
 
     strong = [fact for fact in facts if fact.get("confidence") == "élevée"]
     if strong:
@@ -330,7 +455,13 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
         for i, f, k, v in alerts:
             groups[i].append((str(k).replace("[ALERTE]", "").strip(), str(v)))
         rows = []
+        shown = 0
         for i, items in groups.items():
+            if shown >= _SYNTH_ALERTS:
+                rest = len(alerts) - shown
+                rows.append(f'<tr><td colspan="2" class="reste">{rest} alerte(s) de plus dans les constats détaillés.</td></tr>')
+                break
+            shown += len(items)
             f = report.findings[i]
             rows.append(
                 f'<tr class="groupe"><th colspan="2"><a href="#{_anchor(i)}">{_e(_label(f))}</a> - '
@@ -341,30 +472,12 @@ def _synthese(report: ReportModel, alerts, found, facts) -> str:
     else:
         out.append(_note("tip", "<p>Aucune alerte relevée par les modules exécutés.</p>"))
 
-    techniques = sorted({t for f in report.findings for t in (f.extra or {}).get("mitre", []) if isinstance(t, str)})
-    corr = next((f for f in report.findings if f.type == "correlation"), None)
-    if corr:
-        techniques = sorted(set(techniques) | {t for t in corr.extra.get("techniques", []) if isinstance(t, str)})
-    if techniques:
-        rows = [
-            f"<tr><td><code>{_e(t['id'])}</code></td><td>{_e(t['name'])}</td><td>{_e(t.get('tactic', ''))}</td></tr>"
-            for t in mitre.describe(techniques)
-        ]
-        out.append("<h3>Techniques MITRE ATT&amp;CK</h3>" + _table(["Identifiant", "Technique", "Tactique"], rows))
     return "".join(out)
 
 
 def _perimetre(report: ReportModel) -> str:
     evidence = [f for f in report.findings if f.type not in _TRANSVERSE and os.path.isabs(f.file or "")]
-    modules = sorted({_label(f) for f in evidence})
-    method = (
-        f'<dl class="methode">'
-        f"<div><dt>Rapport généré</dt><dd>{_e(_utc(report.timestamp))}</dd></div>"
-        f"<div><dt>Outil</dt><dd>{_e(report.tool)}</dd></div>"
-        f"<div><dt>Services en ligne</dt><dd>{'activés (--online)' if online_enabled() else 'désactivés : aucune donnée envoyée à un tiers'}</dd></div>"
-        f"<div><dt>Modules exécutés</dt><dd>{_e(', '.join(modules) or 'aucun')}</dd></div>"
-        f"<div><dt>Dossier de sortie</dt><dd><code>{_e(export_root())}</code></dd></div></dl>"
-    )
+    method = _custody(report, sorted({_label(f) for f in evidence}))
     hashed = {r.file for r in report.evidence}
     # Dossier commun affiché une fois : chaque ligne ne garde que son chemin relatif
     try:
@@ -428,6 +541,46 @@ def _perimetre(report: ReportModel) -> str:
         + method
         + f"<h3>Empreintes des preuves ({len(rows)})</h3>{table}"
         + (f"<h3>Intégrité des preuves</h3>{integrity}" if integrity else "")
+        + _registre()
+    )
+
+
+def _custody(report: ReportModel, modules: list[str]) -> str:
+    """Chaîne de possession : qui, où, quand, avec quoi (champs renseignés seulement)."""
+    started, finished = getattr(report, "started_at", None), getattr(report, "finished_at", None)
+    user, host = getattr(report, "analysis_user", None), getattr(report, "analysis_host", None)
+    command = getattr(report, "command_line", None) or []
+    online = "activés (--online)" if online_enabled() else "désactivés : aucune donnée envoyée à un tiers"
+    rows = [
+        ("Affaire", _e(getattr(report, "case_id", None) or "")),
+        ("Organisation", _e(getattr(report, "organization", None) or "")),
+        ("Analyste", _e(getattr(report, "examiner", None) or "")),
+        ("Poste et compte d'analyse", _e(" / ".join(x for x in (host, user) if x))),
+        ("Début de l'analyse", _e(_utc(started)) if started else ""),
+        ("Fin de l'analyse", _e(_utc(finished)) if finished else ""),
+        ("Rapport généré", _e(_utc(report.timestamp))),
+        ("Outil", _e(report.tool)),
+        ("Commande", f"<code>{_e(' '.join(command))}</code>" if command else ""),
+        ("Services en ligne", online),
+        ("Modules exécutés", _e(", ".join(modules) or "aucun")),
+        ("Dossier de sortie", f"<code>{_e(export_root())}</code>"),
+        (
+            "Méthode",
+            "Aucune écriture dans le dossier des preuves ; empreintes SHA-256 et MD5 prises à la collecte puis "
+            "recalculées après analyse (NIST SP 800-86, ISO/IEC 27037).",
+        ),
+    ]
+    return '<dl class="methode">' + "".join(f"<div><dt>{t}</dt><dd>{v}</dd></div>" for t, v in rows if v) + "</dl>"
+
+
+_REGISTRE_LIGNES = 3
+
+
+def _registre() -> str:
+    """Registre des transferts vierge : à compléter et signer sur la version imprimée."""
+    rows = ["<tr>" + "<td>&nbsp;</td>" * 5 + "</tr>"] * _REGISTRE_LIGNES
+    return "<h3>Registre des transferts</h3>" + _table(
+        ["Date et heure (UTC)", "Remis par", "Reçu par", "Motif", "Signature"], rows, "registre"
     )
 
 
@@ -460,20 +613,34 @@ def _chronologie(report: ReportModel, facts) -> str:
     )
 
 
-def _indicateurs(found) -> str:
+def _indicateurs(report: ReportModel, found) -> str:
     if not found:
         return _h2("indicateurs") + "<p>Aucun indicateur extrait.</p>"
+    table = ax.ioc_rows(report, found)
     rows = [
-        f'<tr><td class="court">{_e(i.kind)}</td><td><code>{_e(i.value)}</code></td>'
-        f"<td>{_e(', '.join(sorted(MODULE_NAMES.get(s, s) for s in i.sources)))}</td>"
-        f"<td>{_e(' ; '.join(sorted({o.context for o in i.observations if o.context}))[:400])}</td></tr>"
-        for i in found
+        f'<tr{" class=\"surplus\"" if n >= _PRINT_IOCS else ""}><td class="court">{_e(r.kind)}</td><td><code>{_e(r.value)}</code></td>'
+        f'<td class="fixe confiance c-{_e(ax.fold(r.confidence))}">{_e(r.confidence)}</td>'
+        f"<td>{_e(', '.join(_label_type(s) for s in r.sources))}</td>"
+        f'<td class="fixe">{_e(_utc(r.first_seen)) if r.first_seen else "-"}</td>'
+        f'<td class="fixe">{_e(_utc(r.last_seen)) if r.last_seen and r.last_seen != r.first_seen else ""}</td>'
+        f"<td>{_e(r.context[:400])}</td></tr>"
+        for n, r in enumerate(table[:_MAX_IOCS])
     ]
     shared = sum(len(i.sources) > 1 for i in found)
+    more = (
+        f'<p class="reste">{len(table) - _MAX_IOCS} indicateur(s) de plus dans l\'export iocs.csv et l\'export JSON.</p>'
+        if len(table) > _MAX_IOCS
+        else ""
+    )
+    if len(rows) > _PRINT_IOCS:
+        more += f'<p class="reste impression">{len(rows) - _PRINT_IOCS} indicateur(s) de plus dans le rapport HTML.</p>'
     return (
         _h2("indicateurs")
-        + f"<p>{len(found)} indicateur(s), dont <strong>{shared}</strong> vu(s) par plusieurs sources (en tête).</p>"
-        + _table(["Type", "Valeur", "Sources", "Contexte"], rows)
+        + f"<p>{len(found)} indicateur(s), dont <strong>{shared}</strong> vu(s) par plusieurs sources. Confiance "
+        "<em>élevée</em> : au moins deux sources ; <em>moyenne</em> : source à gravité élevée ; <em>faible</em> : "
+        "simple observation. Export : <code>iocs.csv</code> et STIX 2.1 (menu Exporter, option S).</p>"
+        + _table(["Type", "Valeur", "Confiance", "Sources", "Première vue", "Dernière vue", "Contexte"], rows, "iocs")
+        + more
     )
 
 
@@ -773,7 +940,10 @@ _JS = """
 """
 
 _NAV_LABELS = {
+    "direction": "Direction",
     "synthese": "Synthèse",
+    "attack": "ATT&amp;CK",
+    "etapes": "Étapes",
     "perimetre": "Périmètre",
     "chronologie": "Chronologie",
     "indicateurs": "Indicateurs",
@@ -790,6 +960,8 @@ def build_interactive_html(report: ReportModel) -> str:
     )
     timeline = next((f for f in report.findings if f.type == "timeline"), None)
     facts = (timeline.extra.get("facts") or []) if timeline else []
+    ctx = ax.build_context(report, found)
+    verdict = ax.verdict(report, ctx)
     toc: list[tuple[str, str]] = []
     constats = _constats(report, toc)
     case = os.path.basename(os.path.normpath(export_root())) or "analyse"
@@ -822,11 +994,14 @@ def build_interactive_html(report: ReportModel) -> str:
 </header>
 <main>
   <article>
-    {_couverture(report, alerts, found, facts, case)}
+    {_couverture(report, alerts, found, facts, verdict)}
+    {_direction(report, ctx, verdict)}
     {_synthese(report, alerts, found, facts)}
+    {_attack(report)}
+    {_etapes(report, ctx)}
     {_perimetre(report)}
     {_chronologie(report, facts)}
-    {_indicateurs(found)}
+    {_indicateurs(report, found)}
     {constats}
     {_limites(report)}
   </article>

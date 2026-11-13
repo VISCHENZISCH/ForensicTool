@@ -61,6 +61,8 @@ Chaque option d'analyse accepte un fichier ou un dossier. Dans un dossier, seuls
 | `--export-timesketch`            | Chronologie JSONL importable dans Timesketch              |
 | `--export-graph`                 | Graphe interactif de la chaîne de compromission           |
 | `--export-rules`                 | Règles YARA, Suricata, Sigma et bundle STIX 2.1           |
+| `--export-ecs`                   | Constats et chronologie en NDJSON ECS (Elastic, Splunk, Sentinel) |
+| `--export-misp`                  | Événement MISP (indicateurs), fichier à importer, sans envoi réseau |
 | `--verify-hashes MANIFESTE`      | Contrôle d'intégrité des preuves avant et après l'analyse |
 | `--evidence-dir DOSSIER`         | Dossier de référence des chemins relatifs du manifeste    |
 
@@ -73,14 +75,30 @@ Chaque constat indique sa gravité et ses empreintes ; la conclusion de fin de s
   <img src="docs/images/conclusion.png" width="49%" alt="Conclusion de l'analyse : gravités, indicateurs corroborés, décalage d'horloge et chaîne d'attaque">
 </p>
 
+## Usage en entreprise
+
+```bash
+./run.sh --scan ./preuves --case-id INC-2026-042 --examiner j.dupont --organization CERT \
+         --quiet --log-json run.jsonl --export-ecs constats.ndjson --export-html rapport.html
+```
+
+- **Chaîne de possession** : affaire, analyste, organisation, machine et compte d'analyse, début et fin UTC,
+  ligne de commande (secrets masqués) et empreintes des preuves figurent dans chaque rapport.
+- **Rapport d'enquête** : synthèse pour la direction (verdict et niveau de confiance), matrice MITRE ATT&CK,
+  prochaines étapes d'enquête priorisées, tableau d'indicateurs avec première et dernière apparition.
+- **Automatisation** : `--quiet` (mode batch), `--log-json` (journal d'exécution JSON lines pour l'orchestration),
+  `--config fichier.toml` ou `$FORENSIC_ANALYZER_CONFIG` pour les valeurs par défaut (section `[defaults]`) ;
+  la ligne de commande l'emporte toujours sur la configuration.
+
 ## Codes de sortie
 
 | Code | Signification                                                                       |
 | ---- | ----------------------------------------------------------------------------------- |
 | `0`  | Rien à signaler : tout a été analysé et vérifié                                     |
-| `1`  | Analyse incomplète : preuve introuvable, fichier chiffré, module ou export en échec |
+| `1`  | Analyse incomplète : entrée de manifeste introuvable, fichier chiffré, module ou export en échec |
 | `2`  | Preuve altérée : empreinte différente du manifeste, ou modifiée pendant l'analyse   |
 | `3`  | Menace de gravité élevée ou critique                                                |
+| `4`  | Option, configuration ou chemin de preuve invalide : rien n'a été analysé           |
 
 ## Limites connues
 

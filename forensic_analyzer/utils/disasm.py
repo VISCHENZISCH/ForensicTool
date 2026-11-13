@@ -8,6 +8,7 @@ Analyse statique uniquement : le binaire n'est jamais exécuté.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from collections.abc import Callable
 
@@ -118,6 +119,101 @@ def _port_from_sockaddr(imm: int) -> int | None:
     return ((imm >> 16) & 0xFF) << 8 | (imm >> 24) & 0xFF
 
 
+# Mode « lite » de capstone : sans `detail`, chaque instruction coûte ~10 fois moins (le détail
+# construit des objets Python pour chaque opérande). Les opérandes utiles sont relus depuis le
+# texte Intel, avec la même interface que capstone (type, imm, reg, mem.base/index/disp).
+_NUMBER = re.compile(r"^-?(?:0x[0-9a-f]+|\d+)$")
+_MEM = re.compile(r"\[([^\]]*)\]")
+_OTHER_BASE = 1  # registre de base quelconque (ni RIP ni absent) : adresse non calculable
+_INT64_SIGN = 1 << 63
+_INT32_SIGN = 1 << 31
+_BITS_32 = 32
+
+
+def _number(text: str) -> int:
+    """Valeur telle que capstone la donne en mode détaillé : le texte relu en entier signé 64 bits."""
+    value = int(text, 0)
+    return value - (1 << 64) if value >= _INT64_SIGN else value
+
+
+class _Mem:
+    __slots__ = ("base", "disp", "index")
+
+    def __init__(self, expr: str, bits: int):
+        self.base = self.index = self.disp = 0
+        registers = []
+        for raw in expr.replace(" - ", " + -").split(" + "):
+            term = raw.strip()
+            if _NUMBER.match(term):
+                self.disp += _number(term)
+            elif "*" in term:
+                self.index = 1
+            elif term:
+                registers.append(term)
+        if registers:
+            self.base = x86_const.X86_REG_RIP if registers[0] == "rip" else _OTHER_BASE
+            self.index = self.index or int(len(registers) > 1)
+        if bits == _BITS_32 and _INT32_SIGN <= self.disp < 1 << 32:
+            self.disp -= 1 << 32  # en 32 bits, capstone étend le signe du déplacement (pas des immédiats)
+
+
+_NO_MEM = _Mem("", 64)  # opérande sans mémoire : base, index et déplacement nuls
+
+
+class _Op:
+    __slots__ = ("imm", "mem", "reg", "type")
+
+    def __init__(self, text: str, bits: int):
+        self.imm, self.reg, self.mem = 0, "", _NO_MEM
+        bracket = _MEM.search(text)
+        if bracket:
+            self.type, self.mem = x86_const.X86_OP_MEM, _Mem(bracket.group(1), bits)
+        elif _NUMBER.match(text):
+            self.type, self.imm = x86_const.X86_OP_IMM, _number(text)
+        else:
+            self.type, self.reg = x86_const.X86_OP_REG, text
+
+
+class _Insn:
+    __slots__ = ("address", "mnemonic", "operands", "size")
+
+    def __init__(self, address: int, size: int, mnemonic: str, texts: list[str], bits: int = 64):
+        self.address, self.size, self.mnemonic = address, size, mnemonic
+        self.operands = [_Op(t, bits) for t in texts]
+
+    @staticmethod
+    def reg_name(reg: str) -> str:
+        return reg  # le registre est déjà son nom
+
+
+def _instructions(md, code: bytes, base: int, bits: int):
+    for address, size, mnemonic, op_str in md.disasm_lite(code, base):
+        yield _Insn(address, size, mnemonic, op_str.split(", ") if op_str else [], bits)
+
+
+_TWO_OPERANDS = 2
+_TRACKED = frozenset({"call", "mov", "lea", "xor"})  # seules instructions dont les opérandes sont décodés
+
+
+def _prelude(mnemonic: str, op_str: str, immediates: deque, regs: dict) -> tuple[str, list[str]]:
+    """Mnémonique sans préfixe CET/MPX, opérandes texte ; note les immédiats et oublie un registre écrasé."""
+    mnem = mnemonic.removeprefix("bnd ").removeprefix("notrack ")
+    texts = op_str.split(", ") if op_str else []
+    immediates.extend(_number(t) for t in texts if _NUMBER.match(t))
+    if mnem not in _TRACKED:
+        dst = _clobbered(texts)
+        if dst:
+            regs.pop(dst, None)
+    return mnem, texts
+
+
+def _clobbered(texts: list[str]) -> str | None:
+    """Registre destination écrasé par une instruction non suivie (« add rax, 1 »), sinon None."""
+    if len(texts) < _TWO_OPERANDS or "[" in texts[0] or _NUMBER.match(texts[0]):
+        return None
+    return _ALIASES.get(texts[0], texts[0])
+
+
 def analyze_code(
     code_ranges: list[tuple[int, bytes]],
     reader: _Reader,
@@ -137,7 +233,6 @@ def analyze_code(
     if not HAS_CAPSTONE:
         return []
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64 if is64 else capstone.CS_MODE_32)
-    md.detail = True
     arg_regs = _WIN64_ARGS if windows else _SYSV_ARGS
     volatile = _VOLATILE_WIN64 if windows else _VOLATILE_SYSV
     calls: list[dict] = []
@@ -145,13 +240,15 @@ def analyze_code(
     for base, code in code_ranges:
         regs: dict[str, tuple[str, int]] = {}
         immediates: deque = deque(maxlen=512)  # immédiats de la fonction courante
-        for insn in md.disasm(code, base):
-            if insn.address in function_starts:
+        for address, size, mnemonic, op_str in md.disasm_lite(code, base):
+            if address in function_starts:
                 regs.clear()
                 immediates.clear()
-            mnem = insn.mnemonic.removeprefix("bnd ").removeprefix("notrack ")  # préfixes CET / MPX
+            mnem, texts = _prelude(mnemonic, op_str, immediates, regs)
+            if mnem not in _TRACKED:
+                continue
+            insn = _Insn(address, size, mnemonic, texts, 64 if is64 else 32)
             ops = insn.operands
-            immediates.extend(op.imm for op in ops if op.type == x86_const.X86_OP_IMM)
 
             if mnem == "call":
                 name = resolve(insn)
@@ -184,7 +281,7 @@ def analyze_code(
                     regs.pop(dst, None)
             elif mnem == "mov" and src.type == x86_const.X86_OP_MEM and import_at(_operand_address(insn, src)):
                 regs[dst] = ("func", import_at(_operand_address(insn, src)))
-            elif mnem == "xor" and src.type == x86_const.X86_OP_REG and src.reg == ops[0].reg:
+            elif mnem == "xor" and src.type == x86_const.X86_OP_REG and src.reg == ops[0].reg:  # xor r, r
                 regs[dst] = ("imm", 0)
             else:
                 regs.pop(dst, None)
@@ -296,14 +393,13 @@ def analyze_elf(data: bytes) -> dict | None:
     functions, got = layout["functions"], layout["got"]
 
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64 if layout["is64"] else capstone.CS_MODE_32)
-    md.detail = True
     # Entrées PLT : « jmp [GOT] » → nom de l'import. L'entrée commence soit sur ce jmp,
     # soit 4 octets avant (endbr64), soit à l'alignement de 16 octets (.plt classique).
     plt: dict[int, str] = {}
     for sec in sections:
         if sec["name"].startswith(".plt") and sec["size"]:
             code = data[sec["offset"] : sec["offset"] + sec["size"]]
-            for insn in md.disasm(code, sec["addr"]):
+            for insn in _instructions(md, code, sec["addr"], 64 if layout["is64"] else 32):
                 if insn.mnemonic.endswith("jmp") and insn.operands and insn.operands[0].type == x86_const.X86_OP_MEM:
                     name = got.get(_mem_target(insn))
                     if name:
